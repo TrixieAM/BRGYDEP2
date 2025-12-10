@@ -6,6 +6,9 @@ import html2canvas from "html2canvas";
 import CaloocanLogo from "../../assets/CaloocanLogo.png";
 import Logo145 from "../../assets/Logo145.png";
 import { useCertificateManager } from '../../hooks/useCertificateManager';
+import { useAuth } from '../../contexts/AuthContext';
+import LoadingOverlay from '../LoadingOverlay';
+import { getSignatures, getSignatureImageUrl } from '../../services/signatureService';
 
 // MUI
 import {
@@ -36,6 +39,13 @@ import {
   useMediaQuery,
   Badge,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Slide,
+  Checkbox,
+  FormControlLabel,
 } from "@mui/material";
 
 import {
@@ -60,6 +70,10 @@ import {
   Dashboard as DashboardIcon,
   Article as ArticleIcon,
 } from "@mui/icons-material";
+
+const Transition = React.forwardRef(function Transition(props, ref) {
+  return <Slide direction="up" ref={ref} {...props} />;
+});
 
 const theme = createTheme({
   palette: {
@@ -184,6 +198,7 @@ const theme = createTheme({
 
 export default function CertificateOfAction() {
   const apiBase = "http://localhost:5000"; // change to include /api if needed
+  const { getToken } = useAuth();
 
   const [records, setRecords] = useState([]);
   const [residents, setResidents] = useState([]);
@@ -192,10 +207,14 @@ export default function CertificateOfAction() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("form");
   const [searchTerm, setSearchTerm] = useState("");
-  const [transactionSearch, setTransactionSearch] = useState("");
   const [qrCodeUrl, setQrCodeUrl] = useState("");
   const [zoomLevel, setZoomLevel] = useState(0.75);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [signatures, setSignatures] = useState([]);
+  const [selectedSignature, setSelectedSignature] = useState(null);
   
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -204,6 +223,15 @@ export default function CertificateOfAction() {
   getValidityPeriod,
   calculateExpirationDate
 } = useCertificateManager('Certificate of Action');
+
+  // Helper function to get auth headers
+  const getAuthHeaders = () => {
+    const token = getToken();
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    };
+  };
 
   
 
@@ -221,6 +249,8 @@ export default function CertificateOfAction() {
     transaction_number: "",
     is_active: 1,
     date_created: "",
+    use_signature: false,
+    signature_id: null,
   });
 
   // formatting helpers
@@ -270,7 +300,9 @@ export default function CertificateOfAction() {
 
   async function loadResidents() {
     try {
-      const res = await fetch(`${apiBase}/residents`);
+      const res = await fetch(`${apiBase}/residents`, {
+        headers: getAuthHeaders()
+      });
       const data = await res.json();
       setResidents(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -280,7 +312,9 @@ export default function CertificateOfAction() {
 
   async function loadRecords() {
     try {
-      const res = await fetch(`${apiBase}/certificate-of-action`);
+      const res = await fetch(`${apiBase}/certificate-of-action`, {
+        headers: getAuthHeaders()
+      });
       const data = await res.json();
       setRecords(
         Array.isArray(data)
@@ -296,6 +330,11 @@ export default function CertificateOfAction() {
               transaction_number: r.transaction_number || generateTransactionNumber(),
               is_active: r.is_active ?? 1,
               date_created: r.date_created,
+              use_signature: r.use_signature || false,
+              signature_id: r.signature_id || null,
+              official_name: r.official_name || null,
+              designation: r.designation || null,
+              signature_path: r.signature_path || null,
             }))
           : []
       );
@@ -307,13 +346,43 @@ export default function CertificateOfAction() {
   useEffect(() => {
     loadResidents();
     loadRecords();
+    loadSignatures();
   }, []);
 
+  async function loadSignatures() {
+    try {
+      const data = await getSignatures();
+      setSignatures(data);
+    } catch (err) {
+      console.warn("Could not load signatures:", err);
+    }
+  }
+
   const display = useMemo(() => {
-    if (editingId || isFormOpen) return formData;
-    if (selectedRecord) return selectedRecord;
-    return formData;
-  }, [editingId, isFormOpen, selectedRecord, formData]);
+    let data = null;
+    if (editingId || isFormOpen) {
+      data = formData;
+    } else if (selectedRecord) {
+      data = selectedRecord;
+    } else {
+      data = formData;
+    }
+    
+    // If signature is enabled, ensure signature data is available
+    if (data && data.use_signature && data.signature_id && !data.signature_path) {
+      const sig = signatures.find(s => s.signature_id === data.signature_id);
+      if (sig) {
+        return {
+          ...data,
+          official_name: sig.official_name,
+          designation: sig.designation,
+          signature_path: sig.signature_path
+        };
+      }
+    }
+    
+    return data;
+  }, [editingId, isFormOpen, selectedRecord, formData, signatures]);
 
   // QR generation: visible for drafts too — once complainant_name exists
   useEffect(() => {
@@ -345,10 +414,13 @@ export default function CertificateOfAction() {
       date_issued: data.date_issued || null,
       transaction_number: data.transaction_number,
       is_active: data.is_active ?? 1,
+      use_signature: data.use_signature ? 1 : 0,
+      signature_id: data.use_signature && data.signature_id ? data.signature_id : null,
     };
   }
 
-    async function handleCreate() {
+  async function handleCreate() {
+    setIsLoading(true);
     try {
       const tx = generateTransactionNumber();
       const validityPeriod = getValidityPeriod('Certificate of Action');
@@ -356,11 +428,11 @@ export default function CertificateOfAction() {
         ...formData, 
         transaction_number: tx, 
         date_created: new Date().toISOString(),
-        validity_period: validityPeriod, // Add validity period
+        validity_period: validityPeriod,
       };
       const res = await fetch(`${apiBase}/certificate-of-action`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify(toServerPayload(updated)),
       });
       if (!res.ok) throw new Error("Create failed");
@@ -369,50 +441,57 @@ export default function CertificateOfAction() {
       setRecords([newRec, ...records]);
       setSelectedRecord(newRec);
       
-      // Save to certificates table, mapping complainant_name to full_name
       await saveCertificate({
         ...newRec,
-        full_name: newRec.complainant_name, // Map complainant_name to full_name for the central table
+        full_name: newRec.complainant_name,
       }, true);
       
       storeCertificateData(newRec);
-      resetForm();
-      setActiveTab("records");
+      setIsFormOpen(false);
+      setActiveTab("form");
     } catch (e) {
       console.error(e);
       alert("Failed to create record");
+    } finally {
+      setIsLoading(false);
     }
   }
 
-    async function handleUpdate() {
+  async function handleUpdate() {
+    setIsLoading(true);
     try {
       const validityPeriod = getValidityPeriod('Certificate of Action');
       const updated = { 
         ...formData, 
-        validity_period: validityPeriod, // Add validity period
+        validity_period: validityPeriod,
       };
       const res = await fetch(`${apiBase}/certificate-of-action/${editingId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify(toServerPayload(updated)),
       });
       if (!res.ok) throw new Error("Update failed");
-      const updatedRec = { ...updated, certificate_of_action_id: editingId };
-      setRecords(records.map((r) => (r.certificate_of_action_id === editingId ? updatedRec : r)));
+      const updatedData = await res.json();
+      const updatedRec = { 
+        ...updatedData,
+        validity_period: validityPeriod
+      };
+      setRecords([updatedRec, ...records.filter((r) => r.certificate_of_action_id !== editingId)]);
       setSelectedRecord(updatedRec);
       
-      // Save to certificates table, mapping complainant_name to full_name
       await saveCertificate({
         ...updatedRec,
-        full_name: updatedRec.complainant_name, // Map complainant_name to full_name for the central table
+        full_name: updatedRec.complainant_name,
       }, false);
       
       storeCertificateData(updatedRec);
-      resetForm();
-      setActiveTab("records");
+      setIsFormOpen(false);
+      setActiveTab("form");
     } catch (e) {
       console.error(e);
       alert("Failed to update record");
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -421,16 +500,27 @@ export default function CertificateOfAction() {
       ...record,
       filed_date: record.filed_date || record.filedDate || "",
       date_issued: record.date_issued || record.dateIssued || "",
+      use_signature: record.use_signature || false,
+      signature_id: record.signature_id || null,
     });
     setEditingId(record.certificate_of_action_id);
     setIsFormOpen(true);
-    setActiveTab("form");
+    setSelectedRecord(record);
+    if (record.signature_id) {
+      const sig = signatures.find(s => s.signature_id === record.signature_id);
+      setSelectedSignature(sig || null);
+    } else {
+      setSelectedSignature(null);
+    }
   }
 
   async function handleDelete(id) {
     if (!window.confirm("Delete this record?")) return;
     try {
-      const res = await fetch(`${apiBase}/certificate-of-action/${id}`, { method: "DELETE" });
+      const res = await fetch(`${apiBase}/certificate-of-action/${id}`, { 
+        method: "DELETE",
+        headers: getAuthHeaders()
+      });
       if (!res.ok) throw new Error("Delete failed");
       setRecords(records.filter((r) => r.certificate_of_action_id !== id));
       if (selectedRecord?.certificate_of_action_id === id) setSelectedRecord(null);
@@ -446,9 +536,14 @@ export default function CertificateOfAction() {
   function handleView(record) {
     setSelectedRecord(record);
     setFormData({ ...record });
-    setEditingId(record.certificate_of_action_id);
-    setIsFormOpen(true);
+    setEditingId(null);
     setActiveTab("form");
+    if (record.signature_id) {
+      const sig = signatures.find(s => s.signature_id === record.signature_id);
+      setSelectedSignature(sig || null);
+    } else {
+      setSelectedSignature(null);
+    }
   }
 
   function resetForm() {
@@ -464,15 +559,26 @@ export default function CertificateOfAction() {
       transaction_number: "",
       is_active: 1,
       date_created: "",
+      use_signature: false,
+      signature_id: null,
     });
     setEditingId(null);
     setIsFormOpen(false);
     setSelectedRecord(null);
+    setSelectedSignature(null);
   }
 
   function handleSubmit() {
-    if (editingId) handleUpdate();
-    else handleCreate();
+    setPendingAction(() => (editingId ? handleUpdate : handleCreate));
+    setShowConfirmDialog(true);
+  }
+
+  function confirmSave() {
+    setShowConfirmDialog(false);
+    if (pendingAction) {
+      pendingAction();
+      setPendingAction(null);
+    }
   }
 
   const filteredRecords = useMemo(
@@ -485,18 +591,6 @@ export default function CertificateOfAction() {
       ),
     [records, searchTerm]
   );
-
-  const transactionFilteredRecords = useMemo(
-    () => records.filter((r) => (r.transaction_number || "").toLowerCase().includes(transactionSearch.toLowerCase())),
-    [records, transactionSearch]
-  );
-
-  function handleTransactionSearch() {
-    if (!transactionSearch) return;
-    const found = records.find((r) => (r.transaction_number || "").toLowerCase() === transactionSearch.toLowerCase());
-    if (found) handleView(found);
-    else alert("No certificate found with this transaction number");
-  }
 
   async function generatePDF() {
     if (!display.certificate_of_action_id) {
@@ -554,31 +648,29 @@ export default function CertificateOfAction() {
       setIsGeneratingPDF(false);
     }
   }
-function handlePrint() {
-    // Check if there's a certificate to print
+  function handlePrint() {
     if (!display.certificate_of_action_id) {
       alert('Please save the record first before printing');
       return;
     }
 
-    // 1. Get the certificate element
     const certificateElement = document.getElementById('certificate-preview');
     if (!certificateElement) {
       alert('Certificate not found for printing.');
       return;
     }
 
-    // 2. Create a hidden iframe
+    // Create iframe
     const iframe = document.createElement('iframe');
     iframe.style.position = 'absolute';
-    iframe.style.left = '-9999px'; // Move it way off-screen
+    iframe.style.left = '-9999px';
     iframe.style.top = '0';
     iframe.style.width = '0';
     iframe.style.height = '0';
     document.body.appendChild(iframe);
 
-    // 3. Write the certificate content and styles into the iframe
     const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+    iframeDoc.open();
     iframeDoc.write(`
       <!DOCTYPE html>
       <html>
@@ -599,15 +691,23 @@ function handlePrint() {
             #certificate-preview {
               width: 8.5in;
               height: 11in;
+              margin: 20px auto;
+              padding: 40px;
               position: relative;
-              overflow: hidden;
-              background: white;
+              background-color: #fff;
               box-sizing: border-box;
+              font-weight: bold;
+              max-width: 100%;
+              overflow: auto;
             }
             #certificate-preview * {
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
               color-adjust: exact !important;
+            }
+            img {
+              max-width: 100%;
+              height: auto;
             }
           </style>
         </head>
@@ -618,23 +718,23 @@ function handlePrint() {
     `);
     iframeDoc.close();
 
-    // 4. Trigger the print dialog once the iframe content is loaded
     setTimeout(() => {
       const iframeWindow = iframe.contentWindow || iframe;
-      iframeWindow.focus(); // Required for some browsers
+      iframeWindow.focus();
       iframeWindow.print();
 
-      // 5. Clean up by removing the iframe after the print dialog
       window.onafterprint = () => {
-        document.body.removeChild(iframe);
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
       };
-      // Fallback cleanup in case onafterprint doesn't fire
+      
       setTimeout(() => {
         if (document.body.contains(iframe)) {
           document.body.removeChild(iframe);
         }
       }, 1000);
-    }, 250); // A short delay to render
+    }, 250);
   }
 
   const handleZoomIn = () => setZoomLevel((p) => Math.min(p + 0.1, 2));
@@ -680,6 +780,8 @@ function handlePrint() {
 
   return (
     <ThemeProvider theme={theme}>
+      <LoadingOverlay open={isLoading} message={editingId ? "Updating certificate..." : "Creating certificate..."} />
+      
       <Box sx={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", bgcolor: "background.default" }}>
         {/* TOP HEADER */}
         <Paper elevation={2} sx={{ zIndex: 10, borderRadius: 0 }}>
@@ -692,7 +794,6 @@ function handlePrint() {
             color: "white"
           }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Avatar src={Logo145} sx={{ width: 48, height: 48 }} />
               <Box>
                 <Typography variant="h5" fontWeight="bold">
                   Certificate of Action 
@@ -752,12 +853,6 @@ function handlePrint() {
                   value="records"
                   iconPosition="start"
                 />
-                <Tab 
-                  icon={<ReceiptIcon />} 
-                  label="Transaction" 
-                  value="transaction"
-                  iconPosition="start"
-                />
               </Tabs>
             </Box>
           </Box>
@@ -815,21 +910,6 @@ function handlePrint() {
                 </Box>
 
                 <Box sx={{ display: "flex", gap: 1 }}>
-                  <Tooltip title="Verify Certificate">
-                    <Button 
-                      variant="outlined" 
-                      color="primary" 
-                      onClick={() => { 
-                        if (display.certificate_of_action_id) 
-                          window.open(window.location.origin + `/verify-certificate?id=${display.certificate_of_action_id}`, "_blank"); 
-                      }} 
-                      startIcon={<QrCodeIcon />} 
-                      disabled={!display.certificate_of_action_id}
-                      size="small"
-                    >
-                      Verify
-                    </Button>
-                  </Tooltip>
                   <Tooltip title="Download PDF">
                     <Button 
                       variant="contained" 
@@ -960,10 +1040,36 @@ function handlePrint() {
                     </div>
 
                     <div style={{ textAlign: "right", fontFamily: "Calibri, sans-serif", fontSize: "22px" }}>
-                      <br /><br /><br /><br /><br /><br />
-                      <b>ARNOLD L. DONDONAYOS</b>
-                      <br />
-                      <b>Barangay 145 Chairperson</b>
+                      {display.use_signature && display.signature_path ? (
+                        <>
+                          <div style={{ marginBottom: "10px" }}>
+                            <img 
+                              src={getSignatureImageUrl(display.signature_path)} 
+                              alt="Signature" 
+                              style={{ 
+                                maxWidth: "200px", 
+                                maxHeight: "80px", 
+                                objectFit: "contain",
+                                display: "block",
+                                marginLeft: "auto"
+                              }} 
+                              onError={(e) => {
+                                e.target.style.display = "none";
+                              }}
+                            />
+                          </div>
+                          <b>{display.official_name || "ARNOLD L. DONDONAYOS"}</b>
+                          <br />
+                          <b>{display.designation || "Barangay 145 Chairperson"}</b>
+                        </>
+                      ) : (
+                        <>
+                          <br /><br /><br /><br /><br /><br />
+                          <b>ARNOLD L. DONDONAYOS</b>
+                          <br />
+                          <b>Barangay 145 Chairperson</b>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -1097,6 +1203,54 @@ function handlePrint() {
                       </Grid>
                     </Grid>
 
+                    <Divider sx={{ my: 2 }} />
+
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={formData.use_signature || false}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setFormData({ 
+                              ...formData, 
+                              use_signature: checked,
+                              signature_id: checked && selectedSignature ? selectedSignature.signature_id : null
+                            });
+                            if (!checked) {
+                              setSelectedSignature(null);
+                            }
+                          }}
+                          color="primary"
+                        />
+                      }
+                      label="Add E-Signature"
+                    />
+
+                    {formData.use_signature && (
+                      <Autocomplete
+                        options={signatures}
+                        getOptionLabel={(opt) => `${opt.official_name} - ${opt.designation}`}
+                        value={selectedSignature}
+                        onChange={(e, newValue) => {
+                          setSelectedSignature(newValue);
+                          setFormData({ 
+                            ...formData, 
+                            signature_id: newValue ? newValue.signature_id : null 
+                          });
+                        }}
+                        renderInput={(params) => (
+                          <TextField 
+                            {...params} 
+                            label="Select Signature" 
+                            variant="outlined" 
+                            fullWidth 
+                            size="small"
+                            required
+                          />
+                        )}
+                      />
+                    )}
+
                     <Box sx={{ display: "flex", gap: 2, pt: 2 }}>
                       <Button 
                         onClick={handleSubmit} 
@@ -1228,128 +1382,211 @@ function handlePrint() {
                 </Box>
               </Box>
             )}
-
-            {/* TRANSACTION */}
-            {activeTab === "transaction" && (
-              <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <Paper elevation={0} sx={{ p: 3, borderBottom: 1, borderColor: "divider" }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-                    <ReceiptIcon color="primary" />
-                    Transaction Search
-                  </Typography>
-                  <Box sx={{ display: "flex", gap: 1 }}>
-                    <TextField 
-                      fullWidth 
-                      size="small" 
-                      placeholder="Enter transaction number" 
-                      value={transactionSearch} 
-                      onChange={(e) => setTransactionSearch(e.target.value)} 
-                      InputProps={{ 
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <ReceiptIcon />
-                          </InputAdornment>
-                        ) 
-                      }} 
-                    />
-                    <Button 
-                      variant="contained" 
-                      color="primary" 
-                      onClick={handleTransactionSearch} 
-                      startIcon={<SearchIcon />}
-                    >
-                      Search
-                    </Button>
-                  </Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-                    Format: COA-YYMMDD-######
-                  </Typography>
-                </Paper>
-
-                <Box sx={{ flex: 1, overflow: "auto", p: 2 }}>
-                  {transactionFilteredRecords.length === 0 ? (
-                    <Paper sx={{ p: 4, textAlign: "center", color: "text.secondary" }}>
-                      <ReceiptIcon sx={{ fontSize: 48, mb: 2, opacity: 0.3 }} />
-                      <Typography variant="h6" gutterBottom>
-                        No transactions found
-                      </Typography>
-                      <Typography variant="body2">
-                        Enter a transaction number to search
-                      </Typography>
-                    </Paper>
-                  ) : (
-                    <Stack spacing={2}>
-                      {transactionFilteredRecords.map((r) => (
-                        <Card key={r.certificate_of_action_id} sx={{ 
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                          borderLeft: 4,
-                          borderColor: "secondary.main",
-                        }}>
-                          <CardContent sx={{ p: 2 }}>
-                            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                              <Box sx={{ flex: 1 }}>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5, color: "#000000" }}>
-                                  {r.complainant_name}
-                                </Typography>
-                                <Box sx={{ display: "flex", alignItems: "center", mb: 1, gap: 1 }}>
-                                  <Chip 
-                                    label={r.transaction_number} 
-                                    size="small" 
-                                    color="secondary" 
-                                    variant="outlined" 
-                                  />
-                                </Box>
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                                  {r.barangay_case_no}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  Issued: {formatDateDisplay(r.date_issued)}
-                                </Typography>
-                              </Box>
-                              <Box sx={{ display: "flex", gap: 0.5 }}>
-                                <Tooltip title="View">
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleView(r)} 
-                                    color="primary"
-                                  >
-                                    <EyeIcon />
-                                  </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Edit">
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleEdit(r)} 
-                                    color="success"
-                                  >
-                                    <EditIcon />
-                                  </IconButton>
-                                </Tooltip>
-                              </Box>
-                            </Box>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </Stack>
-                  )}
-                </Box>
-              </Box>
-            )}
           </Box>
         </Box>
 
-        {/* FLOATING ACTION BUTTON FOR MOBILE */}
-        {isMobile && activeTab !== "form" && (
+        {/* FORM MODAL */}
+        <Dialog
+          open={isFormOpen}
+          onClose={() => { resetForm(); }}
+          TransitionComponent={Transition}
+          maxWidth="md"
+          fullWidth
+          PaperProps={{ sx: { borderRadius: 2 } }}
+        >
+          <DialogTitle sx={{ bgcolor: "#41644A", color: "white", py: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                {editingId ? "Edit Certificate" : "New Certificate of Action"}
+              </Typography>
+              <IconButton onClick={() => { resetForm(); }} sx={{ color: "white" }}>
+                <CloseIcon />
+              </IconButton>
+            </Box>
+          </DialogTitle>
+          <DialogContent sx={{ p: 3 }}>
+            <Stack spacing={2.5} sx={{ mt: 1 }}>
+              <Autocomplete
+                options={residents}
+                getOptionLabel={(opt) => opt.full_name || ""}
+                value={residents.find((r) => r.resident_id === formData.resident_id) || null}
+                onChange={(e, nv) => { onResidentSelect(nv); }}
+                renderInput={(params) => (
+                  <TextField {...params} label="Complainant Name" variant="outlined" fullWidth required />
+                )}
+              />
+              <TextField 
+                label="Respondent Name" 
+                variant="outlined" 
+                fullWidth 
+                value={formData.respondent_name} 
+                onChange={(e) => setFormData({ ...formData, respondent_name: e.target.value })} 
+                required
+              />
+              <TextField 
+                label="Barangay Case No." 
+                variant="outlined" 
+                fullWidth 
+                value={formData.barangay_case_no} 
+                onChange={(e) => setFormData({ ...formData, barangay_case_no: e.target.value })} 
+                required
+              />
+              <TextField 
+                label="Request Reason" 
+                variant="outlined" 
+                fullWidth 
+                multiline 
+                rows={3}
+                value={formData.request_reason} 
+                onChange={(e) => setFormData({ ...formData, request_reason: e.target.value })} 
+                placeholder="Reason for certification"
+                required
+              />
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6}>
+                  <TextField 
+                    label="Filed Date" 
+                    type="date" 
+                    variant="outlined" 
+                    fullWidth 
+                    InputLabelProps={{ shrink: true }} 
+                    value={formData.filed_date} 
+                    onChange={(e) => setFormData({ ...formData, filed_date: e.target.value })} 
+                    required
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6}>
+                  <TextField 
+                    label="Date Issued" 
+                    type="date" 
+                    variant="outlined" 
+                    fullWidth 
+                    InputLabelProps={{ shrink: true }} 
+                    value={formData.date_issued} 
+                    onChange={(e) => setFormData({ ...formData, date_issued: e.target.value })} 
+                    helperText={formData.date_issued ? (() => { 
+                      const date = new Date(formData.date_issued); 
+                      const day = date.getDate(); 
+                      const month = date.toLocaleString("default", { month: "short" }); 
+                      const year = date.getFullYear(); 
+                      const suffix = day % 10 === 1 && day !== 11 ? "st" : day % 10 === 2 && day !== 12 ? "nd" : day % 10 === 3 && day !== 13 ? "rd" : "th"; 
+                      return `Formatted: ${day}${suffix} day of ${month}, ${year}`; 
+                    })() : "Select the date"}
+                    required
+                  />
+                </Grid>
+              </Grid>
+
+              <Divider sx={{ my: 2 }} />
+
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={formData.use_signature || false}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setFormData({ 
+                        ...formData, 
+                        use_signature: checked,
+                        signature_id: checked && selectedSignature ? selectedSignature.signature_id : null
+                      });
+                      if (!checked) {
+                        setSelectedSignature(null);
+                      }
+                    }}
+                    color="primary"
+                  />
+                }
+                label="Add E-Signature"
+              />
+
+              {formData.use_signature && (
+                <Autocomplete
+                  options={signatures}
+                  getOptionLabel={(opt) => `${opt.official_name} - ${opt.designation}`}
+                  value={selectedSignature}
+                  onChange={(e, newValue) => {
+                    setSelectedSignature(newValue);
+                    setFormData({ 
+                      ...formData, 
+                      signature_id: newValue ? newValue.signature_id : null 
+                    });
+                  }}
+                  renderInput={(params) => (
+                    <TextField 
+                      {...params} 
+                      label="Select Signature" 
+                      variant="outlined" 
+                      fullWidth 
+                      required
+                    />
+                  )}
+                />
+              )}
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ p: 3, borderTop: "1px solid #F1F0E9" }}>
+            <Button onClick={() => { resetForm(); }} variant="outlined" sx={{ borderColor: "#41644A", color: "#41644A" }}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSubmit} 
+              variant="contained" 
+              startIcon={<SaveIcon />}
+              sx={{ bgcolor: "#41644A", "&:hover": { bgcolor: "#0D4715" } }}
+            >
+              {editingId ? "Update" : "Save"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* CONFIRMATION DIALOG */}
+        <Dialog
+          open={showConfirmDialog}
+          onClose={() => { setShowConfirmDialog(false); setPendingAction(null); }}
+          PaperProps={{ sx: { borderRadius: 2 } }}
+        >
+          <DialogTitle sx={{ bgcolor: "#41644A", color: "white", py: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Confirm {editingId ? "Update" : "Create"}
+            </Typography>
+          </DialogTitle>
+          <DialogContent sx={{ p: 3 }}>
+            <Typography>
+              Are you sure you want to {editingId ? "update" : "create"} this certificate?
+            </Typography>
+          </DialogContent>
+          <DialogActions sx={{ p: 2, borderTop: "1px solid #F1F0E9" }}>
+            <Button 
+              onClick={() => { setShowConfirmDialog(false); setPendingAction(null); }}
+              variant="outlined"
+              sx={{ borderColor: "#41644A", color: "#41644A" }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={confirmSave}
+              variant="contained"
+              sx={{ bgcolor: "#41644A", "&:hover": { bgcolor: "#0D4715" } }}
+            >
+              Confirm
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {isMobile && (
           <Fab
-            color="primary"
+            color="secondary"
             aria-label="add"
             sx={{
-              position: 'absolute',
-              bottom: 16,
-              right: 16,
+              position: 'fixed',
+              bottom: 24,
+              right: 24,
+              zIndex: 1000,
+              bgcolor: "#E9762B",
+              "&:hover": { bgcolor: "#d8651f" }
             }}
-            onClick={() => { resetForm(); setIsFormOpen(true); setActiveTab("form"); }}
+            onClick={() => { resetForm(); setIsFormOpen(true); }}
           >
             <AddIcon />
           </Fab>

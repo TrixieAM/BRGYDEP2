@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import { 
   Box, 
   Card, 
@@ -22,6 +23,7 @@ import SearchIcon from '@mui/icons-material/Search';
 const COLORS = ['#E9762B', '#41644A', '#FFBB28', '#0088FE', '#A020F0', '#FF3366'];
 
 const Reports = () => {
+  const { getToken } = useAuth();
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
@@ -64,8 +66,10 @@ const Reports = () => {
 
   const fetchCertificates = async () => {
     try {
+      const token = getToken();
+      const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
       // Fetch all certificates from a single endpoint
-      const res = await axios.get('http://localhost:5000/certificates');
+      const res = await axios.get('http://localhost:5000/certificates', config);
       console.log('Certificates data:', res.data); // Debug log to see what we're getting
       setCertificates(res.data);
     } catch (error) {
@@ -75,7 +79,9 @@ const Reports = () => {
 
   const fetchResidents = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/residents');
+      const token = getToken();
+      const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+      const res = await axios.get('http://localhost:5000/residents', config);
       setResidents(res.data);
     } catch (error) {
       console.error('Error fetching residents:', error);

@@ -118,6 +118,57 @@ async function setupDatabase() {
 
     console.log("Request records table created/verified");
 
+    // Create official_signature table if it doesn't exist
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS official_signature (
+        signature_id INT(11) NOT NULL AUTO_INCREMENT,
+        official_name VARCHAR(255) NOT NULL,
+        designation VARCHAR(255) NOT NULL,
+        signature_path TEXT NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (signature_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `);
+
+    console.log("Official signature table created/verified");
+
+    // Add signature fields to certificate_of_action table if they don't exist
+    try {
+      // Check if columns exist
+      const [columns] = await pool.query(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+         WHERE TABLE_SCHEMA = DATABASE() 
+         AND TABLE_NAME = 'certificate_of_action' 
+         AND COLUMN_NAME IN ('use_signature', 'signature_id')`
+      );
+      
+      const existingColumns = columns.map(col => col.COLUMN_NAME);
+      
+      if (!existingColumns.includes('use_signature')) {
+        await pool.query(
+          `ALTER TABLE certificate_of_action 
+           ADD COLUMN use_signature TINYINT(1) DEFAULT 0 AFTER transaction_number`
+        );
+        console.log("Added use_signature column to certificate_of_action");
+      }
+      
+      if (!existingColumns.includes('signature_id')) {
+        await pool.query(
+          `ALTER TABLE certificate_of_action 
+           ADD COLUMN signature_id INT(11) NULL AFTER use_signature,
+           ADD KEY signature_id (signature_id),
+           ADD CONSTRAINT fk_cert_action_signature 
+           FOREIGN KEY (signature_id) REFERENCES official_signature (signature_id) 
+           ON DELETE SET NULL ON UPDATE CASCADE`
+        );
+        console.log("Added signature_id column to certificate_of_action");
+      }
+    } catch (err) {
+      // Table might not exist yet, that's okay
+      console.log("Note: certificate_of_action table may not exist yet");
+    }
+
     // Check if admin user exists
     const [existingAdmin] = await pool.query(
       "SELECT user_id FROM users WHERE username = 'admin'"

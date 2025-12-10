@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import CaloocanLogo from '../../assets/CaloocanLogo.png';
 import Logo145 from '../../assets/Logo145.png';
 import BagongPilipinas from '../../assets/BagongPilipinas.png';
@@ -211,6 +212,16 @@ const theme = createTheme({
 export default function SoloParentForm() {
   const apiBase = 'http://localhost:5000';
   const navigate = useNavigate();
+  const { getToken } = useAuth();
+
+  // Helper function to get auth headers
+  const getAuthHeaders = () => {
+    const token = getToken();
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    };
+  };
 
   const [records, setRecords] = useState([]);
   const [selectedRecord, setSelectedRecord] = useState(null);
@@ -218,7 +229,6 @@ export default function SoloParentForm() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('form');
   const [searchTerm, setSearchTerm] = useState('');
-  const [transactionSearch, setTransactionSearch] = useState('');
   const [residents, setResidents] = useState([]);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -378,7 +388,9 @@ const {
 
   async function loadResidents() {
     try {
-      const res = await fetch(`${apiBase}/residents`);
+      const res = await fetch(`${apiBase}/residents`, {
+        headers: getAuthHeaders()
+      });
       const data = await res.json();
       // Format dates properly when loading residents - extract only YYYY-MM-DD
       const formattedResidents = data.map((resident) => ({
@@ -398,7 +410,9 @@ const {
 
   async function loadRecords() {
     try {
-      const res = await fetch(`${apiBase}/solo-parent-records`);
+      const res = await fetch(`${apiBase}/solo-parent-records`, {
+        headers: getAuthHeaders()
+      });
       const data = await res.json();
       setRecords(
         Array.isArray(data)
@@ -427,7 +441,9 @@ const {
 
   async function loadChildren(soloParentId) {
     try {
-      const res = await fetch(`${apiBase}/solo-parent-children/${soloParentId}`);
+      const res = await fetch(`${apiBase}/solo-parent-records/${soloParentId}/children`, {
+        headers: getAuthHeaders()
+      });
       const data = await res.json();
       setChildren(
         Array.isArray(data)
@@ -555,7 +571,7 @@ const {
 
     const res = await fetch(`${apiBase}/solo-parent-records`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(toServerPayload(updatedFormData)),
     });
     if (!res.ok) throw new Error('Create failed');
@@ -564,9 +580,9 @@ const {
 
     // Save children
     if (children.length > 0) {
-      await fetch(`${apiBase}/solo-parent-children/${soloParentId}`, {
+      await fetch(`${apiBase}/solo-parent-records/${soloParentId}/children`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(childrenToServerPayload()),
       });
     }
@@ -621,26 +637,42 @@ async function handleUpdate() {
     
     const res = await fetch(`${apiBase}/solo-parent-records/${editingId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(toServerPayload(updatedFormData)),
     });
     if (!res.ok) throw new Error('Update failed');
-
-    // Update children
-    await fetch(`${apiBase}/solo-parent-children/${editingId}`, {
-      method: 'DELETE',
+    const updatedData = await res.json();
+    
+    // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
+    const newSoloParentId = updatedData.solo_parent_id;
+    
+    // Update children for the new record
+    await fetch(`${apiBase}/solo-parent-records/${newSoloParentId}/children`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(childrenToServerPayload()),
     });
 
-    if (children.length > 0) {
-      await fetch(`${apiBase}/solo-parent-children/${editingId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(childrenToServerPayload()),
-      });
-    }
-
-    const updated = { ...updatedFormData, id: editingId };
-    setRecords(records.map((r) => (r.id === editingId ? updated : r)));
+    const updated = { 
+      ...updatedData,
+      id: newSoloParentId,
+      name: updatedData.full_name,
+      address: updatedData.address,
+      birthday: updatedData.dob?.slice(0, 10) || '',
+      age: String(updatedData.age ?? ''),
+      contactNo: updatedData.contact_no || '',
+      residentsSinceYear: updatedData.residents_since_year || '',
+      unwedSinceYear: updatedData.unwed_since_year || '',
+      employmentStatus: updatedData.employment_status || '',
+      employmentRemarks: updatedData.employment_remarks || '',
+      dateIssued: updatedData.date_issued?.slice(0, 10) || '',
+      dateCreated: updatedData.date_created,
+      transaction_number: updatedData.transaction_number,
+      validity_period: validityPeriod
+    };
+    
+    // Remove old record and add new one
+    setRecords([updated, ...records.filter((r) => r.id !== editingId)]);
     setSelectedRecord(updated);
 
     // --- START: FIX ---
@@ -689,6 +721,7 @@ async function handleUpdate() {
     try {
       const res = await fetch(`${apiBase}/solo-parent-records/${id}`, {
         method: 'DELETE',
+        headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error('Delete failed');
       setRecords(records.filter((r) => r.id !== id));
@@ -752,16 +785,6 @@ async function handleUpdate() {
     [records, searchTerm]
   );
 
-  // Filter records by transaction number
-  const transactionFilteredRecords = useMemo(
-    () =>
-      records.filter((r) =>
-        r.transaction_number
-          .toLowerCase()
-          .includes(transactionSearch.toLowerCase())
-      ),
-    [records, transactionSearch]
-  );
 
   // Generate PDF function
   async function generatePDF() {
@@ -912,26 +935,6 @@ async function handleUpdate() {
     }
   };
 
-  // Function to handle transaction number search
-  const handleTransactionSearch = () => {
-    if (!transactionSearch) return;
-
-    const foundRecord = records.find(
-      (r) =>
-        r.transaction_number.toLowerCase() === transactionSearch.toLowerCase()
-    );
-
-    if (foundRecord) {
-      setSelectedRecord(foundRecord);
-      setFormData({ ...foundRecord }); // Populate form data
-      setEditingId(foundRecord.id); // Indicate viewing/editing
-      setIsFormOpen(true); // Open form view
-      setActiveTab('form'); // Switch to form tab
-      loadChildren(foundRecord.id);
-    } else {
-      alert('No certificate found with this transaction number');
-    }
-  };
 
   const handleZoomIn = () => {
     setZoomLevel((prev) => Math.min(prev + 0.1, 2)); // Max zoom: 2x (200%)
@@ -1072,12 +1075,6 @@ async function handleUpdate() {
                   icon={<FolderIcon />} 
                   label={`Records (${records.length})`} 
                   value="records"
-                  iconPosition="start"
-                />
-                <Tab 
-                  icon={<ReceiptIcon />} 
-                  label="Transaction" 
-                  value="transaction"
                   iconPosition="start"
                 />
               </Tabs>
@@ -2209,113 +2206,6 @@ async function handleUpdate() {
               </Box>
             )}
 
-            {/* TRANSACTION */}
-            {activeTab === "transaction" && (
-              <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <Paper elevation={0} sx={{ p: 3, borderBottom: 1, borderColor: "divider" }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-                    <ReceiptIcon color="primary" />
-                    Transaction Search
-                  </Typography>
-                  <Box sx={{ display: "flex", gap: 1 }}>
-                    <TextField 
-                      fullWidth 
-                      size="small" 
-                      placeholder="Enter transaction number" 
-                      value={transactionSearch} 
-                      onChange={(e) => setTransactionSearch(e.target.value)} 
-                      InputProps={{ 
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <ReceiptIcon />
-                          </InputAdornment>
-                        ) 
-                      }} 
-                    />
-                    <Button 
-                      variant="contained" 
-                      color="primary" 
-                      onClick={handleTransactionSearch} 
-                      startIcon={<SearchIcon />}
-                    >
-                      Search
-                    </Button>
-                  </Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-                    Format: SP-YYMMDD-XXX
-                  </Typography>
-                </Paper>
-
-                <Box sx={{ flex: 1, overflow: "auto", p: 2 }}>
-                  {transactionFilteredRecords.length === 0 ? (
-                    <Paper sx={{ p: 4, textAlign: "center", color: "text.secondary" }}>
-                      <ReceiptIcon sx={{ fontSize: 48, mb: 2, opacity: 0.3 }} />
-                      <Typography variant="h6" gutterBottom>
-                        No transactions found
-                      </Typography>
-                      <Typography variant="body2">
-                        Enter a transaction number to search
-                      </Typography>
-                    </Paper>
-                  ) : (
-                    <Stack spacing={2}>
-                      {transactionFilteredRecords.map((r) => (
-                        <Card key={r.id} sx={{ 
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                          borderLeft: 4,
-                          borderColor: "secondary.main",
-                        }}>
-                          <CardContent sx={{ p: 2 }}>
-                            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                              <Box sx={{ flex: 1 }}>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5, color: "#000000" }}>
-                                  {r.name}
-                                </Typography>
-                                <Box sx={{ display: "flex", alignItems: "center", mb: 1, gap: 1 }}>
-                                  <Chip 
-                                    label={r.transaction_number} 
-                                    size="small" 
-                                    color="secondary" 
-                                    variant="outlined" 
-                                  />
-                                </Box>
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                                  {r.address}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  Issued: {formatDateDisplay(r.dateIssued)}
-                                </Typography>
-                              </Box>
-                              <Box sx={{ display: "flex", gap: 0.5 }}>
-                                <Tooltip title="View">
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleView(r)} 
-                                    color="primary"
-                                  >
-                                    <EyeIcon />
-                                  </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Edit">
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleEdit(r)} 
-                                    color="success"
-                                  >
-                                    <EditIcon />
-                                  </IconButton>
-                                </Tooltip>
-                              </Box>
-                            </Box>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </Stack>
-                  )}
-                </Box>
-              </Box>
-            )}
           </Box>
         </Box>
 

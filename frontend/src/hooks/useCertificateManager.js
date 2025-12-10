@@ -6,6 +6,15 @@ export function useCertificateManager(certificateType, apiBase = 'http://localho
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Helper function to get auth headers
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('token');
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    };
+  };
+
   // Function to calculate validity period based on certificate type
   const getValidityPeriod = (type) => {
     const validityPeriods = {
@@ -54,7 +63,9 @@ export function useCertificateManager(certificateType, apiBase = 'http://localho
     
     try {
       const query = type ? `?certificate_type=${type}` : '';
-      const res = await fetch(`${apiBase}/certificates${query}`);
+      const res = await fetch(`${apiBase}/certificates${query}`, {
+        headers: getAuthHeaders()
+      });
       
       if (!res.ok) throw new Error('Failed to fetch certificates');
       
@@ -96,7 +107,7 @@ const saveCertificate = async (certificateData, isNew = true, certificateId = nu
       
       res = await fetch(`${apiBase}/certificates`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(certificatePayload),
       });
     } else {
@@ -110,14 +121,14 @@ const saveCertificate = async (certificateData, isNew = true, certificateId = nu
       if (existingCertificate) {
         res = await fetch(`${apiBase}/certificates/${existingCertificate.certificate_id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify(certificatePayload),
         });
       } else {
         // Create a new certificate record if none exists
         res = await fetch(`${apiBase}/certificates`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify(certificatePayload),
         });
       }

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import QRCode from "qrcode";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import { useAuth } from '../../contexts/AuthContext';
 
 import CaloocanLogo from "../../assets/CaloocanLogo.png";
 import Logo145 from "../../assets/Logo145.png";
@@ -200,6 +201,16 @@ const theme = createTheme({
 export default function Cohabitation() {
   // Change apiBase to include /api if your backend routes are under /api
   const apiBase = "http://localhost:5000";
+  const { getToken } = useAuth();
+
+  // Helper function to get auth headers
+  const getAuthHeaders = () => {
+    const token = getToken();
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    };
+  };
 
   const [records, setRecords] = useState([]);
   const [residents, setResidents] = useState([]);
@@ -208,7 +219,6 @@ export default function Cohabitation() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("form");
   const [searchTerm, setSearchTerm] = useState("");
-  const [transactionSearch, setTransactionSearch] = useState("");
   const [qrCodeUrl, setQrCodeUrl] = useState("");
   const [zoomLevel, setZoomLevel] = useState(0.75);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -321,7 +331,9 @@ const {
 
   async function loadResidents() {
     try {
-      const res = await fetch(`${apiBase}/residents`);
+      const res = await fetch(`${apiBase}/residents`, {
+        headers: getAuthHeaders()
+      });
       const data = await res.json();
       setResidents(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -331,7 +343,9 @@ const {
 
   async function loadRecords() {
     try {
-      const res = await fetch(`${apiBase}/certificate-of-cohabitation`);
+      const res = await fetch(`${apiBase}/certificate-of-cohabitation`, {
+        headers: getAuthHeaders()
+      });
       const data = await res.json();
       setRecords(
         Array.isArray(data)
@@ -440,7 +454,7 @@ async function handleCreate() {
     };
     const res = await fetch(`${apiBase}/certificate-of-cohabitation`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(toServerPayload(updated)),
     });
     if (!res.ok) throw new Error("Create failed");
@@ -481,12 +495,30 @@ async function handleUpdate() {
     };
     const res = await fetch(`${apiBase}/certificate-of-cohabitation/${editingId}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify(toServerPayload(updated)),
     });
     if (!res.ok) throw new Error("Update failed");
-    const updatedRec = { ...updated, certificate_of_cohabitation_id: editingId };
-    setRecords(records.map((r) => (r.certificate_of_cohabitation_id === editingId ? updatedRec : r)));
+    const updatedData = await res.json();
+    // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
+    const updatedRec = { 
+      ...updatedData,
+      certificate_of_cohabitation_id: updatedData.certificate_of_cohabitation_id,
+      full_name1: updatedData.full_name1,
+      dob1: updatedData.dob1 ? updatedData.dob1.split("T")[0] : "",
+      full_name2: updatedData.full_name2,
+      dob2: updatedData.dob2 ? updatedData.dob2.split("T")[0] : "",
+      address: updatedData.address,
+      date_started: updatedData.date_started,
+      date_issued: updatedData.date_issued ? updatedData.date_issued.split("T")[0] : "",
+      witness1_name: updatedData.witness1_name,
+      witness2_name: updatedData.witness2_name,
+      date_created: updatedData.date_created,
+      transaction_number: updatedData.transaction_number,
+      validity_period: validityPeriod
+    };
+    // Remove old record and add new one
+    setRecords([updatedRec, ...records.filter((r) => r.certificate_of_cohabitation_id !== editingId)]);
     setSelectedRecord(updatedRec);
 
     // --- Save to certificates table ---
@@ -527,7 +559,10 @@ async function handleUpdate() {
   async function handleDelete(id) {
     if (!window.confirm("Delete this record?")) return;
     try {
-      const res = await fetch(`${apiBase}/certificate-of-cohabitation/${id}`, { method: "DELETE" });
+      const res = await fetch(`${apiBase}/certificate-of-cohabitation/${id}`, { 
+        method: "DELETE",
+        headers: getAuthHeaders()
+      });
       if (!res.ok) throw new Error("Delete failed");
       setRecords(records.filter((r) => r.certificate_of_cohabitation_id !== id));
       if (selectedRecord?.certificate_of_cohabitation_id === id) setSelectedRecord(null);
@@ -587,17 +622,6 @@ async function handleUpdate() {
     [records, searchTerm]
   );
 
-  const transactionFilteredRecords = useMemo(
-    () => records.filter((r) => (r.transaction_number || "").toLowerCase().includes(transactionSearch.toLowerCase())),
-    [records, transactionSearch]
-  );
-
-  function handleTransactionSearch() {
-    if (!transactionSearch) return;
-    const found = records.find((r) => (r.transaction_number || "").toLowerCase() === transactionSearch.toLowerCase());
-    if (found) handleView(found);
-    else alert("No certificate found with this transaction number");
-  }
 
   async function generatePDF() {
     if (!display.certificate_of_cohabitation_id) {
@@ -862,12 +886,6 @@ async function handleUpdate() {
                   icon={<FolderIcon />} 
                   label={`Records (${records.length})`} 
                   value="records"
-                  iconPosition="start"
-                />
-                <Tab 
-                  icon={<ReceiptIcon />} 
-                  label="Transaction" 
-                  value="transaction"
                   iconPosition="start"
                 />
               </Tabs>
@@ -1594,116 +1612,6 @@ async function handleUpdate() {
               </Box>
             )}
 
-            {/* TRANSACTION */}
-            {activeTab === "transaction" && (
-              <Box sx={{ flex: 1, p: 2, overflow: "auto" }}>
-                <Card sx={{ borderRadius: 3, boxShadow: 1, mb: 2 }}>
-                  <CardHeader title={<Typography variant="h6" sx={{ fontSize: "1rem", fontWeight: 600, color: "grey.800" }}>Search by Transaction Number</Typography>} sx={{ borderBottom: 1, borderColor: "grey.200" }} />
-                  <CardContent>
-                    <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
-                      <TextField
-                        fullWidth
-                        size="small"
-                        placeholder="Enter transaction number (e.g., COH-240101-123456)"
-                        value={transactionSearch}
-                        onChange={(e)=>setTransactionSearch(e.target.value)}
-                        InputProps={{
-                          startAdornment: (
-                            <InputAdornment position="start">
-                              <ReceiptIcon />
-                            </InputAdornment>
-                          )
-                        }}
-                      />
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        onClick={handleTransactionSearch}
-                        startIcon={<SearchIcon />}
-                        sx={{ fontWeight: 600, px: 3 }}
-                      >
-                        Search
-                      </Button>
-                    </Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-                      Transaction numbers are automatically generated when creating a new certificate. Format: COH-YYMMDD-######
-                    </Typography>
-                  </CardContent>
-                </Card>
-
-                <Card sx={{ borderRadius: 3, boxShadow: 1 }}>
-                  <CardHeader title={<Typography variant="h6" sx={{ fontSize: "1rem", fontWeight: 600, color: "grey.800" }}>Recent Transactions</Typography>} sx={{ borderBottom: 1, borderColor: "grey.200" }} />
-                  <CardContent sx={{ p: 0 }}>
-                    {transactionFilteredRecords.length === 0 ? (
-                      <Box sx={{ p: 3, textAlign: "center", color: "text.secondary" }}>
-                        <ReceiptIcon sx={{ fontSize: 48, mb: 2, opacity: 0.3 }} />
-                        <Typography variant="h6" gutterBottom>
-                          No transactions found
-                        </Typography>
-                        <Typography variant="body2">
-                          Enter a transaction number to search
-                        </Typography>
-                      </Box>
-                    ) : (
-                      <Stack spacing={2}>
-                        {transactionFilteredRecords.map((record) => (
-                          <Card key={record.certificate_of_cohabitation_id} sx={{
-                            cursor: "pointer",
-                            transition: "all 0.2s ease",
-                            borderLeft: 4,
-                            borderColor: "secondary.main",
-                          }}>
-                            <CardContent sx={{ p: 2 }}>
-                              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                                <Box sx={{ flex: 1 }}>
-                                  <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5, color: "#000000" }}>
-                                    {record.full_name1} & {record.full_name2}
-                                  </Typography>
-                                  <Box sx={{ display: "flex", alignItems: "center", mb: 1, gap: 1 }}>
-                                    <Chip
-                                      label={record.transaction_number}
-                                      size="small"
-                                      color="secondary"
-                                      variant="outlined"
-                                    />
-                                  </Box>
-                                  <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                                    {record.address}
-                                  </Typography>
-                                  <Typography variant="caption" color="text.secondary">
-                                    Issued: {formatDateDisplay(record.date_issued)}
-                                  </Typography>
-                                </Box>
-                                <Box sx={{ display: "flex", gap: 0.5 }}>
-                                  <Tooltip title="View">
-                                    <IconButton
-                                      size="small"
-                                      onClick={()=>handleView(record)}
-                                      color="primary"
-                                    >
-                                      <EyeIcon />
-                                    </IconButton>
-                                  </Tooltip>
-                                  <Tooltip title="Edit">
-                                    <IconButton
-                                      size="small"
-                                      onClick={()=>handleEdit(record)}
-                                      color="success"
-                                    >
-                                      <EditIcon />
-                                    </IconButton>
-                                  </Tooltip>
-                                </Box>
-                              </Box>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </Stack>
-                    )}
-                  </CardContent>
-                </Card>
-              </Box>
-            )}
           </Box>
         </Box>
 

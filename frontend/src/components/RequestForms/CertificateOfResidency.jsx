@@ -4,6 +4,7 @@ import QRCode from 'qrcode';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import CaloocanLogo from '../../assets/CaloocanLogo.png';
 import Logo145 from '../../assets/Logo145.png';
 import BagongPilipinas from '../../assets/BagongPilipinas.png';
@@ -210,6 +211,16 @@ const theme = createTheme({
 export default function CertificateOfResidency() {
   const apiBase = 'http://localhost:5000';
   const navigate = useNavigate();
+  const { getToken } = useAuth();
+
+  // Helper function to get auth headers
+  const getAuthHeaders = () => {
+    const token = getToken();
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    };
+  };
 
   const [records, setRecords] = useState([]);
   const [selectedRecord, setSelectedRecord] = useState(null);
@@ -217,7 +228,6 @@ export default function CertificateOfResidency() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('form');
   const [searchTerm, setSearchTerm] = useState('');
-  const [transactionSearch, setTransactionSearch] = useState('');
   const [residents, setResidents] = useState([]);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -381,7 +391,9 @@ export default function CertificateOfResidency() {
 
   async function loadResidents() {
     try {
-      const res = await fetch(`${apiBase}/residents`);
+      const res = await fetch(`${apiBase}/residents`, {
+        headers: getAuthHeaders()
+      });
       const data = await res.json();
       // Format dates properly when loading residents - extract only YYYY-MM-DD
       const formattedResidents = data.map((resident) => ({
@@ -401,7 +413,9 @@ export default function CertificateOfResidency() {
 
   async function loadRecords() {
     try {
-      const res = await fetch(`${apiBase}/certificate-of-residency`);
+      const res = await fetch(`${apiBase}/certificate-of-residency`, {
+        headers: getAuthHeaders()
+      });
       const data = await res.json();
       setRecords(
         Array.isArray(data)
@@ -525,7 +539,7 @@ export default function CertificateOfResidency() {
 
       const res = await fetch(`${apiBase}/certificate-of-residency`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(toServerPayload(updatedFormData)),
       });
       if (!res.ok) throw new Error('Create failed');
@@ -559,14 +573,31 @@ export default function CertificateOfResidency() {
 
       const res = await fetch(`${apiBase}/certificate-of-residency/${editingId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(toServerPayload(updatedFormData)),
       });
       if (!res.ok) throw new Error('Update failed');
-      const updated = { ...updatedFormData, certificate_of_residency_id: editingId };
-      setRecords(
-        records.map((r) => (r.certificate_of_residency_id === editingId ? updated : r))
-      );
+      const updatedData = await res.json();
+      // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
+      const updated = { 
+        ...updatedData,
+        certificate_of_residency_id: updatedData.certificate_of_residency_id,
+        full_name: updatedData.full_name,
+        address: updatedData.address,
+        provincial_address: updatedData.provincial_address || '',
+        dob: updatedData.dob?.split('T')[0] || '',
+        age: String(updatedData.age ?? ''),
+        civil_status: updatedData.civil_status,
+        contact_no: updatedData.contact_no || '',
+        remarks: updatedData.remarks || '',
+        request_reason: updatedData.request_reason || '',
+        date_issued: updatedData.date_issued?.split('T')[0] || '',
+        date_created: updatedData.date_created,
+        transaction_number: updatedData.transaction_number,
+        validity_period: validityPeriod
+      };
+      // Remove old record and add new one
+      setRecords([updated, ...records.filter((r) => r.certificate_of_residency_id !== editingId)]);
       setSelectedRecord(updated);
 
       // Save to certificates table
@@ -595,6 +626,7 @@ export default function CertificateOfResidency() {
     try {
       const res = await fetch(`${apiBase}/certificate-of-residency/${id}`, {
         method: 'DELETE',
+        headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error('Delete failed');
       setRecords(records.filter((r) => r.certificate_of_residency_id !== id));
@@ -660,16 +692,6 @@ export default function CertificateOfResidency() {
     [records, searchTerm]
   );
 
-  // Filter records by transaction number
-  const transactionFilteredRecords = useMemo(
-    () =>
-      records.filter((r) =>
-        r.transaction_number
-          .toLowerCase()
-          .includes(transactionSearch.toLowerCase())
-      ),
-    [records, transactionSearch]
-  );
 
   // Generate PDF function
   async function generatePDF() {
@@ -820,25 +842,6 @@ export default function CertificateOfResidency() {
     }
   };
 
-  // Function to handle transaction number search
-  const handleTransactionSearch = () => {
-    if (!transactionSearch) return;
-
-    const foundRecord = records.find(
-      (r) =>
-        r.transaction_number.toLowerCase() === transactionSearch.toLowerCase()
-    );
-
-    if (foundRecord) {
-      setSelectedRecord(foundRecord);
-      setFormData({ ...foundRecord }); // Populate form data
-      setEditingId(foundRecord.certificate_of_residency_id); // Indicate viewing/editing
-      setIsFormOpen(true); // Open form view
-      setActiveTab('form'); // Switch to form tab
-    } else {
-      alert('No certificate found with this transaction number');
-    }
-  };
 
   const handleZoomIn = () => {
     setZoomLevel((prev) => Math.min(prev + 0.1, 2)); // Max zoom: 2x (200%)
@@ -945,12 +948,6 @@ export default function CertificateOfResidency() {
                   icon={<FolderIcon />} 
                   label={`Records (${records.length})`} 
                   value="records"
-                  iconPosition="start"
-                />
-                <Tab 
-                  icon={<ReceiptIcon />} 
-                  label="Transaction" 
-                  value="transaction"
                   iconPosition="start"
                 />
               </Tabs>
@@ -1951,113 +1948,6 @@ export default function CertificateOfResidency() {
               </Box>
             )}
 
-            {/* TRANSACTION */}
-            {activeTab === "transaction" && (
-              <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <Paper elevation={0} sx={{ p: 3, borderBottom: 1, borderColor: "divider" }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-                    <ReceiptIcon color="primary" />
-                    Transaction Search
-                  </Typography>
-                  <Box sx={{ display: "flex", gap: 1 }}>
-                    <TextField 
-                      fullWidth 
-                      size="small" 
-                      placeholder="Enter transaction number" 
-                      value={transactionSearch} 
-                      onChange={(e) => setTransactionSearch(e.target.value)} 
-                      InputProps={{ 
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <ReceiptIcon />
-                          </InputAdornment>
-                        ) 
-                      }} 
-                    />
-                    <Button 
-                      variant="contained" 
-                      color="primary" 
-                      onClick={handleTransactionSearch} 
-                      startIcon={<SearchIcon />}
-                    >
-                      Search
-                    </Button>
-                  </Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-                    Format: COR-YYMMDD-XXX
-                  </Typography>
-                </Paper>
-
-                <Box sx={{ flex: 1, overflow: "auto", p: 2 }}>
-                  {transactionFilteredRecords.length === 0 ? (
-                    <Paper sx={{ p: 4, textAlign: "center", color: "text.secondary" }}>
-                      <ReceiptIcon sx={{ fontSize: 48, mb: 2, opacity: 0.3 }} />
-                      <Typography variant="h6" gutterBottom>
-                        No transactions found
-                      </Typography>
-                      <Typography variant="body2">
-                        Enter a transaction number to search
-                      </Typography>
-                    </Paper>
-                  ) : (
-                    <Stack spacing={2}>
-                      {transactionFilteredRecords.map((r) => (
-                        <Card key={r.certificate_of_residency_id} sx={{ 
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                          borderLeft: 4,
-                          borderColor: "secondary.main",
-                        }}>
-                          <CardContent sx={{ p: 2 }}>
-                            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                              <Box sx={{ flex: 1 }}>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5, color: "#000000" }}>
-                                  {r.full_name}
-                                </Typography>
-                                <Box sx={{ display: "flex", alignItems: "center", mb: 1, gap: 1 }}>
-                                  <Chip 
-                                    label={r.transaction_number} 
-                                    size="small" 
-                                    color="secondary" 
-                                    variant="outlined" 
-                                  />
-                                </Box>
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                                  {r.address}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  Issued: {formatDateDisplay(r.date_issued)}
-                                </Typography>
-                              </Box>
-                              <Box sx={{ display: "flex", gap: 0.5 }}>
-                                <Tooltip title="View">
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleView(r)} 
-                                    color="primary"
-                                  >
-                                    <EyeIcon />
-                                  </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Edit">
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleEdit(r)} 
-                                    color="success"
-                                  >
-                                    <EditIcon />
-                                  </IconButton>
-                                </Tooltip>
-                              </Box>
-                            </Box>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </Stack>
-                  )}
-                </Box>
-              </Box>
-            )}
           </Box>
         </Box>
 

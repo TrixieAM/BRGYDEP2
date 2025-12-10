@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import {
   Container,
   Paper,
@@ -30,6 +31,7 @@ import {
   ListItemAvatar,
   ListItemSecondaryAction,
   CardActions,
+  Badge,
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -51,12 +53,15 @@ import {
 
 export default function Residents() {
   const apiBase = 'http://localhost:5000';
+  const { getToken } = useAuth();
 
   const [records, setRecords] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterCivilStatus, setFilterCivilStatus] = useState('all');
+  const [filterHasContact, setFilterHasContact] = useState('all');
 
   const [formData, setFormData] = useState({
     full_name: '',
@@ -77,13 +82,24 @@ export default function Residents() {
     'Separated',
   ];
 
+  // Helper to include auth headers
+  const getAuthHeaders = () => {
+    const token = getToken();
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+    };
+  };
+
   useEffect(() => {
     loadRecords();
   }, []);
 
   async function loadRecords() {
     try {
-      const res = await fetch(`${apiBase}/residents`);
+      const res = await fetch(`${apiBase}/residents`, {
+        headers: getAuthHeaders(),
+      });
       const data = await res.json();
       setRecords(
         Array.isArray(data)
@@ -162,7 +178,7 @@ export default function Residents() {
     try {
       const res = await fetch(`${apiBase}/residents`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(toServerPayload(formData)),
       });
       if (!res.ok) throw new Error('Create failed');
@@ -182,7 +198,7 @@ export default function Residents() {
     try {
       const res = await fetch(`${apiBase}/residents/${editingId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(toServerPayload(formData)),
       });
       if (!res.ok) throw new Error('Update failed');
@@ -209,6 +225,7 @@ export default function Residents() {
     try {
       const res = await fetch(`${apiBase}/residents/${id}`, {
         method: 'DELETE',
+        headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error('Delete failed');
       setRecords(records.filter((r) => r.resident_id !== id));
@@ -241,13 +258,23 @@ export default function Residents() {
 
   const filteredRecords = useMemo(
     () =>
-      records.filter(
-        (r) =>
+      records.filter((r) => {
+        const matchesSearch =
           r.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           r.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (r.contact_no || '').includes(searchTerm)
-      ),
-    [records, searchTerm]
+          (r.contact_no || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+        const matchesCivilStatus =
+          filterCivilStatus === 'all' ||
+          (r.civil_status || '').toLowerCase() === filterCivilStatus.toLowerCase();
+
+        const matchesContact =
+          filterHasContact === 'all' ||
+          (filterHasContact === 'with' ? !!r.contact_no : !r.contact_no);
+
+        return matchesSearch && matchesCivilStatus && matchesContact;
+      }),
+    [records, searchTerm, filterCivilStatus, filterHasContact]
   );
 
   function formatDate(dateString) {
@@ -273,77 +300,157 @@ export default function Residents() {
       sx={{
         minHeight: '100vh',
         width: '100%',
-        bgcolor: 'grey.100',
+        bgcolor: 'transparent',
         p: 2,
       }}
     >
-      <Container maxWidth="lg">
-        {/* Header */}
-        <Paper
-          elevation={3}
-          sx={{
-            p: 3,
-            mb: 3,
-            borderRadius: 3,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            bgcolor: '#445C3C',
-            color: 'white',
-          }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Avatar sx={{ bgcolor: 'white', color: '#445C3C', mr: 2 }}>
-              <PersonIcon />
-            </Avatar>
-            <Typography variant="h4" sx={{ fontWeight: 700 }}>
-              Residents Information
-            </Typography>
+      <Container maxWidth="xl">
+        {/* Header - mirrored styling */}
+        <Paper elevation={2} sx={{ borderRadius: 3, overflow: 'hidden', mb: 3 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              p: 3,
+              bgcolor: '#0D4715',
+              color: 'white',
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Avatar
+                sx={{
+                  bgcolor: '#F1F0E9',
+                  color: '#0D4715',
+                  width: 46,
+                  height: 46,
+                }}
+              >
+                <PersonIcon />
+              </Avatar>
+              <Box>
+                <Typography
+                  variant="h5"
+                  fontWeight={700}
+                  sx={{ lineHeight: 1.2, fontSize: { xs: 24, sm: 28, md: 32 } }}
+                >
+                  Residents Information
+                </Typography>
+                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                  Manage and monitor resident records and profiles
+                </Typography>
+              </Box>
+            </Box>
+            <Badge
+              badgeContent={records.length}
+              color="secondary"
+              sx={{
+                '& .MuiBadge-badge': {
+                  bgcolor: '#E9762B',
+                  color: '#FFFFFF',
+                  fontWeight: 700,
+                },
+              }}
+            >
+              <Chip
+                icon={<PersonIcon />}
+                label="Total Residents"
+                sx={{
+                  bgcolor: 'rgba(255,255,255,0.2)',
+                  color: 'white',
+                  fontWeight: 600,
+                  '& .MuiChip-icon': {
+                    color: '#FFFFFF',
+                  },
+                }}
+              />
+            </Badge>
           </Box>
-          <Typography variant="body1">
-            Total Records: {records.length}
-          </Typography>
+          <Box
+            sx={{
+              height: '4px',
+              background: 'linear-gradient(90deg, #0D4715 0%, #1a5f2e 50%, #E9762B 100%)',
+              width: '100%',
+            }}
+          />
         </Paper>
 
         {/* Search and View Controls */}
         <Paper
           elevation={2}
           sx={{
-            p: 2,
+            p: 3,
             mb: 3,
             borderRadius: 3,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
           }}
         >
-          <TextField
-            sx={{ width: '70%' }}
-            size="small"
-            placeholder="Search residents..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon sx={{ color: 'grey.400' }} />
-                </InputAdornment>
-              ),
-            }}
-          />
-          <ToggleButtonGroup
-            value={viewMode}
-            exclusive
-            onChange={(e, newMode) => newMode && setViewMode(newMode)}
-            aria-label="view mode"
-          >
-            <ToggleButton value="grid" aria-label="grid view">
-              <ViewModuleIcon />
-            </ToggleButton>
-            <ToggleButton value="list" aria-label="list view">
-              <ViewListIcon />
-            </ToggleButton>
-          </ToggleButtonGroup>
+          <Stack spacing={2}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
+              <TextField
+                sx={{ flex: 1 }}
+                size="small"
+                placeholder="Search by name, address, or contact number"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ color: 'grey.400' }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Showing {filteredRecords.length} of {records.length}
+                </Typography>
+                <ToggleButtonGroup
+                  value={viewMode}
+                  exclusive
+                  onChange={(e, newMode) => newMode && setViewMode(newMode)}
+                  aria-label="view mode"
+                  size="small"
+                >
+                  <ToggleButton value="grid" aria-label="grid view">
+                    <ViewModuleIcon fontSize="small" />
+                  </ToggleButton>
+                  <ToggleButton value="list" aria-label="list view">
+                    <ViewListIcon fontSize="small" />
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </Box>
+            </Box>
+
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Civil Status</InputLabel>
+                <Select
+                  value={filterCivilStatus}
+                  label="Civil Status"
+                  onChange={(e) => setFilterCivilStatus(e.target.value)}
+                >
+                  <MenuItem value="all">All</MenuItem>
+                  {civilStatusOptions.map((status) => (
+                    <MenuItem key={status} value={status}>
+                      {status}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl fullWidth size="small">
+                <InputLabel>Contact</InputLabel>
+                <Select
+                  value={filterHasContact}
+                  label="Contact"
+                  onChange={(e) => setFilterHasContact(e.target.value)}
+                >
+                  <MenuItem value="all">All</MenuItem>
+                  <MenuItem value="with">With contact</MenuItem>
+                  <MenuItem value="without">Without contact</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+          </Stack>
         </Paper>
 
         {/* Records Display */}
@@ -364,77 +471,137 @@ export default function Residents() {
             </Typography>
           </Paper>
         ) : viewMode === 'grid' ? (
-          <Grid container spacing={3}>
+          <Grid container spacing={3.5}>
             {filteredRecords.map((record) => (
-              <Grid item xs={12} sm={6} md={4} key={record.resident_id}>
+              <Grid item xs={12} sm={6} md={4} lg={3} key={record.resident_id}>
                 <Card
-                  elevation={3}
                   sx={{
                     height: '100%',
                     display: 'flex',
                     flexDirection: 'column',
-                    transition: 'transform 0.2s',
+                    gap: 1,
+                    p: 1.5,
+                    borderRadius: 3,
+                    border: '1px solid rgba(13, 71, 21, 0.12)',
+                    boxShadow: '0 10px 28px rgba(13, 71, 21, 0.12)',
+                    backgroundColor: '#FFFFFF',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
                     '&:hover': {
                       transform: 'translateY(-5px)',
-                      boxShadow: 6,
+                      boxShadow: '0 14px 34px rgba(13, 71, 21, 0.18)',
                     },
                   }}
                 >
                   <CardHeader
                     avatar={
-                      <Avatar sx={{ bgcolor: '#445C3C' }}>
-                        {getInitials(record.full_name)}
+                      <Avatar
+                        sx={{
+                          bgcolor: '#0D4715',
+                          color: '#F1F0E9',
+                          fontWeight: 700,
+                        }}
+                      >
+                        <PersonIcon />
                       </Avatar>
                     }
                     title={record.full_name}
                     subheader={`Age: ${record.age}`}
+                    titleTypographyProps={{ fontWeight: 700, color: '#0D4715' }}
+                    subheaderTypographyProps={{ color: '#41644A', fontWeight: 500 }}
                   />
                   <Divider />
                   <CardContent sx={{ flexGrow: 1 }}>
-                    <Stack spacing={1}>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <HomeIcon
-                          fontSize="small"
-                          sx={{ mr: 1, color: '#445C3C' }}
-                        />
-                        <Typography variant="body2">
-                          {record.address}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <CakeIcon
-                          fontSize="small"
-                          sx={{ mr: 1, color: '#445C3C' }}
-                        />
-                        <Typography variant="body2">
-                          {formatDate(record.dob)}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <HeartIcon
-                          fontSize="small"
-                          sx={{ mr: 1, color: '#445C3C' }}
-                        />
-                        <Typography variant="body2">
-                          {record.civil_status}
-                        </Typography>
-                      </Box>
-                      {record.contact_no && (
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <PhoneIcon
-                            fontSize="small"
-                            sx={{ mr: 1, color: '#445C3C' }}
-                          />
-                          <Typography variant="body2">
-                            {record.contact_no}
+                    <Stack spacing={1.25}>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                          backgroundColor: 'rgba(65, 100, 74, 0.06)',
+                          borderRadius: 2,
+                          p: 1,
+                        }}
+                      >
+                        <Avatar
+                          sx={{
+                            width: 34,
+                            height: 34,
+                            bgcolor: '#F1F0E9',
+                            color: '#0D4715',
+                            fontSize: 18,
+                          }}
+                        >
+                          <HomeIcon fontSize="inherit" />
+                        </Avatar>
+                        <Box>
+                          <Typography variant="caption" sx={{ color: '#0D4715' }}>
+                            Address
                           </Typography>
+                          <Typography variant="body2">{record.address}</Typography>
+                        </Box>
+                      </Box>
+
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Avatar
+                          sx={{
+                            width: 32,
+                            height: 32,
+                            bgcolor: '#F1F0E9',
+                            color: '#0D4715',
+                            fontSize: 18,
+                          }}
+                        >
+                          <CakeIcon fontSize="inherit" />
+                        </Avatar>
+                        <Typography variant="body2">
+                          {formatDate(record.dob)} ({record.age} years old)
+                        </Typography>
+                      </Box>
+
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Avatar
+                          sx={{
+                            width: 32,
+                            height: 32,
+                            bgcolor: '#E9762B22',
+                            color: '#E9762B',
+                            fontSize: 18,
+                          }}
+                        >
+                          <HeartIcon fontSize="inherit" />
+                        </Avatar>
+                        <Typography variant="body2">{record.civil_status}</Typography>
+                      </Box>
+
+                      {record.contact_no && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Avatar
+                            sx={{
+                              width: 32,
+                              height: 32,
+                              bgcolor: '#F1F0E9',
+                              color: '#0D4715',
+                              fontSize: 18,
+                            }}
+                          >
+                            <PhoneIcon fontSize="inherit" />
+                          </Avatar>
+                          <Typography variant="body2">{record.contact_no}</Typography>
                         </Box>
                       )}
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <CalendarIcon
-                          fontSize="small"
-                          sx={{ mr: 1, color: '#445C3C' }}
-                        />
+
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Avatar
+                          sx={{
+                            width: 32,
+                            height: 32,
+                            bgcolor: '#F1F0E9',
+                            color: '#0D4715',
+                            fontSize: 18,
+                          }}
+                        >
+                          <CalendarIcon fontSize="inherit" />
+                        </Avatar>
                         <Typography variant="body2">
                           Added: {formatDate(record.created_at)}
                         </Typography>
@@ -445,14 +612,14 @@ export default function Residents() {
                     <IconButton
                       size="small"
                       onClick={() => handleEdit(record)}
-                      sx={{ color: '#445C3C' }}
+                      sx={{ color: '#0D4715' }}
                     >
                       <EditIcon />
                     </IconButton>
                     <IconButton
                       size="small"
                       onClick={() => handleDelete(record.resident_id)}
-                      sx={{ color: '#d32f2f' }}
+                      sx={{ color: '#E9762B' }}
                     >
                       <DeleteIcon />
                     </IconButton>
@@ -462,86 +629,130 @@ export default function Residents() {
             ))}
           </Grid>
         ) : (
-          <Paper elevation={3} sx={{ borderRadius: 3 }}>
-            <List>
-              {filteredRecords.map((record, index) => (
-                <React.Fragment key={record.resident_id}>
-                  <ListItem alignItems="flex-start">
-                    <ListItemAvatar>
-                      <Avatar sx={{ bgcolor: '#445C3C' }}>
-                        {getInitials(record.full_name)}
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                          {record.full_name}
-                        </Typography>
-                      }
-                      secondary={
-                        <Stack spacing={0.5} sx={{ mt: 1 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <HomeIcon
-                              fontSize="small"
-                              sx={{ mr: 1, color: '#445C3C' }}
-                            />
-                            <Typography variant="body2">
-                              {record.address}
-                            </Typography>
+          <Paper
+            elevation={3}
+            sx={{
+              borderRadius: 3,
+              border: '1px solid rgba(13, 71, 21, 0.12)',
+              boxShadow: '0 10px 28px rgba(13, 71, 21, 0.12)',
+              p: 1.5,
+            }}
+          >
+            <List sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+              {filteredRecords.map((record) => (
+                <ListItem
+                  key={record.resident_id}
+                  alignItems="flex-start"
+                  sx={{
+                    border: '1px solid rgba(13, 71, 21, 0.12)',
+                    borderRadius: 2,
+                    backgroundColor: '#FFFFFF',
+                    boxShadow: '0 6px 16px rgba(13, 71, 21, 0.08)',
+                    p: 1.5,
+                    gap: 2,
+                    alignItems: 'center',
+                  }}
+                >
+                  <ListItemAvatar>
+                    <Avatar
+                      sx={{
+                        bgcolor: '#0D4715',
+                        color: '#F1F0E9',
+                        fontWeight: 700,
+                      }}
+                    >
+                      <PersonIcon />
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={
+                      <Typography variant="h6" sx={{ fontWeight: 700, color: '#0D4715' }}>
+                        {record.full_name}
+                      </Typography>
+                    }
+                    secondary={
+                      <Stack spacing={0.9} sx={{ mt: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Avatar
+                            sx={{
+                              width: 30,
+                              height: 30,
+                              bgcolor: '#F1F0E9',
+                              color: '#0D4715',
+                              fontSize: 16,
+                            }}
+                          >
+                            <HomeIcon fontSize="inherit" />
+                          </Avatar>
+                          <Typography variant="body2">{record.address}</Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Avatar
+                            sx={{
+                              width: 30,
+                              height: 30,
+                              bgcolor: '#F1F0E9',
+                              color: '#0D4715',
+                              fontSize: 16,
+                            }}
+                          >
+                            <CakeIcon fontSize="inherit" />
+                          </Avatar>
+                          <Typography variant="body2">
+                            {formatDate(record.dob)} ({record.age} years old)
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Avatar
+                            sx={{
+                              width: 30,
+                              height: 30,
+                              bgcolor: '#E9762B22',
+                              color: '#E9762B',
+                              fontSize: 16,
+                            }}
+                          >
+                            <HeartIcon fontSize="inherit" />
+                          </Avatar>
+                          <Typography variant="body2">{record.civil_status}</Typography>
+                        </Box>
+                        {record.contact_no && (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Avatar
+                              sx={{
+                                width: 30,
+                                height: 30,
+                                bgcolor: '#F1F0E9',
+                                color: '#0D4715',
+                                fontSize: 16,
+                              }}
+                            >
+                              <PhoneIcon fontSize="inherit" />
+                            </Avatar>
+                            <Typography variant="body2">{record.contact_no}</Typography>
                           </Box>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <CakeIcon
-                              fontSize="small"
-                              sx={{ mr: 1, color: '#445C3C' }}
-                            />
-                            <Typography variant="body2">
-                              {formatDate(record.dob)} ({record.age} years old)
-                            </Typography>
-                          </Box>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <HeartIcon
-                              fontSize="small"
-                              sx={{ mr: 1, color: '#445C3C' }}
-                            />
-                            <Typography variant="body2">
-                              {record.civil_status}
-                            </Typography>
-                          </Box>
-                          {record.contact_no && (
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <PhoneIcon
-                                fontSize="small"
-                                sx={{ mr: 1, color: '#445C3C' }}
-                              />
-                              <Typography variant="body2">
-                                {record.contact_no}
-                              </Typography>
-                            </Box>
-                          )}
-                        </Stack>
-                      }
-                    />
-                    <ListItemSecondaryAction>
-                      <IconButton
-                        edge="end"
-                        onClick={() => handleEdit(record)}
-                        sx={{ color: '#445C3C', mr: 1 }}
-                      >
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton
-                        edge="end"
-                        onClick={() => handleDelete(record.resident_id)}
-                        sx={{ color: '#d32f2f' }}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                  {index < filteredRecords.length - 1 && (
-                    <Divider variant="inset" component="li" />
-                  )}
-                </React.Fragment>
+                        )}
+                      </Stack>
+                    }
+                    secondaryTypographyProps={{ component: 'div' }}
+                  />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 1 }}>
+                    <IconButton
+                      edge="end"
+                      onClick={() => handleEdit(record)}
+                      sx={{ color: '#0D4715' }}
+                    >
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton
+                      edge="end"
+                      onClick={() => handleDelete(record.resident_id)}
+                      sx={{ color: '#E9762B' }}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </Box>
+                </ListItem>
               ))}
             </List>
           </Paper>
@@ -581,172 +792,206 @@ export default function Residents() {
               top: '50%',
               left: '50%',
               transform: 'translate(-50%, -50%)',
-              width: { xs: '90%', sm: '70%', md: '50%' },
+              width: { xs: '92%', sm: '75%', md: '55%' },
               maxHeight: '90vh',
               overflow: 'auto',
-              bgcolor: 'background.paper',
-              boxShadow: 24,
-              p: 4,
+              bgcolor: '#FDFCF9',
+              boxShadow: '0 18px 44px rgba(13, 71, 21, 0.25)',
               borderRadius: 3,
+              border: '1px solid rgba(13, 71, 21, 0.12)',
+              p: 0,
             }}
           >
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-              <Avatar sx={{ bgcolor: '#445C3C', mr: 2 }}>
+            <Box
+              sx={{
+                p: 3,
+                background: 'linear-gradient(180deg, #0D4715 0%, #1a5f2e 40%, #0D2818 100%)',
+                borderTopLeftRadius: 12,
+                borderTopRightRadius: 12,
+                color: '#F1F0E9',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.5,
+              }}
+            >
+              <Avatar
+                sx={{
+                  bgcolor: '#F1F0E9',
+                  color: '#0D4715',
+                  width: 46,
+                  height: 46,
+                }}
+              >
                 <PersonIcon />
               </Avatar>
-              <Typography variant="h5" component="h2">
-                {editingId ? 'Edit Resident Record' : 'New Resident Record'}
-              </Typography>
+              <Box>
+                <Typography variant="h5" component="h2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                  {editingId ? 'Edit Resident Record' : 'New Resident Record'}
+                </Typography>
+                <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                  Please fill in the resident details below
+                </Typography>
+              </Box>
             </Box>
 
-            <Stack spacing={2}>
-              <TextField
-                label="Full Name *"
-                size="small"
-                fullWidth
-                value={formData.full_name}
-                onChange={(e) =>
-                  setFormData({ ...formData, full_name: e.target.value })
-                }
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <PersonIcon fontSize="small" />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-              <TextField
-                label="Address *"
-                size="small"
-                fullWidth
-                multiline
-                rows={2}
-                value={formData.address}
-                onChange={(e) =>
-                  setFormData({ ...formData, address: e.target.value })
-                }
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <HomeIcon fontSize="small" />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <TextField
-                    label="Date of Birth *"
-                    type="date"
-                    size="small"
-                    fullWidth
-                    InputLabelProps={{ shrink: true }}
-                    value={formData.dob}
-                    onChange={(e) => handleDobChange(e.target.value)}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <CakeIcon fontSize="small" />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
+            <Box sx={{ p: { xs: 3, sm: 4 } }}>
+              <Stack spacing={2}>
+                <TextField
+                  label="Full Name *"
+                  size="small"
+                  fullWidth
+                  value={formData.full_name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, full_name: e.target.value })
+                  }
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <PersonIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+                <TextField
+                  label="Address *"
+                  size="small"
+                  fullWidth
+                  multiline
+                  rows={2}
+                  value={formData.address}
+                  onChange={(e) =>
+                    setFormData({ ...formData, address: e.target.value })
+                  }
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <HomeIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Date of Birth *"
+                      type="date"
+                      size="small"
+                      fullWidth
+                      InputLabelProps={{ shrink: true }}
+                      value={formData.dob}
+                      onChange={(e) => handleDobChange(e.target.value)}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <CakeIcon fontSize="small" />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      label="Age"
+                      size="small"
+                      fullWidth
+                      value={formData.age}
+                      InputProps={{ readOnly: true }}
+                    />
+                  </Grid>
                 </Grid>
-                <Grid item xs={6}>
-                  <TextField
-                    label="Age"
-                    size="small"
-                    fullWidth
-                    value={formData.age}
-                    InputProps={{ readOnly: true }}
-                  />
-                </Grid>
-              </Grid>
-              <TextField
-                label="Provincial Address"
-                size="small"
-                fullWidth
-                value={formData.provincial_address}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    provincial_address: e.target.value,
-                  })
-                }
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <HomeIcon fontSize="small" />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-              <TextField
-                label="Contact Number"
-                size="small"
-                fullWidth
-                value={formData.contact_no}
-                onChange={(e) =>
-                  setFormData({ ...formData, contact_no: e.target.value })
-                }
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <PhoneIcon fontSize="small" />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-              <FormControl fullWidth size="small">
-                <InputLabel>Civil Status *</InputLabel>
-                <Select
-                  value={formData.civil_status}
-                  label="Civil Status *"
+                <TextField
+                  label="Provincial Address"
+                  size="small"
+                  fullWidth
+                  value={formData.provincial_address}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
-                      civil_status: e.target.value,
+                      provincial_address: e.target.value,
                     })
                   }
-                  startAdornment={
-                    <InputAdornment position="start">
-                      <HeartIcon fontSize="small" />
-                    </InputAdornment>
-                  }
-                >
-                  {civilStatusOptions.map((status) => (
-                    <MenuItem key={status} value={status}>
-                      {status}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-                <Button
-                  variant="contained"
-                  startIcon={<SaveIcon />}
-                  fullWidth
-                  sx={{
-                    background: 'linear-gradient(45deg, #2e7d32, #388e3c)',
-                    '&:hover': {
-                      background: 'linear-gradient(45deg, #1b5e20, #2e7d32)',
-                    },
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <HomeIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
                   }}
-                  onClick={handleSubmit}
-                >
-                  {editingId ? 'Update' : 'Save'}
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<CloseIcon />}
-                  onClick={resetForm}
-                >
-                  Cancel
-                </Button>
-              </Box>
-            </Stack>
+                />
+                <TextField
+                  label="Contact Number"
+                  size="small"
+                  fullWidth
+                  value={formData.contact_no}
+                  onChange={(e) =>
+                    setFormData({ ...formData, contact_no: e.target.value })
+                  }
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <PhoneIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+                <FormControl fullWidth size="small">
+                  <InputLabel>Civil Status *</InputLabel>
+                  <Select
+                    value={formData.civil_status}
+                    label="Civil Status *"
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        civil_status: e.target.value,
+                      })
+                    }
+                    startAdornment={
+                      <InputAdornment position="start">
+                        <HeartIcon fontSize="small" />
+                      </InputAdornment>
+                    }
+                  >
+                    {civilStatusOptions.map((status) => (
+                      <MenuItem key={status} value={status}>
+                        {status}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
+                  <Button
+                    variant="contained"
+                    startIcon={<SaveIcon />}
+                    fullWidth
+                    sx={{
+                      background: 'linear-gradient(135deg, #0D4715 0%, #1a5f2e 100%)',
+                      '&:hover': {
+                        background: 'linear-gradient(135deg, #1a5f2e 0%, #0D4715 100%)',
+                      },
+                    }}
+                    onClick={handleSubmit}
+                  >
+                    {editingId ? 'Update' : 'Save'}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<CloseIcon />}
+                    sx={{
+                      color: '#0D4715',
+                      borderColor: 'rgba(13, 71, 21, 0.4)',
+                      '&:hover': {
+                        borderColor: '#0D4715',
+                        backgroundColor: 'rgba(13, 71, 21, 0.06)',
+                      },
+                    }}
+                    onClick={resetForm}
+                  >
+                    Cancel
+                  </Button>
+                </Box>
+              </Stack>
+            </Box>
           </Box>
         </Modal>
       </Container>

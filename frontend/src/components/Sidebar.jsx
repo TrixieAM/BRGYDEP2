@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
   Drawer,
@@ -13,7 +13,8 @@ import {
   IconButton,
   Divider,
   Tooltip,
-  Backdrop
+  Backdrop,
+  Button
 } from '@mui/material';
 import {
   Home as HomeIcon,
@@ -23,7 +24,9 @@ import {
   ExpandLess as ExpandLessIcon,
   ExpandMore as ExpandMoreIcon,
   Menu as MenuIcon,
-  AccountCircle as AccountCircleIcon
+  AccountCircle as AccountCircleIcon,
+  Receipt as ReceiptIcon,
+  Logout as LogoutIcon
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { ChartBarIcon, ChartPieIcon, PieChartIcon } from 'lucide-react';
@@ -31,17 +34,24 @@ import { ChartBarIcon, ChartPieIcon, PieChartIcon } from 'lucide-react';
 const drawerWidth = 250;
 
 export default function Sidebar() {
-  const { user, hasPermission } = useAuth();
+  const { user, hasPermission, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [certOpen, setCertOpen] = useState(location.pathname.startsWith('/certificates'));
 
   const toggleMobile = () => setMobileOpen(!mobileOpen);
 
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
   const navItems = [
     { path: '/home', label: 'Home', icon: <HomeIcon />, permission: 'view_dashboard' },
     { path: '/residents', label: 'Residents', icon: <PeopleIcon />, permission: 'manage_residents' },
     { path: '/reports', label: 'Reports', icon: <ChartBarIcon />, permission: 'manage_residents' },
+    { path: '/certification-action-transactions', label: 'Transactions', icon: <ReceiptIcon />, permission: 'manage_certificates' },
     {
       path: '/certificates',
       label: 'Certificates',
@@ -72,14 +82,13 @@ export default function Sidebar() {
       display: 'flex',
       flexDirection: 'column',
       fontFamily: `'Inter', 'Roboto', 'Segoe UI', 'system-ui', Arial, sans-serif`,
-      background: 'linear-gradient(180deg, #0D4715 0%, #1a5f2e 40%, #0D2818 100%)',
+      background: '#0D4715',
       color: '#F1F0E9',
-      pt: 8,
-      borderTopRightRadius: 38,
-      borderBottomRightRadius: 38,
+      pt: 3,
+      borderTopRightRadius: 32,
+      borderBottomRightRadius: 32,
       boxShadow: '0 20px 60px rgba(13, 71, 21, 0.4), 0 0 0 1px rgba(241, 240, 233, 0.1)',
-      overflowX: 'hidden',
-      overflowY: 'auto',
+      overflow: 'hidden',
       position: 'relative',
       '&::before': {
         content: '""',
@@ -92,258 +101,312 @@ export default function Sidebar() {
         boxShadow: '0 0 20px rgba(233, 118, 43, 0.3)',
       }
     }}>
-      {/* Profile Section */}
-      <Box sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 2,
-        p: 3,
-        pb: 2,
-        position: 'relative',
-        '&::after': {
-          content: '""',
-          position: 'absolute',
-          bottom: 0,
-          left: 20,
-          right: 20,
-          height: '1px',
-          background: 'linear-gradient(90deg, transparent, rgba(241, 240, 233, 0.2), transparent)',
-        }
-      }}>
-        <Avatar sx={{ 
-          bgcolor: 'rgba(65, 100, 74, 0.8)', 
-          color: '#F1F0E9', 
-          width: 54, 
-          height: 54,
-          border: '2px solid rgba(233, 118, 43, 0.3)',
-          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+      <Box sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+        {/* Profile Section */}
+        <Box sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.25,
+          p: 2,
+          pb: 1,
+          position: 'relative',
+          overflow: 'hidden',
+          '&::after': {
+            content: '""',
+            position: 'absolute',
+            bottom: 0,
+            left: 20,
+            right: 20,
+            height: '1px',
+            background: 'linear-gradient(90deg, transparent, rgba(241, 240, 233, 0.2), transparent)',
+          },
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            right: -26,
+            top: -18,
+            width: 120,
+            height: 120,
+            background: 'linear-gradient(135deg, rgba(233, 118, 43, 0.25), rgba(13, 71, 21, 0.65))',
+            borderRadius: '38px 72px 18px 72px',
+            boxShadow: '0 18px 48px rgba(233, 118, 43, 0.25)',
+            opacity: 0.85,
+            transform: 'rotate(-10deg)',
+            pointerEvents: 'none',
+          }
         }}>
-          <AccountCircleIcon sx={{ fontSize: 38 }} />
-        </Avatar>
-        <Box>
-          <Typography variant="subtitle2" sx={{ 
-            opacity: 0.7, 
+          <Avatar sx={{ 
+            bgcolor: 'rgba(65, 100, 74, 0.8)', 
             color: '#F1F0E9', 
-            letterSpacing: 1.5, 
-            fontSize: 12, 
-            fontFamily: `'Inter', 'Roboto', 'Segoe UI', 'system-ui', Arial, sans-serif`,
-            textTransform: 'uppercase',
-            fontWeight: 500
-          }}>Profile</Typography>
-          <Typography variant="h6" sx={{ 
-            fontWeight: 700, 
-            color: '#F1F0E9', 
-            fontSize: 18, 
-            fontFamily: `'Inter', 'Roboto', 'Segoe UI', 'system-ui', Arial, sans-serif`,
-            textShadow: '0 2px 4px rgba(0, 0, 0, 0.3)',
-          }}>{user?.name || 'Guest'}</Typography>
+            width: 54, 
+            height: 54,
+            border: '2px solid rgba(233, 118, 43, 0.3)',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+            position: 'relative',
+            zIndex: 1,
+          }}>
+            <AccountCircleIcon sx={{ fontSize: 38 }} />
+          </Avatar>
+          <Box sx={{ position: 'relative', zIndex: 1 }}>
+            <Typography variant="subtitle2" sx={{ 
+              opacity: 0.7, 
+              color: '#F1F0E9', 
+              letterSpacing: 1.5, 
+              fontSize: 12, 
+              fontFamily: `'Inter', 'Roboto', 'Segoe UI', 'system-ui', Arial, sans-serif`,
+              textTransform: 'uppercase',
+              fontWeight: 500
+            }}>Profile</Typography>
+            <Typography variant="h6" sx={{ 
+              fontWeight: 700, 
+              color: '#F1F0E9', 
+              fontSize: 18, 
+              fontFamily: `'Inter', 'Roboto', 'Segoe UI', 'system-ui', Arial, sans-serif`,
+              textShadow: '0 2px 4px rgba(0, 0, 0, 0.3)',
+            }}>{user?.name || 'Guest'}</Typography>
+          </Box>
         </Box>
-      </Box>
 
-      <List sx={{ p: 0, mt: 3 }}>
-        {navItems.map(item => {
-          const isActive = location.pathname === item.path && !item.children;
-          return (
-            <Box key={item.path}>
-              <Tooltip title={item.label} placement="right" arrow>
-                <ListItemButton
-                  component={item.children ? 'button' : Link}
-                  to={item.children ? undefined : item.path}
-                  onClick={() => {
-                    if (item.children) setCertOpen(!certOpen);
-                    if (!item.children) setMobileOpen(false);
-                  }}
-                  sx={{
-                    color: '#F1F0E9',
-                    borderRadius: 3,
-                    mx: 2,
-                    my: 0.5,
-                    fontWeight: 500,
-                    fontFamily: `'Inter', 'Roboto', 'Segoe UI', 'system-ui', Arial, sans-serif`,
-                    fontSize: 15,
-                    position: 'relative',
-                    overflow: 'hidden',
-                    transition: 'all 0.3s ease',
-                    background: isActive 
-                      ? 'linear-gradient(90deg, rgba(65, 100, 74, 0.6) 0%, rgba(65, 100, 74, 0.3) 100%)' 
-                      : 'transparent',
-                    '&:hover': {
+        <List sx={{ p: 0, mt: 1.5 }}>
+          {navItems.map(item => {
+            const isActive = location.pathname === item.path && !item.children;
+            return (
+              <Box key={item.path}>
+                <Tooltip title={item.label} placement="right" arrow>
+                  <ListItemButton
+                    component={item.children ? 'button' : Link}
+                    to={item.children ? undefined : item.path}
+                    onClick={() => {
+                      if (item.children) setCertOpen(!certOpen);
+                      if (!item.children) setMobileOpen(false);
+                    }}
+                    sx={{
+                      color: '#F1F0E9',
+                      borderRadius: 3,
+                      mx: 2,
+                      my: 0.5,
+                      fontWeight: 500,
+                      fontFamily: `'Inter', 'Roboto', 'Segoe UI', 'system-ui', Arial, sans-serif`,
+                      fontSize: 15,
+                      position: 'relative',
+                      overflow: 'hidden',
+                      transition: 'all 0.3s ease',
                       background: isActive 
-                        ? 'linear-gradient(90deg, rgba(65, 100, 74, 0.7) 0%, rgba(65, 100, 74, 0.4) 100%)'
-                        : 'linear-gradient(90deg, rgba(65, 100, 74, 0.2) 0%, rgba(65, 100, 74, 0.1) 100%)',
-                      transform: 'translateX(3px)',
-                      '& .sidebar-icon': {
-                        background: 'linear-gradient(135deg, #E9762B 0%, #d4681f 100%)',
-                        color: '#F1F0E9',
-                        boxShadow: '0 4px 12px rgba(233, 118, 43, 0.4)',
+                        ? 'linear-gradient(90deg, rgba(65, 100, 74, 0.6) 0%, rgba(65, 100, 74, 0.3) 100%)' 
+                        : 'transparent',
+                      '&:hover': {
+                        background: isActive 
+                          ? 'linear-gradient(90deg, rgba(65, 100, 74, 0.7) 0%, rgba(65, 100, 74, 0.4) 100%)'
+                          : 'linear-gradient(90deg, rgba(65, 100, 74, 0.2) 0%, rgba(65, 100, 74, 0.1) 100%)',
+                        transform: 'translateX(3px)',
+                        '& .sidebar-icon': {
+                          background: 'linear-gradient(135deg, #E9762B 0%, #d4681f 100%)',
+                          color: '#F1F0E9',
+                          boxShadow: '0 4px 12px rgba(233, 118, 43, 0.4)',
+                        },
                       },
-                    },
-                    '&:before': {
-                      content: '""',
-                      position: 'absolute',
-                      left: 0,
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      width: 4,
-                      height: isActive ? '70%' : 0,
-                      bgcolor: '#E9762B',
-                      borderRadius: '0 4px 4px 0',
-                      transition: 'all 0.3s ease',
-                      boxShadow: isActive ? '0 0 10px rgba(233, 118, 43, 0.5)' : 'none',
-                    },
-                  }}
-                >
-                  <ListItemIcon sx={{ 
-                    color: 'inherit', 
-                    minWidth: 42,
-                    position: 'relative',
-                  }}>
-                    <Box className="sidebar-icon" sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      background: isActive 
-                        ? 'linear-gradient(135deg, #E9762B 0%, #d4681f 100%)'
-                        : 'rgba(241, 240, 233, 0.1)',
-                      color: isActive ? '#F1F0E9' : '#F1F0E9',
-                      width: 38, 
-                      height: 38, 
-                      borderRadius: '12px',
-                      transition: 'all 0.3s ease',
-                      boxShadow: isActive 
-                        ? '0 4px 12px rgba(233, 118, 43, 0.4)' 
-                        : '0 2px 8px rgba(0, 0, 0, 0.2)',
-                      border: isActive ? '1px solid rgba(233, 118, 43, 0.3)' : '1px solid transparent',
+                      '&:before': {
+                        content: '""',
+                        position: 'absolute',
+                        left: 0,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        width: 4,
+                        height: isActive ? '70%' : 0,
+                        bgcolor: '#E9762B',
+                        borderRadius: '0 4px 4px 0',
+                        transition: 'all 0.3s ease',
+                        boxShadow: isActive ? '0 0 10px rgba(233, 118, 43, 0.5)' : 'none',
+                      },
+                    }}
+                  >
+                    <ListItemIcon sx={{ 
+                      color: 'inherit', 
+                      minWidth: 42,
+                      position: 'relative',
                     }}>
-                      {item.icon}
-                    </Box>
-                  </ListItemIcon>
-                  <ListItemText 
-                    primary={item.label} 
-                    sx={{ 
-                      '& .MuiListItemText-primary': {
-                        fontWeight: isActive ? 600 : 500,
-                        fontSize: 15,
-                        fontFamily: `'Inter', 'Roboto', 'Segoe UI', 'system-ui', Arial, sans-serif`,
-                        color: isActive ? '#F1F0E9' : 'rgba(241, 240, 233, 0.9)',
-                      }
-                    }} 
-                  />
-                  {item.children ? (certOpen ? <ExpandLessIcon sx={{ color: 'rgba(241, 240, 233, 0.7)' }} /> : <ExpandMoreIcon sx={{ color: 'rgba(241, 240, 233, 0.7)' }} />) : null}
-                </ListItemButton>
-              </Tooltip>
-              {item.children && (
-                <Collapse in={certOpen} timeout="auto" unmountOnExit>
-                  <List component="div" disablePadding>
-                    {item.children.map(child => {
-                      const childActive = location.pathname === child.path;
-                      return (
-                        <Tooltip title={child.label} placement="right" arrow key={child.path}>
-                          <ListItemButton
-                            component={Link}
-                            to={child.path}
-                            onClick={() => setMobileOpen(false)}
-                            sx={{
-                              pl: 7,
-                              color: '#F1F0E9',
-                              borderRadius: 2,
-                              mx: 2.5,
-                              my: 0.25,
-                              fontWeight: 400,
-                              fontSize: 14,
-                              fontFamily: `'Inter', 'Roboto', 'Segoe UI', 'system-ui', Arial, sans-serif`,
-                              position: 'relative',
-                              overflow: 'hidden',
-                              transition: 'all 0.3s ease',
-                              background: childActive 
-                                ? 'linear-gradient(90deg, rgba(65, 100, 74, 0.4) 0%, rgba(65, 100, 74, 0.2) 100%)'
-                                : 'transparent',
-                              '&:hover': {
+                      <Box className="sidebar-icon" sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: isActive 
+                          ? 'linear-gradient(135deg, #E9762B 0%, #d4681f 100%)'
+                          : 'rgba(241, 240, 233, 0.1)',
+                        color: isActive ? '#F1F0E9' : '#F1F0E9',
+                        width: 38, 
+                        height: 38, 
+                        borderRadius: '12px',
+                        transition: 'all 0.3s ease',
+                        boxShadow: isActive 
+                          ? '0 4px 12px rgba(233, 118, 43, 0.4)' 
+                          : '0 2px 8px rgba(0, 0, 0, 0.2)',
+                        border: isActive ? '1px solid rgba(233, 118, 43, 0.3)' : '1px solid transparent',
+                      }}>
+                        {item.icon}
+                      </Box>
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary={item.label} 
+                      sx={{ 
+                        '& .MuiListItemText-primary': {
+                          fontWeight: isActive ? 600 : 500,
+                          fontSize: 15,
+                          fontFamily: `'Inter', 'Roboto', 'Segoe UI', 'system-ui', Arial, sans-serif`,
+                          color: isActive ? '#F1F0E9' : 'rgba(241, 240, 233, 0.9)',
+                        }
+                      }} 
+                    />
+                    {item.children ? (certOpen ? <ExpandLessIcon sx={{ color: 'rgba(241, 240, 233, 0.7)' }} /> : <ExpandMoreIcon sx={{ color: 'rgba(241, 240, 233, 0.7)' }} />) : null}
+                  </ListItemButton>
+                </Tooltip>
+                {item.children && (
+                  <Collapse in={certOpen} timeout="auto" unmountOnExit>
+                    <List component="div" disablePadding>
+                      {item.children.map(child => {
+                        const childActive = location.pathname === child.path;
+                        return (
+                          <Tooltip title={child.label} placement="right" arrow key={child.path}>
+                            <ListItemButton
+                              component={Link}
+                              to={child.path}
+                              onClick={() => setMobileOpen(false)}
+                              sx={{
+                                pl: 7,
+                                color: '#F1F0E9',
+                                borderRadius: 2,
+                                mx: 2.5,
+                                my: 0.25,
+                                fontWeight: 400,
+                                fontSize: 14,
+                                fontFamily: `'Inter', 'Roboto', 'Segoe UI', 'system-ui', Arial, sans-serif`,
+                                position: 'relative',
+                                overflow: 'hidden',
+                                transition: 'all 0.3s ease',
                                 background: childActive 
-                                  ? 'linear-gradient(90deg, rgba(65, 100, 74, 0.5) 0%, rgba(65, 100, 74, 0.3) 100%)'
-                                  : 'linear-gradient(90deg, rgba(65, 100, 74, 0.15) 0%, rgba(65, 100, 74, 0.05) 100%)',
-                                transform: 'translateX(2px)',
-                                '& .sidebar-icon': {
-                                  background: 'linear-gradient(135deg, #E9762B 0%, #d4681f 100%)',
-                                  color: '#F1F0E9',
+                                  ? 'linear-gradient(90deg, rgba(65, 100, 74, 0.4) 0%, rgba(65, 100, 74, 0.2) 100%)'
+                                  : 'transparent',
+                                '&:hover': {
+                                  background: childActive 
+                                    ? 'linear-gradient(90deg, rgba(65, 100, 74, 0.5) 0%, rgba(65, 100, 74, 0.3) 100%)'
+                                    : 'linear-gradient(90deg, rgba(65, 100, 74, 0.15) 0%, rgba(65, 100, 74, 0.05) 100%)',
+                                  transform: 'translateX(2px)',
+                                  '& .sidebar-icon': {
+                                    background: 'linear-gradient(135deg, #E9762B 0%, #d4681f 100%)',
+                                    color: '#F1F0E9',
+                                  },
                                 },
-                              },
-                              '&:before': {
-                                content: '""',
-                                position: 'absolute',
-                                left: 0,
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                width: 3,
-                                height: childActive ? '60%' : 0,
-                                bgcolor: '#E9762B',
-                                borderRadius: '0 3px 3px 0',
-                                transition: 'all 0.3s ease',
-                              },
-                            }}
-                          >
-                            <ListItemIcon sx={{ 
-                              color: 'inherit', 
-                              minWidth: 36,
-                              position: 'relative',
-                            }}>
-                              <Box className="sidebar-icon" sx={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                background: childActive 
-                                  ? 'linear-gradient(135deg, #E9762B 0%, #d4681f 100%)'
-                                  : 'rgba(241, 240, 233, 0.08)',
-                                color: childActive ? '#F1F0E9' : 'rgba(241, 240, 233, 0.8)',
-                                width: 32, 
-                                height: 32, 
-                                borderRadius: '10px',
-                                transition: 'all 0.3s ease',
-                                boxShadow: childActive 
-                                  ? '0 3px 10px rgba(233, 118, 43, 0.3)' 
-                                  : '0 2px 6px rgba(0, 0, 0, 0.15)',
+                                '&:before': {
+                                  content: '""',
+                                  position: 'absolute',
+                                  left: 0,
+                                  top: '50%',
+                                  transform: 'translateY(-50%)',
+                                  width: 3,
+                                  height: childActive ? '60%' : 0,
+                                  bgcolor: '#E9762B',
+                                  borderRadius: '0 3px 3px 0',
+                                  transition: 'all 0.3s ease',
+                                },
+                              }}
+                            >
+                              <ListItemIcon sx={{ 
+                                color: 'inherit', 
+                                minWidth: 36,
+                                position: 'relative',
                               }}>
-                                {child.icon}
-                              </Box>
-                            </ListItemIcon>
-                            <ListItemText 
-                              primary={child.label} 
-                              sx={{ 
-                                '& .MuiListItemText-primary': {
-                                  fontWeight: childActive ? 500 : 400,
-                                  fontSize: 14,
-                                  fontFamily: `'Inter', 'Roboto', 'Segoe UI', 'system-ui', Arial, sans-serif`,
+                                <Box className="sidebar-icon" sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  background: childActive 
+                                    ? 'linear-gradient(135deg, #E9762B 0%, #d4681f 100%)'
+                                    : 'rgba(241, 240, 233, 0.08)',
                                   color: childActive ? '#F1F0E9' : 'rgba(241, 240, 233, 0.8)',
-                                }
-                              }} 
-                            />
-                          </ListItemButton>
-                        </Tooltip>
-                      );
-                    })}
-                  </List>
-                </Collapse>
-              )}
-            </Box>
-          );
-        })}
-      </List>
+                                  width: 32, 
+                                  height: 32, 
+                                  borderRadius: '10px',
+                                  transition: 'all 0.3s ease',
+                                  boxShadow: childActive 
+                                    ? '0 3px 10px rgba(233, 118, 43, 0.3)' 
+                                    : '0 2px 6px rgba(0, 0, 0, 0.15)',
+                                }}>
+                                  {child.icon}
+                                </Box>
+                              </ListItemIcon>
+                              <ListItemText 
+                                primary={child.label} 
+                                sx={{ 
+                                  '& .MuiListItemText-primary': {
+                                    fontWeight: childActive ? 500 : 400,
+                                    fontSize: 14,
+                                    fontFamily: `'Inter', 'Roboto', 'Segoe UI', 'system-ui', Arial, sans-serif`,
+                                    color: childActive ? '#F1F0E9' : 'rgba(241, 240, 233, 0.8)',
+                                  }
+                                }} 
+                              />
+                            </ListItemButton>
+                          </Tooltip>
+                        );
+                      })}
+                    </List>
+                  </Collapse>
+                )}
+              </Box>
+            );
+          })}
+        </List>
+      </Box>
       
-      {/* Bottom decorative element */}
+      {/* Bottom pinned logout */}
       <Box sx={{
         mt: 'auto',
         p: 3,
-        display: 'flex',
-        justifyContent: 'center',
-        opacity: 0.6
+        pt: 1.25,
+        position: 'sticky',
+        bottom: 25,
+        background: 'linear-gradient(180deg, rgba(13, 71, 21, 0.92) 0%, rgba(13, 40, 24, 0.96) 100%)',
+        backdropFilter: 'blur(6px)',
+        borderTop: '1px solid rgba(241, 240, 233, 0.08)',
+        boxShadow: '0 -6px 18px rgba(0, 0, 0, 0.35)',
+        borderBottomRightRadius: 32,
+        zIndex: 2,
       }}>
+        <Button
+          onClick={handleLogout}
+          variant="contained"
+          fullWidth
+          startIcon={<LogoutIcon />}
+          sx={{
+            textTransform: 'none',
+            fontWeight: 600,
+            letterSpacing: 0.4,
+            py: 1.1,
+            borderRadius: 3,
+            background: 'linear-gradient(135deg, #0D4715 0%, #1a5f2e 100%)',
+            boxShadow: '0 12px 26px rgba(233, 118, 43, 0.45)',
+            border: '1px solid rgba(233, 118, 43, 0.2)',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #1a5f2e 0%, #0D4715 100%)',
+              boxShadow: '0 14px 30px rgba(233, 118, 43, 0.55)',
+            },
+          }}
+        >
+          Logout
+        </Button>
         <Box sx={{
-          width: '70%',
-          height: 3,
-          borderRadius: 2,
-          background: 'linear-gradient(90deg, transparent, rgba(233, 118, 43, 0.5), transparent)',
-          boxShadow: '0 0 10px rgba(233, 118, 43, 0.3)',
-        }} />
+          mt: 2.5,
+          display: 'flex',
+          justifyContent: 'center',
+          opacity: 0.7
+        }}>
+          <Box sx={{
+            width: '70%',
+            height: 3,
+            borderRadius: 2,
+            background: 'linear-gradient(90deg, transparent, rgba(233, 118, 43, 0.5), transparent)',
+            boxShadow: '0 0 10px rgba(233, 118, 43, 0.3)',
+          }} />
+        </Box>
       </Box>
     </Box>
   );
@@ -397,10 +460,12 @@ export default function Sidebar() {
           '& .MuiDrawer-paper': {
             width: drawerWidth,
             boxSizing: 'border-box',
-            background: 'linear-gradient(180deg, #0D4715 0%, #1a5f2e 40%, #0D2818 100%)',
-            borderTopRightRadius: 38,
-            borderBottomRightRadius: 38,
+            background: '#0D4715',
+            borderTopRightRadius: 32,
+            borderBottomRightRadius: 32,
             boxShadow: '0 20px 60px rgba(13, 71, 21, 0.6)',
+            mt: '64px',
+            height: 'calc(100% - 64px)',
           }
         }}
       >
@@ -416,10 +481,12 @@ export default function Sidebar() {
           '& .MuiDrawer-paper': {
             width: drawerWidth,
             boxSizing: 'border-box',
-            background: 'linear-gradient(180deg, #0D4715 0%, #1a5f2e 40%, #0D2818 100%)',
-            borderTopRightRadius: 38,
-            borderBottomRightRadius: 38,
+            background: '#0D4715',
+            borderTopRightRadius: 32,
+            borderBottomRightRadius: 32,
             boxShadow: '0 20px 60px rgba(13, 71, 21, 0.4)',
+            mt: '64px',
+            height: 'calc(100% - 64px)',
           }
         }}
       >

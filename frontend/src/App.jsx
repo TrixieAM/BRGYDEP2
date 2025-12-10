@@ -33,13 +33,13 @@ import {
   ExpandLess as ExpandLessIcon,
   HomeFilled,
 } from '@mui/icons-material';
-import axios from 'axios';
 
 // Import existing components
 import Login from './components/Login';
 import Footer from './components/Footer';
 import Indigency from './components/RequestForms/Indigency';
 import CertificationAction from './components/RequestForms/CertificationAction';
+import Transaction from './components/Transaction';
 import Home from './components/Home';
 import UserManagement from './components/UserManagement';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -81,7 +81,7 @@ function Header() {
         left: 0,
         width: '100%',
         zIndex: (theme) => theme.zIndex.drawer + 1,
-        bgcolor: '#445C3C',
+        background: 'linear-gradient(180deg, #0D4715 0%, #1a5f2e 40%, #0D2818 100%)',
         color: 'white',
         padding: '10px 20px',
         height: '60px',
@@ -193,7 +193,7 @@ function Navigation() {
       position="fixed"
       sx={{
         zIndex: 1201,
-        bgcolor: '#445C3C',
+        background: 'linear-gradient(180deg, #0D4715 0%, #1a5f2e 40%, #0D2818 100%)',
         height: '65px',
         top: 0,
         left: 0,
@@ -298,7 +298,7 @@ function Navigation() {
         <Box
           sx={{
             display: { xs: 'block', md: 'none' },
-            bgcolor: '#445C3C',
+            background: 'linear-gradient(180deg, #0D4715 0%, #1a5f2e 40%, #0D2818 100%)',
             p: 2,
             borderTop: '1px solid rgba(255,255,255,0.1)',
           }}
@@ -389,21 +389,7 @@ function Navigation() {
 }
 
 function AppContent() {
-  const [settings, setSettings] = useState({});
   const { user, loading } = useAuth();
-
-  const fetchSettings = async () => {
-    try {
-      const response = await axios.get('http://localhost:5000/api/settings');
-      setSettings(response.data);
-    } catch (error) {
-      console.error('Error fetching settings:', error);
-    }
-  };
-
-  useEffect(() => {
-    fetchSettings();
-  }, []);
 
   if (loading) {
     return (
@@ -509,6 +495,22 @@ function AppContent() {
               }
             />
             <Route
+              path="/certification-action-transactions"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                  <Transaction />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/indigency-transactions"
+              element={
+                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                  <Transaction />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/indigency"
               element={
                 <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
@@ -603,7 +605,10 @@ function AppContent() {
               }
             />
 
-            <Route path="/verify-cohabitation" element={<VerifyCohabitation />} />
+            <Route
+              path="/verify-cohabitation"
+              element={<VerifyCohabitation />}
+            />
 
             <Route
               path="/financial-assistance"
@@ -658,7 +663,7 @@ function AppContent() {
           left: 0,
           width: '100%',
           zIndex: (theme) => theme.zIndex.drawer + 1,
-          bgcolor: '#445C3C',
+          background: 'linear-gradient(180deg, #0D4715 0%, #1a5f2e 40%, #0D2818 100%)',
           color: 'white',
           textAlign: 'center',
           padding: '20px',

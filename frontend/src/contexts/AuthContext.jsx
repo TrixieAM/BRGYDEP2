@@ -36,6 +36,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     setUser(null);
     localStorage.removeItem('user');
+    localStorage.removeItem('token');
   };
 
   const hasRole = (requiredRoles) => {
@@ -78,13 +79,18 @@ export const AuthProvider = ({ children }) => {
     return rolePermissions[user.role]?.includes(permission) || false;
   };
 
+  const getToken = () => {
+    return localStorage.getItem('token');
+  };
+
   const value = {
     user,
     login,
     logout,
     hasRole,
     hasPermission,
-    loading
+    loading,
+    getToken
   };
 
   return (

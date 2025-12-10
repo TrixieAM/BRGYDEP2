@@ -3,7 +3,7 @@ import React from 'react';
 const Footer = () => {
   return (
     <footer style={{
-      backgroundColor: '#0D4715',
+      background: 'linear-gradient(180deg, #0D4715 0%, #1a5f2e 40%, #0D2818 100%)',
       color: 'white',
       padding: '2rem 2rem 1rem 2rem',
       marginTop: 'auto',

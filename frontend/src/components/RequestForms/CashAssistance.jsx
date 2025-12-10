@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
 import CaloocanLogo from '../../assets/CaloocanLogo.png';
 import Logo145 from '../../assets/Logo145.png';
@@ -208,6 +209,16 @@ const theme = createTheme({
 export default function CashAssistance() {
   const apiBase = 'http://localhost:5000';
   const navigate = useNavigate?.() || (() => {});
+  const { getToken } = useAuth();
+
+  // Helper function to get auth headers
+  const getAuthHeaders = () => {
+    const token = getToken();
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    };
+  };
 
   const [records, setRecords] = useState([]);
   const [selectedRecord, setSelectedRecord] = useState(null);
@@ -215,7 +226,6 @@ export default function CashAssistance() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('form');
   const [searchTerm, setSearchTerm] = useState('');
-  const [transactionSearch, setTransactionSearch] = useState('');
   const [residents, setResidents] = useState([]);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
@@ -294,7 +304,9 @@ export default function CashAssistance() {
   // load residents for autocomplete
   async function loadResidents() {
     try {
-      const res = await fetch(`${apiBase}/residents`);
+      const res = await fetch(`${apiBase}/residents`, {
+        headers: getAuthHeaders()
+      });
       const data = await res.json();
       const formatted = Array.isArray(data)
         ? data.map((r) => ({ ...r, dob: r.dob ? r.dob.split('T')[0] : '', created_at: r.created_at || r.createdAt || null }))
@@ -308,7 +320,9 @@ export default function CashAssistance() {
   // load cash assistance records
   async function loadRecords() {
     try {
-      const res = await fetch(`${apiBase}/cash-assistance`);
+      const res = await fetch(`${apiBase}/cash-assistance`, {
+        headers: getAuthHeaders()
+      });
       const data = await res.json();
       setRecords(
         Array.isArray(data)
@@ -409,7 +423,7 @@ export default function CashAssistance() {
 
       const res = await fetch(`${apiBase}/cash-assistance`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(toServerPayload(updatedFormData)),
       });
       if (!res.ok) throw new Error('Create failed');
@@ -444,14 +458,26 @@ export default function CashAssistance() {
 
       const res = await fetch(`${apiBase}/cash-assistance/${editingId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify(toServerPayload(updatedFormData)),
       });
       if (!res.ok) throw new Error('Update failed');
-      const updated = { ...updatedFormData, cash_assistance_id: editingId };
-      setRecords(
-        records.map((r) => (r.cash_assistance_id === editingId ? updated : r))
-      );
+      const updatedData = await res.json();
+      // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
+      const updated = { 
+        ...updatedData,
+        cash_assistance_id: updatedData.cash_assistance_id,
+        full_name: updatedData.full_name,
+        sinceYear: updatedData.since_year || '',
+        address: updatedData.address || '',
+        request_reason: updatedData.request_reason || '',
+        date_issued: updatedData.date_issued?.split('T')[0] || '',
+        date_created: updatedData.date_created,
+        transaction_number: updatedData.transaction_number,
+        validity_period: validityPeriod
+      };
+      // Remove old record and add new one
+      setRecords([updated, ...records.filter((r) => r.cash_assistance_id !== editingId)]);
       setSelectedRecord(updated);
 
       // Save to certificates table
@@ -478,7 +504,10 @@ export default function CashAssistance() {
   async function handleDelete(id) {
     if (!window.confirm('Delete this record?')) return;
     try {
-      const res = await fetch(`${apiBase}/cash-assistance/${id}`, { method: 'DELETE' });
+      const res = await fetch(`${apiBase}/cash-assistance/${id}`, { 
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
       if (!res.ok) throw new Error('Delete failed');
       setRecords(records.filter((r) => r.cash_assistance_id !== id));
       if (selectedRecord?.cash_assistance_id === id) setSelectedRecord(null);
@@ -534,28 +563,6 @@ export default function CashAssistance() {
     [records, searchTerm]
   );
 
-  // transaction search
-  const transactionFilteredRecords = useMemo(
-    () =>
-      records.filter((r) =>
-        (r.transaction_number || '').toLowerCase().includes(transactionSearch.toLowerCase())
-      ),
-    [records, transactionSearch]
-  );
-
-  function handleTransactionSearch() {
-    if (!transactionSearch) return;
-    const found = records.find((r) => (r.transaction_number || '').toLowerCase() === transactionSearch.toLowerCase());
-    if (found) {
-      setSelectedRecord(found);
-      setFormData({ ...found });
-      setEditingId(found.cash_assistance_id);
-      setIsFormOpen(true);
-      setActiveTab('form');
-    } else {
-      alert('No certificate found with this transaction number');
-    }
-  }
 
   async function generatePDF() {
     if (!display.cash_assistance_id) {
@@ -793,12 +800,6 @@ export default function CashAssistance() {
                   icon={<FolderIcon />} 
                   label={`Records (${records.length})`} 
                   value="records"
-                  iconPosition="start"
-                />
-                <Tab 
-                  icon={<ReceiptIcon />} 
-                  label="Transaction" 
-                  value="transaction"
                   iconPosition="start"
                 />
               </Tabs>
@@ -1479,113 +1480,6 @@ export default function CashAssistance() {
               </Box>
             )}
 
-            {/* TRANSACTION */}
-            {activeTab === "transaction" && (
-              <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <Paper elevation={0} sx={{ p: 3, borderBottom: 1, borderColor: "divider" }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-                    <ReceiptIcon color="primary" />
-                    Transaction Search
-                  </Typography>
-                  <Box sx={{ display: "flex", gap: 1 }}>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      placeholder="Enter transaction number (e.g., CA-240101-123456)"
-                      value={transactionSearch}
-                      onChange={(e)=>setTransactionSearch(e.target.value)}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <ReceiptIcon />
-                          </InputAdornment>
-                        )
-                      }}
-                    />
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      onClick={handleTransactionSearch}
-                      startIcon={<SearchIcon />}
-                    >
-                      Search
-                    </Button>
-                  </Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-                    Transaction numbers are automatically generated when creating a new certificate. Format: CA-YYMMDD-######
-                  </Typography>
-                </Paper>
-
-                <Box sx={{ flex: 1, overflow: "auto", p: 2 }}>
-                  {transactionFilteredRecords.length === 0 ? (
-                    <Paper sx={{ p: 4, textAlign: "center", color: "text.secondary" }}>
-                      <ReceiptIcon sx={{ fontSize: 48, mb: 2, opacity: 0.3 }} />
-                      <Typography variant="h6" gutterBottom>
-                        No transactions found
-                      </Typography>
-                      <Typography variant="body2">
-                        Enter a transaction number to search
-                      </Typography>
-                    </Paper>
-                  ) : (
-                    <Stack spacing={2}>
-                      {transactionFilteredRecords.map((record) => (
-                        <Card key={record.cash_assistance_id} sx={{
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                          borderLeft: 4,
-                          borderColor: "secondary.main",
-                        }}>
-                          <CardContent sx={{ p: 2 }}>
-                            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                              <Box sx={{ flex: 1 }}>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5, color: "#000000" }}>
-                                  {record.full_name}
-                                </Typography>
-                                <Box sx={{ display: "flex", alignItems: "center", mb: 1, gap: 1 }}>
-                                  <Chip
-                                    label={record.transaction_number}
-                                    size="small"
-                                    color="secondary"
-                                    variant="outlined"
-                                  />
-                                </Box>
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                                  {record.address}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  Issued: {formatDateDisplay(record.date_issued)}
-                                </Typography>
-                              </Box>
-                              <Box sx={{ display: "flex", gap: 0.5 }}>
-                                <Tooltip title="View">
-                                  <IconButton
-                                    size="small"
-                                    onClick={()=>handleView(record)}
-                                    color="primary"
-                                  >
-                                    <EyeIcon />
-                                  </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Edit">
-                                  <IconButton
-                                    size="small"
-                                    onClick={()=>handleEdit(record)}
-                                    color="success"
-                                  >
-                                    <EditIcon />
-                                  </IconButton>
-                                </Tooltip>
-                              </Box>
-                            </Box>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </Stack>
-                  )}
-                </Box>
-              </Box>
-            )}
           </Box>
         </Box>
 
