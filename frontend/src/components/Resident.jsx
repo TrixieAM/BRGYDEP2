@@ -266,7 +266,8 @@ export default function Residents() {
 
         const matchesCivilStatus =
           filterCivilStatus === 'all' ||
-          (r.civil_status || '').toLowerCase() === filterCivilStatus.toLowerCase();
+          (r.civil_status || '').toLowerCase() ===
+            filterCivilStatus.toLowerCase();
 
         const matchesContact =
           filterHasContact === 'all' ||
@@ -306,7 +307,10 @@ export default function Residents() {
     >
       <Container maxWidth="xl">
         {/* Header - mirrored styling */}
-        <Paper elevation={2} sx={{ borderRadius: 3, overflow: 'hidden', mb: 3 }}>
+        <Paper
+          elevation={2}
+          sx={{ borderRadius: 3, overflow: 'hidden', mb: 3 }}
+        >
           <Box
             sx={{
               display: 'flex',
@@ -369,7 +373,8 @@ export default function Residents() {
           <Box
             sx={{
               height: '4px',
-              background: 'linear-gradient(90deg, #0D4715 0%, #1a5f2e 50%, #E9762B 100%)',
+              background:
+                'linear-gradient(90deg, #0D4715 0%, #1a5f2e 50%, #E9762B 100%)',
               width: '100%',
             }}
           />
@@ -385,7 +390,13 @@ export default function Residents() {
           }}
         >
           <Stack spacing={2}>
-            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: { xs: 'column', md: 'row' },
+                gap: 2,
+              }}
+            >
               <TextField
                 sx={{ flex: 1 }}
                 size="small"
@@ -421,7 +432,13 @@ export default function Residents() {
               </Box>
             </Box>
 
-            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: { xs: 'column', md: 'row' },
+                gap: 2,
+              }}
+            >
               <FormControl fullWidth size="small">
                 <InputLabel>Civil Status</InputLabel>
                 <Select
@@ -507,7 +524,10 @@ export default function Residents() {
                     title={record.full_name}
                     subheader={`Age: ${record.age}`}
                     titleTypographyProps={{ fontWeight: 700, color: '#0D4715' }}
-                    subheaderTypographyProps={{ color: '#41644A', fontWeight: 500 }}
+                    subheaderTypographyProps={{
+                      color: '#41644A',
+                      fontWeight: 500,
+                    }}
                   />
                   <Divider />
                   <CardContent sx={{ flexGrow: 1 }}>
@@ -534,14 +554,21 @@ export default function Residents() {
                           <HomeIcon fontSize="inherit" />
                         </Avatar>
                         <Box>
-                          <Typography variant="caption" sx={{ color: '#0D4715' }}>
+                          <Typography
+                            variant="caption"
+                            sx={{ color: '#0D4715' }}
+                          >
                             Address
                           </Typography>
-                          <Typography variant="body2">{record.address}</Typography>
+                          <Typography variant="body2">
+                            {record.address}
+                          </Typography>
                         </Box>
                       </Box>
 
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box
+                        sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+                      >
                         <Avatar
                           sx={{
                             width: 32,
@@ -558,7 +585,9 @@ export default function Residents() {
                         </Typography>
                       </Box>
 
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box
+                        sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+                      >
                         <Avatar
                           sx={{
                             width: 32,
@@ -570,11 +599,15 @@ export default function Residents() {
                         >
                           <HeartIcon fontSize="inherit" />
                         </Avatar>
-                        <Typography variant="body2">{record.civil_status}</Typography>
+                        <Typography variant="body2">
+                          {record.civil_status}
+                        </Typography>
                       </Box>
 
                       {record.contact_no && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box
+                          sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+                        >
                           <Avatar
                             sx={{
                               width: 32,
@@ -586,11 +619,15 @@ export default function Residents() {
                           >
                             <PhoneIcon fontSize="inherit" />
                           </Avatar>
-                          <Typography variant="body2">{record.contact_no}</Typography>
+                          <Typography variant="body2">
+                            {record.contact_no}
+                          </Typography>
                         </Box>
                       )}
 
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box
+                        sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+                      >
                         <Avatar
                           sx={{
                             width: 32,
@@ -629,133 +666,205 @@ export default function Residents() {
             ))}
           </Grid>
         ) : (
-          <Paper
-            elevation={3}
+          <Box
             sx={{
-              borderRadius: 3,
-              border: '1px solid rgba(13, 71, 21, 0.12)',
-              boxShadow: '0 10px 28px rgba(13, 71, 21, 0.12)',
-              p: 1.5,
+              display: 'grid',
+              // Responsive columns matching the previous cards
+              gridTemplateColumns: {
+                xs: 'repeat(1, 1fr)',
+                sm: 'repeat(2, 1fr)',
+                md: 'repeat(3, 1fr)',
+                lg: 'repeat(4, 1fr)',
+              },
+              gap: 2, // Same gap
             }}
           >
-            <List sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-              {filteredRecords.map((record) => (
-                <ListItem
-                  key={record.resident_id}
-                  alignItems="flex-start"
+            {filteredRecords.map((record) => (
+              <Paper
+                key={record.resident_id}
+                sx={{
+                  height: 380, // STRICT FIXED HEIGHT
+                  display: 'flex',
+                  flexDirection: 'column',
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                  backgroundColor: '#ffffff',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  border: '1px solid #e0e0e0',
+                  width: '100%',
+                  '&:hover': {
+                    transform: 'translateY(-4px)',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+                  },
+                }}
+              >
+                {/* Header - SAME DARK GREEN */}
+                <Box
                   sx={{
-                    border: '1px solid rgba(13, 71, 21, 0.12)',
-                    borderRadius: 2,
-                    backgroundColor: '#FFFFFF',
-                    boxShadow: '0 6px 16px rgba(13, 71, 21, 0.08)',
-                    p: 1.5,
-                    gap: 2,
-                    alignItems: 'center',
+                    p: 2,
+                    backgroundColor: '#41644A',
+                    color: 'white',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0.5,
+                    flexGrow: 0,
                   }}
                 >
-                  <ListItemAvatar>
+                  <Typography
+                    variant="subtitle1"
+                    sx={{
+                      fontWeight: 'bold',
+                      fontSize: '1rem',
+                      lineHeight: 1.2,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {record.full_name}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      opacity: 0.95,
+                      fontSize: '0.75rem',
+                    }}
+                  >
+                    Resident Profile
+                  </Typography>
+                </Box>
+
+                {/* Body Content - Flex Column to control layout */}
+                <Box
+                  sx={{
+                    p: 2.5,
+                    flexGrow: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* Avatar Section */}
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      mb: 2,
+                    }}
+                  >
                     <Avatar
                       sx={{
-                        bgcolor: '#0D4715',
-                        color: '#F1F0E9',
+                        width: 64,
+                        height: 64,
+                        bgcolor: '#41644A',
+                        color: '#fff',
                         fontWeight: 700,
+                        fontSize: 32,
+                        border: '3px solid #f0f0f0',
                       }}
                     >
-                      <PersonIcon />
+                      {record.full_name.charAt(0)}
                     </Avatar>
-                  </ListItemAvatar>
-                  <ListItemText
-                    primary={
-                      <Typography variant="h6" sx={{ fontWeight: 700, color: '#0D4715' }}>
-                        {record.full_name}
-                      </Typography>
-                    }
-                    secondary={
-                      <Stack spacing={0.9} sx={{ mt: 1 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Avatar
-                            sx={{
-                              width: 30,
-                              height: 30,
-                              bgcolor: '#F1F0E9',
-                              color: '#0D4715',
-                              fontSize: 16,
-                            }}
-                          >
-                            <HomeIcon fontSize="inherit" />
-                          </Avatar>
-                          <Typography variant="body2">{record.address}</Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Avatar
-                            sx={{
-                              width: 30,
-                              height: 30,
-                              bgcolor: '#F1F0E9',
-                              color: '#0D4715',
-                              fontSize: 16,
-                            }}
-                          >
-                            <CakeIcon fontSize="inherit" />
-                          </Avatar>
-                          <Typography variant="body2">
-                            {formatDate(record.dob)} ({record.age} years old)
-                          </Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Avatar
-                            sx={{
-                              width: 30,
-                              height: 30,
-                              bgcolor: '#E9762B22',
-                              color: '#E9762B',
-                              fontSize: 16,
-                            }}
-                          >
-                            <HeartIcon fontSize="inherit" />
-                          </Avatar>
-                          <Typography variant="body2">{record.civil_status}</Typography>
-                        </Box>
-                        {record.contact_no && (
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Avatar
-                              sx={{
-                                width: 30,
-                                height: 30,
-                                bgcolor: '#F1F0E9',
-                                color: '#0D4715',
-                                fontSize: 16,
-                              }}
-                            >
-                              <PhoneIcon fontSize="inherit" />
-                            </Avatar>
-                            <Typography variant="body2">{record.contact_no}</Typography>
-                          </Box>
-                        )}
-                      </Stack>
-                    }
-                    secondaryTypographyProps={{ component: 'div' }}
-                  />
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 1 }}>
-                    <IconButton
-                      edge="end"
-                      onClick={() => handleEdit(record)}
-                      sx={{ color: '#0D4715' }}
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton
-                      edge="end"
-                      onClick={() => handleDelete(record.resident_id)}
-                      sx={{ color: '#E9762B' }}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
                   </Box>
-                </ListItem>
-              ))}
-            </List>
-          </Paper>
+
+                  {/* Middle Details (Age, Status, Phone) */}
+                  <Stack spacing={1.2} sx={{ fontSize: '0.875rem' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <CakeIcon sx={{ color: '#41644A', fontSize: 18 }} />
+                      <Typography variant="body2">
+                        {formatDate(record.dob)} ({record.age}y)
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <FavoriteIcon sx={{ color: '#E9762B', fontSize: 18 }} />
+                      <Typography variant="body2">
+                        {record.civil_status}
+                      </Typography>
+                    </Box>
+                    {record.contact_no && (
+                      <Box
+                        sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+                      >
+                        <PhoneIcon sx={{ color: '#41644A', fontSize: 18 }} />
+                        <Typography variant="body2">
+                          {record.contact_no}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Stack>
+
+                  {/* ADDRESS - PUSHED TO BOTTOM */}
+                  <Box
+                    sx={{
+                      mt: 'auto', // Pushes this box to the very bottom of the flex container
+                      pt: 2,
+                      borderTop: '1px dashed #e0e0e0', // Separator line
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                    }}
+                  >
+                    <HomeIcon
+                      sx={{ color: '#41644A', fontSize: 18, flexShrink: 0 }}
+                    />
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: '#555',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis', // Adds "..." if address is too long
+                        width: '100%',
+                      }}
+                    >
+                      {record.address}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                {/* Footer Actions */}
+                <Box
+                  sx={{
+                    p: 2,
+                    borderTop: '1px solid #e0e0e0',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    backgroundColor: '#fafafa',
+                  }}
+                >
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<EditIcon />}
+                    onClick={() => handleEdit(record)}
+                    sx={{
+                      color: '#41644A',
+                      borderColor: '#41644A',
+                      fontWeight: 'bold',
+                      '&:hover': { backgroundColor: 'rgba(65,100,74,0.05)' },
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<DeleteIcon />}
+                    onClick={() => handleDelete(record.resident_id)}
+                    sx={{
+                      color: '#E9762B',
+                      borderColor: '#E9762B',
+                      fontWeight: 'bold',
+                      '&:hover': { backgroundColor: 'rgba(233,118,43,0.05)' },
+                    }}
+                  >
+                    Delete
+                  </Button>
+                </Box>
+              </Paper>
+            ))}
+          </Box>
         )}
 
         {/* Floating Action Button */}
@@ -805,7 +914,8 @@ export default function Residents() {
             <Box
               sx={{
                 p: 3,
-                background: 'linear-gradient(180deg, #0D4715 0%, #1a5f2e 40%, #0D2818 100%)',
+                background:
+                  'linear-gradient(180deg, #0D4715 0%, #1a5f2e 40%, #0D2818 100%)',
                 borderTopLeftRadius: 12,
                 borderTopRightRadius: 12,
                 color: '#F1F0E9',
@@ -825,7 +935,11 @@ export default function Residents() {
                 <PersonIcon />
               </Avatar>
               <Box>
-                <Typography variant="h5" component="h2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
+                <Typography
+                  variant="h5"
+                  component="h2"
+                  sx={{ fontWeight: 700, lineHeight: 1.2 }}
+                >
                   {editingId ? 'Edit Resident Record' : 'New Resident Record'}
                 </Typography>
                 <Typography variant="body2" sx={{ opacity: 0.9 }}>
@@ -965,9 +1079,11 @@ export default function Residents() {
                     startIcon={<SaveIcon />}
                     fullWidth
                     sx={{
-                      background: 'linear-gradient(135deg, #0D4715 0%, #1a5f2e 100%)',
+                      background:
+                        'linear-gradient(135deg, #0D4715 0%, #1a5f2e 100%)',
                       '&:hover': {
-                        background: 'linear-gradient(135deg, #1a5f2e 0%, #0D4715 100%)',
+                        background:
+                          'linear-gradient(135deg, #1a5f2e 0%, #0D4715 100%)',
                       },
                     }}
                     onClick={handleSubmit}

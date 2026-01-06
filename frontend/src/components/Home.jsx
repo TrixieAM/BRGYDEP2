@@ -537,21 +537,6 @@ const BarangayDashboard = () => {
             </Menu>
           </Box>
         </Box>
-        <Box sx={{ px: 2, pb: 1 }}>
-          <Tabs
-            value={activeTab}
-            onChange={handleTabChange}
-            variant="scrollable"
-            scrollButtons="auto"
-          >
-            <Tab label="Dashboard" />
-            <Tab label="Residents" />
-            <Tab label="Certificates" />
-            <Tab label="Events" />
-            <Tab label="Announcements" />
-            <Tab label="Reports" />
-          </Tabs>
-        </Box>
       </Box>
 
       {/* Main Content */}

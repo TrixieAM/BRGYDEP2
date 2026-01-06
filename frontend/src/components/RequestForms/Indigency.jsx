@@ -1,4 +1,3 @@
-
 import React, { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import jsPDF from 'jspdf';
@@ -226,11 +225,8 @@ export default function Indigency() {
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  const { 
-  saveCertificate, 
-  getValidityPeriod,
-  calculateExpirationDate 
-} = useCertificateManager('Barangay Indigency');
+  const { saveCertificate, getValidityPeriod, calculateExpirationDate } =
+    useCertificateManager('Barangay Indigency');
 
   const { getToken } = useAuth();
 
@@ -238,7 +234,7 @@ export default function Indigency() {
     const token = getToken();
     return {
       'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` })
+      ...(token && { Authorization: `Bearer ${token}` }),
     };
   };
 
@@ -391,7 +387,9 @@ export default function Indigency() {
 
   async function loadResidents() {
     try {
-      const res = await fetch(`${apiBase}/residents`, { headers: getAuthHeaders() });
+      const res = await fetch(`${apiBase}/residents`, {
+        headers: getAuthHeaders(),
+      });
       const data = await res.json();
       // Format dates properly when loading residents - extract only YYYY-MM-DD
       const formattedResidents = data.map((resident) => ({
@@ -411,7 +409,9 @@ export default function Indigency() {
 
   async function loadRecords() {
     try {
-      const res = await fetch(`${apiBase}/indigency`, { headers: getAuthHeaders() });
+      const res = await fetch(`${apiBase}/indigency`, {
+        headers: getAuthHeaders(),
+      });
       const data = await res.json();
       setRecords(
         Array.isArray(data)
@@ -462,18 +462,18 @@ export default function Indigency() {
         storeCertificateData(display);
 
         // Create a URL that points to a verification page
-                // Using window.location.origin to get the current domain
-                const verificationUrl = `${
-                  window.location.origin
-                }/verify-certificate?id=${display.indigency_id || 'draft'}`;
-        
-                const qrContent = `CERTIFICATE VERIFICATION:
+        // Using window.location.origin to get the current domain
+        const verificationUrl = `${
+          window.location.origin
+        }/verify-certificate?id=${display.indigency_id || 'draft'}`;
+
+        const qrContent = `CERTIFICATE VERIFICATION:
                 𝗧𝗿𝗮𝗻𝘀𝗮𝗰𝘁𝗶𝗼𝗻 𝗡𝗼: ${display.transaction_number || 'N/A'}
                 Name: ${display.full_name}
                 Date Issued: ${
-                display.date_created
-                ? formatDateTimeDisplay(display.date_created)
-                : new Date().toLocaleString()
+                  display.date_created
+                    ? formatDateTimeDisplay(display.date_created)
+                    : new Date().toLocaleString()
                 }
                 Document Type: Indigency
                
@@ -481,28 +481,28 @@ export default function Indigency() {
                 CALOOCAN CITY
                 ALL RIGHTS RESERVED
                 `;
-        
-                try {
-                  const qrUrl = await QRCode.toDataURL(qrContent, {
-                    width: 140,
-                    margin: 1,
-                    color: {
-                      dark: '#000000',
-                      light: '#FFFFFF',
-                    },
-                    errorCorrectionLevel: 'L',
-                  });
-                  setQrCodeUrl(qrUrl);
-                } catch (err) {
-                  console.error('Failed to generate QR code:', err);
-                }
-              } else {
-                setQrCodeUrl('');
-              }
-            };
-        
-            generateQRCode();
-          }, [display]);
+
+        try {
+          const qrUrl = await QRCode.toDataURL(qrContent, {
+            width: 140,
+            margin: 1,
+            color: {
+              dark: '#000000',
+              light: '#FFFFFF',
+            },
+            errorCorrectionLevel: 'L',
+          });
+          setQrCodeUrl(qrUrl);
+        } catch (err) {
+          console.error('Failed to generate QR code:', err);
+        }
+      } else {
+        setQrCodeUrl('');
+      }
+    };
+
+    generateQRCode();
+  }, [display]);
 
   function toServerPayload(data) {
     return {
@@ -521,7 +521,7 @@ export default function Indigency() {
     };
   }
 
-   async function handleCreate() {
+  async function handleCreate() {
     try {
       // Generate a transaction number for new certificates
       const transactionNumber = generateTransactionNumber();
@@ -575,12 +575,15 @@ export default function Indigency() {
       if (!res.ok) throw new Error('Update failed');
       const updatedData = await res.json();
       // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
-      const updatedRec = { 
+      const updatedRec = {
         ...updatedData,
-        validity_period: validityPeriod
+        validity_period: validityPeriod,
       };
       // Remove old record and add new one
-      setRecords([updatedRec, ...records.filter((r) => r.indigency_id !== editingId)]);
+      setRecords([
+        updatedRec,
+        ...records.filter((r) => r.indigency_id !== editingId),
+      ]);
       setSelectedRecord(updatedRec);
 
       // Save to certificates table
@@ -675,7 +678,6 @@ export default function Indigency() {
     [records, searchTerm]
   );
 
-
   // Generate PDF function
   async function generatePDF() {
     if (!display.indigency_id) {
@@ -720,7 +722,9 @@ export default function Indigency() {
       });
       pdf.addImage(imgData, 'PNG', 0, 0, 8.5, 11);
 
-      const fileName = `Indigency_Certificate_${display.indigency_id}_${display.full_name.replace(/\s+/g, '_')}.pdf`;
+      const fileName = `Indigency_Certificate_${
+        display.indigency_id
+      }_${display.full_name.replace(/\s+/g, '_')}.pdf`;
       pdf.save(fileName);
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -730,7 +734,7 @@ export default function Indigency() {
     }
   }
 
-function handlePrint() {
+  function handlePrint() {
     // Check if there's a certificate to print
     if (!display.indigency_id) {
       alert('Please save the record first before printing');
@@ -824,7 +828,6 @@ function handlePrint() {
     }
   };
 
-
   const handleZoomIn = () => {
     setZoomLevel((prev) => Math.min(prev + 0.1, 2)); // Max zoom: 2x (200%)
   };
@@ -860,17 +863,27 @@ function handlePrint() {
 
   return (
     <ThemeProvider theme={theme}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', bgcolor: 'background.default' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100vh',
+          overflow: 'hidden',
+          bgcolor: 'background.default',
+        }}
+      >
         {/* TOP HEADER */}
         <Paper elevation={2} sx={{ zIndex: 10, borderRadius: 0 }}>
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'space-between',
-            p: 2,
-            bgcolor: 'primary.main',
-            color: 'white'
-          }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              p: 2,
+              bgcolor: 'primary.main',
+              color: 'white',
+            }}
+          >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Avatar src={Logo145} sx={{ width: 48, height: 48 }} />
               <Box>
@@ -882,25 +895,29 @@ function handlePrint() {
                 </Typography>
               </Box>
             </Box>
-            
+
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Badge badgeContent={records.length} color="secondary">
-                <Chip 
+                <Chip
                   icon={<FolderIcon />}
-                  label="Total Records" 
-                  sx={{ 
-                    bgcolor: "rgba(255,255,255,0.2)", 
-                    color: "white",
-                    fontWeight: 600
-                  }} 
+                  label="Total Records"
+                  sx={{
+                    bgcolor: 'rgba(255,255,255,0.2)',
+                    color: 'white',
+                    fontWeight: 600,
+                  }}
                 />
               </Badge>
-              
-              <Button 
-                variant="contained" 
-                color="secondary" 
-                startIcon={<AddIcon />} 
-                onClick={() => { resetForm(); setIsFormOpen(true); setActiveTab("form"); }}
+
+              <Button
+                variant="contained"
+                color="secondary"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  resetForm();
+                  setIsFormOpen(true);
+                  setActiveTab('form');
+                }}
                 sx={{ borderRadius: 20, px: 3 }}
               >
                 New Certificate
@@ -909,26 +926,35 @@ function handlePrint() {
           </Box>
 
           {/* NAVIGATION TABS */}
-          <Box sx={{ bgcolor: "background.paper", borderBottom: 1, borderColor: "divider" }}>
-            <Box sx={{ maxWidth: 1200, mx: "auto" }}>
-              <Tabs 
-                value={activeTab} 
-                onChange={(e, nv) => setActiveTab(nv)} 
+          <Box
+            sx={{
+              bgcolor: 'background.paper',
+              borderBottom: 1,
+              borderColor: 'divider',
+            }}
+          >
+            <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
+              <Tabs
+                value={activeTab}
+                onChange={(e, nv) => setActiveTab(nv)}
                 variant="fullWidth"
-                sx={{ 
-                  "& .MuiTabs-indicator": { height: 3, borderRadius: "3px 3px 0 0" },
-                  minHeight: 48
+                sx={{
+                  '& .MuiTabs-indicator': {
+                    height: 3,
+                    borderRadius: '3px 3px 0 0',
+                  },
+                  minHeight: 48,
                 }}
               >
-                <Tab 
-                  icon={<ArticleIcon />} 
-                  label="Form" 
+                <Tab
+                  icon={<ArticleIcon />}
+                  label="Form"
                   value="form"
                   iconPosition="start"
                 />
-                <Tab 
-                  icon={<FolderIcon />} 
-                  label={`Records (${records.length})`} 
+                <Tab
+                  icon={<FolderIcon />}
+                  label={`Records (${records.length})`}
                   value="records"
                   iconPosition="start"
                 />
@@ -940,61 +966,82 @@ function handlePrint() {
         {/* MAIN CONTENT AREA */}
         <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           {/* LEFT: Certificate preview */}
-          <Box sx={{ 
-            flex: 1, 
-            overflow: 'auto', 
-            display: 'flex', 
-            flexDirection: 'column', 
-            bgcolor: 'background.default',
-            p: 2,
-            [theme.breakpoints.down('lg')]: { display: activeTab === "form" ? 'none' : 'flex' }
-          }}>
+          <Box
+            sx={{
+              flex: 1,
+              overflow: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              bgcolor: 'background.default',
+              p: 2,
+              [theme.breakpoints.down('lg')]: {
+                display: activeTab === 'form' ? 'none' : 'flex',
+              },
+            }}
+          >
             {/* ZOOM CONTROLS */}
             <Paper elevation={1} sx={{ p: 2, mb: 2, borderRadius: 2 }}>
-              <Box sx={{ 
-                display: "flex", 
-                justifyContent: "space-between", 
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: 1
-              }}>
-                <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 1,
+                }}
+              >
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                   <Tooltip title="Zoom Out">
-                    <IconButton onClick={handleZoomOut} color="primary" size="small">
+                    <IconButton
+                      onClick={handleZoomOut}
+                      color="primary"
+                      size="small"
+                    >
                       <ZoomOutIcon />
                     </IconButton>
                   </Tooltip>
-                  <Typography variant="body2" sx={{ 
-                    minWidth: 60, 
-                    textAlign: "center", 
-                    fontWeight: 600,
-                    px: 1,
-                    py: 0.5,
-                    bgcolor: "background.paper",
-                    borderRadius: 1,
-                    color: "#000000"
-                  }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      minWidth: 60,
+                      textAlign: 'center',
+                      fontWeight: 600,
+                      px: 1,
+                      py: 0.5,
+                      bgcolor: 'background.paper',
+                      borderRadius: 1,
+                      color: '#000000',
+                    }}
+                  >
                     {Math.round(zoomLevel * 100)}%
                   </Typography>
                   <Tooltip title="Zoom In">
-                    <IconButton onClick={handleZoomIn} color="primary" size="small">
+                    <IconButton
+                      onClick={handleZoomIn}
+                      color="primary"
+                      size="small"
+                    >
                       <ZoomInIcon />
                     </IconButton>
                   </Tooltip>
                   <Tooltip title="Reset Zoom">
-                    <IconButton onClick={handleResetZoom} color="primary" size="small">
+                    <IconButton
+                      onClick={handleResetZoom}
+                      color="primary"
+                      size="small"
+                    >
                       <ResetIcon />
                     </IconButton>
                   </Tooltip>
                 </Box>
 
-                <Box sx={{ display: "flex", gap: 1 }}>
+                <Box sx={{ display: 'flex', gap: 1 }}>
                   <Tooltip title="Verify Certificate">
-                    <Button 
-                      variant="outlined" 
-                      color="primary" 
-                      onClick={handleQrCodeClick} 
-                      startIcon={<QrCodeIcon />} 
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      onClick={handleQrCodeClick}
+                      startIcon={<QrCodeIcon />}
                       disabled={!display.indigency_id}
                       size="small"
                     >
@@ -1002,21 +1049,21 @@ function handlePrint() {
                     </Button>
                   </Tooltip>
                   <Tooltip title="Download PDF">
-                    <Button 
-                      variant="contained" 
-                      color="secondary" 
-                      onClick={generatePDF} 
-                      disabled={!display.indigency_id || isGeneratingPDF} 
+                    <Button
+                      variant="contained"
+                      color="secondary"
+                      onClick={generatePDF}
+                      disabled={!display.indigency_id || isGeneratingPDF}
                       startIcon={<FileTextIcon />}
                       size="small"
                     >
-                      {isGeneratingPDF ? "Generating..." : "Download"}
+                      {isGeneratingPDF ? 'Generating...' : 'Download'}
                     </Button>
                   </Tooltip>
                   <Tooltip title="Print">
-                    <Button 
-                      variant="outlined" 
-                      onClick={handlePrint} 
+                    <Button
+                      variant="outlined"
+                      onClick={handlePrint}
                       disabled={!display.indigency_id}
                       startIcon={<PrintIcon />}
                       size="small"
@@ -1029,15 +1076,22 @@ function handlePrint() {
             </Paper>
 
             {/* CERTIFICATE PREVIEW */}
-            <Box sx={{ 
-              display: "flex", 
-              justifyContent: "center", 
-              alignItems: "flex-start", 
-              flex: 1, 
-              overflow: "auto",
-              p: 1
-            }}>
-              <Box sx={{ transform: `scale(${zoomLevel})`, transformOrigin: "top center" }}>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'flex-start',
+                flex: 1,
+                overflow: 'auto',
+                p: 1,
+              }}
+            >
+              <Box
+                sx={{
+                  transform: `scale(${zoomLevel})`,
+                  transformOrigin: 'top center',
+                }}
+              >
                 <div
                   id="certificate-preview"
                   style={{
@@ -1248,8 +1302,9 @@ function handlePrint() {
                     <p style={{ margin: 0, textIndent: '50px' }}>
                       This is to certify that the person whose name and thumb
                       print appear hereon has requested a{' '}
-                      <i> Barangay Indigency</i> from this office and the result/s
-                      is/are listed below and valid for six (6) months only.
+                      <i> Barangay Indigency</i> from this office and the
+                      result/s is/are listed below and valid for six (6) months
+                      only.
                     </p>
                   </div>
 
@@ -1618,22 +1673,45 @@ function handlePrint() {
           </Box>
 
           {/* RIGHT: FORM/RECORDS PANEL */}
-          <Box sx={{ 
-            width: { xs: '100%', md: '50%', lg: '40%' }, 
-            bgcolor: "background.paper", 
-            borderLeft: { xs: 0, md: 1 }, 
-            borderColor: "divider",
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden'
-          }}>
+          <Box
+            sx={{
+              width: { xs: '100%', md: '50%', lg: '40%' },
+              bgcolor: 'background.paper',
+              borderLeft: { xs: 0, md: 1 },
+              borderColor: 'divider',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
             {/* FORM */}
-            {activeTab === "form" && (
-              <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <Paper elevation={0} sx={{ p: 3, borderBottom: 1, borderColor: "divider" }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+            {activeTab === 'form' && (
+              <Box
+                sx={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                }}
+              >
+                <Paper
+                  elevation={0}
+                  sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}
+                >
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontWeight: 600,
+                      mb: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                    }}
+                  >
                     <ArticleIcon color="primary" />
-                    {editingId ? "Edit Certificate" : "New Certificate of Indigency"}
+                    {editingId
+                      ? 'Edit Certificate'
+                      : 'New Certificate of Indigency'}
                   </Typography>
                   {selectedRecord && !editingId && (
                     <Typography variant="body2" color="text.secondary">
@@ -1642,16 +1720,22 @@ function handlePrint() {
                   )}
                 </Paper>
 
-                <Box sx={{ flex: 1, overflow: "auto", p: 3 }}>
+                <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
                   <Stack spacing={3}>
                     <Autocomplete
                       options={residents}
-                      getOptionLabel={(option) => option.full_name || ""}
-                      value={residents.find((r) => r.full_name === formData.full_name) || null}
+                      getOptionLabel={(option) => option.full_name || ''}
+                      value={
+                        residents.find(
+                          (r) => r.full_name === formData.full_name
+                        ) || null
+                      }
                       onChange={(e, nv) => {
                         if (nv) {
                           // Ensure date is properly formatted without timezone issues
-                          const dobFormatted = nv.dob ? nv.dob.slice(0, 10) : '';
+                          const dobFormatted = nv.dob
+                            ? nv.dob.slice(0, 10)
+                            : '';
                           setFormData({
                             ...formData,
                             resident_id: nv.resident_id,
@@ -1668,50 +1752,52 @@ function handlePrint() {
                         }
                       }}
                       renderInput={(params) => (
-                        <TextField 
-                          {...params} 
-                          label="Full Name" 
-                          variant="outlined" 
-                          fullWidth 
+                        <TextField
+                          {...params}
+                          label="Full Name"
+                          variant="outlined"
+                          fullWidth
                           size="small"
                           required
                         />
                       )}
                     />
 
-                    <TextField 
-                      label="Address" 
-                      variant="outlined" 
-                      fullWidth 
+                    <TextField
+                      label="Address"
+                      variant="outlined"
+                      fullWidth
                       size="small"
-                      multiline 
+                      multiline
                       rows={2}
-                      value={formData.address} 
-                      onChange={(e) => setFormData({ ...formData, address: e.target.value })} 
+                      value={formData.address}
+                      onChange={(e) =>
+                        setFormData({ ...formData, address: e.target.value })
+                      }
                       required
                     />
 
                     <Grid container spacing={2}>
                       <Grid item xs={12} sm={6}>
-                        <TextField 
-                          label="Birthday" 
-                          type="date" 
-                          variant="outlined" 
-                          fullWidth 
+                        <TextField
+                          label="Birthday"
+                          type="date"
+                          variant="outlined"
+                          fullWidth
                           size="small"
-                          InputLabelProps={{ shrink: true }} 
-                          value={formData.dob} 
-                          onChange={(e) => handleBirthdayChange(e.target.value)} 
+                          InputLabelProps={{ shrink: true }}
+                          value={formData.dob}
+                          onChange={(e) => handleBirthdayChange(e.target.value)}
                           required
                         />
                       </Grid>
                       <Grid item xs={12} sm={6}>
-                        <TextField 
-                          label="Age" 
-                          variant="outlined" 
-                          fullWidth 
+                        <TextField
+                          label="Age"
+                          variant="outlined"
+                          fullWidth
                           size="small"
-                          value={formData.age} 
+                          value={formData.age}
                           InputProps={{ readOnly: true }}
                           sx={{
                             '& .MuiOutlinedInput-root': {
@@ -1722,23 +1808,30 @@ function handlePrint() {
                       </Grid>
                     </Grid>
 
-                    <TextField 
-                      label="Provincial Address" 
-                      variant="outlined" 
-                      fullWidth 
+                    <TextField
+                      label="Provincial Address"
+                      variant="outlined"
+                      fullWidth
                       size="small"
-                      value={formData.provincial_address} 
-                      onChange={(e) => setFormData({ ...formData, provincial_address: e.target.value })} 
+                      value={formData.provincial_address}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          provincial_address: e.target.value,
+                        })
+                      }
                     />
 
-                    <TextField 
-                      label="Contact Number" 
-                      variant="outlined" 
-                      fullWidth 
+                    <TextField
+                      label="Contact Number"
+                      variant="outlined"
+                      fullWidth
                       size="small"
                       placeholder="09XXXXXXXXX"
-                      value={formData.contact_no} 
-                      onChange={(e) => setFormData({ ...formData, contact_no: e.target.value })} 
+                      value={formData.contact_no}
+                      onChange={(e) =>
+                        setFormData({ ...formData, contact_no: e.target.value })
+                      }
                     />
 
                     <FormControl fullWidth size="small">
@@ -1746,7 +1839,12 @@ function handlePrint() {
                       <Select
                         value={formData.civil_status}
                         label="Civil Status"
-                        onChange={(e) => setFormData({ ...formData, civil_status: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            civil_status: e.target.value,
+                          })
+                        }
                       >
                         {civilStatusOptions.map((status) => (
                           <MenuItem key={status} value={status}>
@@ -1756,59 +1854,71 @@ function handlePrint() {
                       </Select>
                     </FormControl>
 
-                    <TextField 
-                      label="Remarks" 
-                      variant="outlined" 
-                      fullWidth 
+                    <TextField
+                      label="Remarks"
+                      variant="outlined"
+                      fullWidth
                       size="small"
-                      multiline 
+                      multiline
                       rows={2}
-                      value={formData.remarks} 
-                      onChange={(e) => setFormData({ ...formData, remarks: e.target.value })} 
+                      value={formData.remarks}
+                      onChange={(e) =>
+                        setFormData({ ...formData, remarks: e.target.value })
+                      }
                       required
                     />
 
-                    <TextField 
-                      label="Request Reason" 
-                      variant="outlined" 
-                      fullWidth 
+                    <TextField
+                      label="Request Reason"
+                      variant="outlined"
+                      fullWidth
                       size="small"
-                      multiline 
+                      multiline
                       rows={2}
                       placeholder="Job application, School enrollment, etc."
-                      value={formData.request_reason} 
-                      onChange={(e) => setFormData({ ...formData, request_reason: e.target.value })} 
+                      value={formData.request_reason}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          request_reason: e.target.value,
+                        })
+                      }
                       required
                     />
 
-                    <TextField 
-                      label="Date Issued" 
-                      type="date" 
-                      variant="outlined" 
-                      fullWidth 
+                    <TextField
+                      label="Date Issued"
+                      type="date"
+                      variant="outlined"
+                      fullWidth
                       size="small"
-                      InputLabelProps={{ shrink: true }} 
-                      value={formData.date_issued} 
-                      onChange={(e) => setFormData({ ...formData, date_issued: e.target.value })} 
+                      InputLabelProps={{ shrink: true }}
+                      value={formData.date_issued}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          date_issued: e.target.value,
+                        })
+                      }
                       required
                     />
 
-                    <Box sx={{ display: "flex", gap: 2, pt: 2 }}>
-                      <Button 
-                        onClick={handleSubmit} 
-                        variant="contained" 
-                        startIcon={<SaveIcon />} 
-                        fullWidth 
+                    <Box sx={{ display: 'flex', gap: 2, pt: 2 }}>
+                      <Button
+                        onClick={handleSubmit}
+                        variant="contained"
+                        startIcon={<SaveIcon />}
+                        fullWidth
                         color="primary"
                         size="large"
                       >
-                        {editingId ? "Update" : "Save"}
+                        {editingId ? 'Update' : 'Save'}
                       </Button>
                       {(editingId || isFormOpen) && (
-                        <Button 
-                          onClick={resetForm} 
-                          variant="outlined" 
-                          startIcon={<CloseIcon />} 
+                        <Button
+                          onClick={resetForm}
+                          variant="outlined"
+                          startIcon={<CloseIcon />}
                           color="primary"
                           size="large"
                         >
@@ -1822,98 +1932,161 @@ function handlePrint() {
             )}
 
             {/* RECORDS */}
-            {activeTab === "records" && (
-              <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <Paper elevation={0} sx={{ p: 3, borderBottom: 1, borderColor: "divider" }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            {activeTab === 'records' && (
+              <Box
+                sx={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                }}
+              >
+                <Paper
+                  elevation={0}
+                  sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}
+                >
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontWeight: 600,
+                      mb: 2,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                    }}
+                  >
                     <FolderIcon color="primary" />
                     Certificate Records
                   </Typography>
-                  <TextField 
-                    fullWidth 
-                    size="small" 
-                    placeholder="Search by name, address, or contact no." 
-                    value={searchTerm} 
-                    onChange={(e) => setSearchTerm(e.target.value)} 
-                    InputProps={{ 
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Search by name, address, or contact no."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
                           <SearchIcon />
                         </InputAdornment>
-                      ) 
-                    }} 
+                      ),
+                    }}
                   />
                 </Paper>
 
-                <Box sx={{ flex: 1, overflow: "auto", p: 2 }}>
+                <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
                   {filteredRecords.length === 0 ? (
-                    <Paper sx={{ p: 4, textAlign: "center", color: "text.secondary" }}>
+                    <Paper
+                      sx={{
+                        p: 4,
+                        textAlign: 'center',
+                        color: 'text.secondary',
+                      }}
+                    >
                       <FolderIcon sx={{ fontSize: 48, mb: 2, opacity: 0.3 }} />
                       <Typography variant="h6" gutterBottom>
-                        {searchTerm ? "No records found" : "No records yet"}
+                        {searchTerm ? 'No records found' : 'No records yet'}
                       </Typography>
                       <Typography variant="body2">
-                        {searchTerm ? "Try a different search term" : "Create your first certificate to get started"}
+                        {searchTerm
+                          ? 'Try a different search term'
+                          : 'Create your first certificate to get started'}
                       </Typography>
                     </Paper>
                   ) : (
                     <Stack spacing={2}>
                       {filteredRecords.map((record) => (
-                        <Card key={record.indigency_id} sx={{ 
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                          borderLeft: 4,
-                          borderColor: "primary.main",
-                        }}>
+                        <Card
+                          key={record.indigency_id}
+                          sx={{
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            borderLeft: 4,
+                            borderColor: 'primary.main',
+                          }}
+                        >
                           <CardContent sx={{ p: 2 }}>
-                            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'flex-start',
+                              }}
+                            >
                               <Box sx={{ flex: 1 }}>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5, color: "#000000" }}>
+                                <Typography
+                                  variant="subtitle1"
+                                  sx={{
+                                    fontWeight: 600,
+                                    mb: 0.5,
+                                    color: '#000000',
+                                  }}
+                                >
                                   {record.full_name}
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                  sx={{ mb: 1 }}
+                                >
                                   {record.address}
                                 </Typography>
-                                <Box sx={{ display: "flex", alignItems: "center", mb: 1, gap: 1 }}>
-                                  <Chip 
-                                    label={record.civil_status} 
-                                    size="small" 
-                                    color="primary" 
-                                    variant="outlined" 
+                                <Box
+                                  sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    mb: 1,
+                                    gap: 1,
+                                  }}
+                                >
+                                  <Chip
+                                    label={record.civil_status}
+                                    size="small"
+                                    color="primary"
+                                    variant="outlined"
                                   />
                                   {record.contact_no && (
-                                    <Typography variant="caption" color="text.secondary">
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                    >
                                       {record.contact_no}
                                     </Typography>
                                   )}
-                                  <Typography variant="caption" color="text.secondary">
-                                    Issued: {formatDateDisplay(record.date_issued)}
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                  >
+                                    Issued:{' '}
+                                    {formatDateDisplay(record.date_issued)}
                                   </Typography>
                                 </Box>
                               </Box>
-                              <Box sx={{ display: "flex", gap: 0.5 }}>
+                              <Box sx={{ display: 'flex', gap: 0.5 }}>
                                 <Tooltip title="View">
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleView(record)} 
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleView(record)}
                                     color="primary"
                                   >
                                     <EyeIcon />
                                   </IconButton>
                                 </Tooltip>
                                 <Tooltip title="Edit">
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleEdit(record)} 
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleEdit(record)}
                                     color="success"
                                   >
                                     <EditIcon />
                                   </IconButton>
                                 </Tooltip>
                                 <Tooltip title="Delete">
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleDelete(record.indigency_id)} 
+                                  <IconButton
+                                    size="small"
+                                    onClick={() =>
+                                      handleDelete(record.indigency_id)
+                                    }
                                     color="error"
                                   >
                                     <DeleteIcon />
@@ -1929,12 +2102,11 @@ function handlePrint() {
                 </Box>
               </Box>
             )}
-
           </Box>
         </Box>
 
         {/* FLOATING ACTION BUTTON FOR MOBILE */}
-        {isMobile && activeTab !== "form" && (
+        {isMobile && activeTab !== 'form' && (
           <Fab
             color="primary"
             aria-label="add"
@@ -1943,7 +2115,11 @@ function handlePrint() {
               bottom: 16,
               right: 16,
             }}
-            onClick={() => { resetForm(); setIsFormOpen(true); setActiveTab("form"); }}
+            onClick={() => {
+              resetForm();
+              setIsFormOpen(true);
+              setActiveTab('form');
+            }}
           >
             <AddIcon />
           </Fab>
