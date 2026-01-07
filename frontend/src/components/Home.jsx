@@ -66,7 +66,10 @@ import {
   KeyboardArrowRight,
   Announcement as AnnouncementIcon,
   Description as DescriptionIcon,
+  AccessibilityNew as AccessibilityNewIcon,
+  Groups as GroupsIcon,
 } from '@mui/icons-material';
+import { Pause, PlayArrow } from '@mui/icons-material';
 
 const BarangayDashboard = () => {
   const theme = useTheme();
@@ -75,7 +78,7 @@ const BarangayDashboard = () => {
   const [anchorEl, setAnchorEl] = useState(null);
   const [activeStep, setActiveStep] = useState(0);
   const open = Boolean(anchorEl);
-  const autoPlayRef = useRef();
+  const [demoStep, setDemoStep] = useState(0);
 
   // Dummy data
   const stats = {
@@ -113,15 +116,15 @@ const BarangayDashboard = () => {
     },
     {
       id: 4,
-      title: 'Send Announcement',
-      description: 'Broadcast message',
+      title: 'Announcement',
+      description: 'Create announcement',
       icon: <CampaignIcon />,
       color: '#E9762B',
     },
     {
       id: 5,
-      title: 'Health Services',
-      description: 'Manage health records',
+      title: 'Barangay Officials ',
+      description: 'Manage barangay officials',
       icon: <HealthIcon />,
       color: '#41644A',
     },
@@ -302,21 +305,49 @@ const BarangayDashboard = () => {
   ];
 
   const demographics = {
-    seniorCitizens: { count: 387, percentage: 13.6 },
-    soloParents: { count: 124, percentage: 4.4 },
-    personsWithDisability: { count: 67, percentage: 2.4 },
-    jobSeekers: { count: 156, percentage: 5.5 },
-    youth: { count: 842, percentage: 29.6 },
-    children: { count: 534, percentage: 18.8 },
+    seniorCitizens: { count: 387 },
+    soloParents: { count: 124 },
+    personsWithDisability: { count: 67 },
+    youth: { count: 842 },
   };
 
-  // Auto-play carousel
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setActiveStep((prevActiveStep) => (prevActiveStep + 1) % 3);
-    }, 5000);
+  const demographicStats = [
+    {
+      label: 'Senior Citizens',
+      value: demographics.seniorCitizens.count,
+      icon: <PersonIcon />,
+      color1: '#41644A',
+      color2: '#0D4715',
+    },
+    {
+      label: 'Solo Parents',
+      value: demographics.soloParents.count,
+      icon: <PeopleIcon />,
+      color1: '#E9762B',
+      color2: '#d4681f',
+    },
+    {
+      label: 'PWD',
+      value: demographics.personsWithDisability.count,
+      icon: <AccessibilityNewIcon />,
+      color1: '#41644A',
+      color2: '#0D4715',
+    },
+    {
+      label: 'Youth',
+      value: demographics.youth.count,
+      icon: <GroupsIcon />,
+      color1: '#E9762B',
+      color2: '#d4681f',
+    },
+  ];
 
-    return () => clearInterval(timer);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDemoStep((prev) => (prev + 1) % demographicStats.length);
+    }, 4000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleNext = () => {
@@ -460,10 +491,13 @@ const BarangayDashboard = () => {
       <Box
         sx={{
           backgroundColor: '#FFFFFF',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
+          // Enhanced shadow with a hint of your brand color for depth
+          boxShadow: '0 4px 20px rgba(65, 100, 74, 0.15)',
           zIndex: 100,
           position: 'sticky',
           top: 0,
+          // Added a subtle bottom border for a crisp finish
+          borderBottom: '1px solid rgba(0, 0, 0, 0.05)',
         }}
       >
         <Box
@@ -471,70 +505,47 @@ const BarangayDashboard = () => {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            p: 2,
+            // Increased Padding: px (horizontal) and py (vertical)
+            px: { xs: 3, md: 4 }, // Responsive padding
+            py: 2.5,
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2.5 }}>
             <Avatar
               sx={{
-                width: 48,
-                height: 48,
-                mr: 2,
+                width: 56,
+                height: 56,
                 backgroundColor: '#41644A',
+                // Added a border to separate the avatar from the background
+                border: '3px solid #F1F8E9',
+                boxShadow: '0 2px 8px rgba(65, 100, 74, 0.2)',
               }}
             >
-              <PersonIcon />
+              <PersonIcon sx={{ fontSize: 32 }} />
             </Avatar>
             <Box>
               <Typography
                 variant="h5"
-                sx={{ fontWeight: 'bold', color: '#0D4715' }}
+                sx={{
+                  fontWeight: 700,
+                  color: '#1B5E20', // Darker green for better contrast
+                  letterSpacing: '-0.5px', // Tighter tracking for a modern look
+                  lineHeight: 1.2,
+                }}
               >
                 Welcome back, Secretary
               </Typography>
-              <Typography variant="body2" color="#41644A">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: '#558B2F', // Slightly muted green for subtext
+                  fontWeight: 500,
+                  mt: 0.5,
+                }}
+              >
                 Barangay 145 Management System
               </Typography>
             </Box>
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <IconButton size="large" color="inherit">
-              <Badge badgeContent={notifications.length} color="error">
-                <NotificationsIcon sx={{ color: '#41644A' }} />
-              </Badge>
-            </IconButton>
-            <IconButton size="large" color="inherit">
-              <RefreshIcon sx={{ color: '#41644A' }} />
-            </IconButton>
-            <IconButton
-              size="large"
-              aria-label="more"
-              aria-controls="menu-appbar"
-              aria-haspopup="true"
-              onClick={handleMenuClick}
-              color="inherit"
-            >
-              <MoreVertIcon sx={{ color: '#41644A' }} />
-            </IconButton>
-            <Menu
-              id="menu-appbar"
-              anchorEl={anchorEl}
-              anchorOrigin={{
-                vertical: 'top',
-                horizontal: 'right',
-              }}
-              keepMounted
-              transformOrigin={{
-                vertical: 'top',
-                horizontal: 'right',
-              }}
-              open={open}
-              onClose={handleMenuClose}
-            >
-              <MenuItem onClick={handleMenuClose}>Profile</MenuItem>
-              <MenuItem onClick={handleMenuClose}>Settings</MenuItem>
-              <MenuItem onClick={handleMenuClose}>Logout</MenuItem>
-            </Menu>
           </Box>
         </Box>
       </Box>
@@ -554,8 +565,9 @@ const BarangayDashboard = () => {
               }}
             >
               {/* Stats Cards */}
-              <Grid container spacing={2} sx={{ flexShrink: 0, width: '100%' }}>
-                <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
+              <Grid item xs={1} sx={{ display: 'flex', gap: 2 }}>
+                {/* Card 1: Residents */}
+                <Grid item xs={1} sx={{ display: 'flex' }}>
                   <Card
                     sx={{
                       borderRadius: 2,
@@ -563,10 +575,11 @@ const BarangayDashboard = () => {
                       overflow: 'hidden',
                       height: '100%',
                       width: '100%',
-                      transition: 'transform 0.3s, box-shadow 0.3s',
+                      transition: 'transform 0.4s ease, box-shadow 0.4s ease',
                       '&:hover': {
-                        transform: 'translateY(-5px)',
-                        boxShadow: '0 8px 16px rgba(0,0,0,0.1)',
+                        transform: 'translateY(-8px)',
+                        // Orange Glow Effect
+                        boxShadow: '0 15px 30px rgba(233, 118, 43, 0.4)',
                       },
                     }}
                   >
@@ -613,7 +626,8 @@ const BarangayDashboard = () => {
                   </Card>
                 </Grid>
 
-                <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
+                {/* Card 2: Certificates */}
+                <Grid item xs={1} sx={{ display: 'flex' }}>
                   <Card
                     sx={{
                       borderRadius: 2,
@@ -621,10 +635,10 @@ const BarangayDashboard = () => {
                       overflow: 'hidden',
                       height: '100%',
                       width: '100%',
-                      transition: 'transform 0.3s, box-shadow 0.3s',
+                      transition: 'transform 0.4s ease, box-shadow 0.4s ease',
                       '&:hover': {
-                        transform: 'translateY(-5px)',
-                        boxShadow: '0 8px 16px rgba(0,0,0,0.1)',
+                        transform: 'translateY(-8px)',
+                        boxShadow: '0 15px 30px rgba(233, 118, 43, 0.4)',
                       },
                     }}
                   >
@@ -632,7 +646,7 @@ const BarangayDashboard = () => {
                       sx={{
                         p: 2,
                         background:
-                          'linear-gradient(135deg, #E9762B 0%, #d4681f 100%)',
+                          'linear-gradient(135deg, #41644A 0%, #0D4715 100%)',
                         color: '#FFFFFF',
                       }}
                     >
@@ -662,16 +676,17 @@ const BarangayDashboard = () => {
                     </Box>
                     <Box sx={{ p: 2, display: 'flex', alignItems: 'center' }}>
                       <TrendingUpIcon
-                        sx={{ color: '#E9762B', mr: 1, fontSize: '1rem' }}
+                        sx={{ color: '#41644A', mr: 1, fontSize: '1rem' }}
                       />
-                      <Typography variant="body2" color="#E9762B">
+                      <Typography variant="body2" color="#41644A">
                         12% increase from last month
                       </Typography>
                     </Box>
                   </Card>
                 </Grid>
 
-                <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
+                {/* Card 3: Households */}
+                <Grid item xs={1} sx={{ display: 'flex' }}>
                   <Card
                     sx={{
                       borderRadius: 2,
@@ -679,10 +694,10 @@ const BarangayDashboard = () => {
                       overflow: 'hidden',
                       height: '100%',
                       width: '100%',
-                      transition: 'transform 0.3s, box-shadow 0.3s',
+                      transition: 'transform 0.4s ease, box-shadow 0.4s ease',
                       '&:hover': {
-                        transform: 'translateY(-5px)',
-                        boxShadow: '0 8px 16px rgba(0,0,0,0.1)',
+                        transform: 'translateY(-8px)',
+                        boxShadow: '0 15px 30px rgba(233, 118, 43, 0.4)',
                       },
                     }}
                   >
@@ -729,7 +744,8 @@ const BarangayDashboard = () => {
                   </Card>
                 </Grid>
 
-                <Grid item xs={12} sm={6} md={3} sx={{ display: 'flex' }}>
+                {/* Card 4: Health Checkups */}
+                <Grid item xs={1} sx={{ display: 'flex' }}>
                   <Card
                     sx={{
                       borderRadius: 2,
@@ -737,10 +753,10 @@ const BarangayDashboard = () => {
                       overflow: 'hidden',
                       height: '100%',
                       width: '100%',
-                      transition: 'transform 0.3s, box-shadow 0.3s',
+                      transition: 'transform 0.4s ease, box-shadow 0.4s ease',
                       '&:hover': {
-                        transform: 'translateY(-5px)',
-                        boxShadow: '0 8px 16px rgba(0,0,0,0.1)',
+                        transform: 'translateY(-8px)',
+                        boxShadow: '0 15px 30px rgba(233, 118, 43, 0.4)',
                       },
                     }}
                   >
@@ -748,7 +764,7 @@ const BarangayDashboard = () => {
                       sx={{
                         p: 2,
                         background:
-                          'linear-gradient(135deg, #E9762B 0%, #d4681f 100%)',
+                          'linear-gradient(135deg, #41644A 0%, #0D4715 100%)',
                         color: '#FFFFFF',
                       }}
                     >
@@ -778,10 +794,67 @@ const BarangayDashboard = () => {
                     </Box>
                     <Box sx={{ p: 2, display: 'flex', alignItems: 'center' }}>
                       <TrendingUpIcon
-                        sx={{ color: '#E9762B', mr: 1, fontSize: '1rem' }}
+                        sx={{ color: '#41644A', mr: 1, fontSize: '1rem' }}
                       />
-                      <Typography variant="body2" color="#E9762B">
+                      <Typography variant="body2" color="#41644A">
                         8% increase from last month
+                      </Typography>
+                    </Box>
+                  </Card>
+                </Grid>
+
+                {/* Card 5: Demographic */}
+                <Grid item xs={1} sx={{ display: 'flex' }}>
+                  <Card
+                    sx={{
+                      borderRadius: 2,
+                      boxShadow: '0 4px 8px rgba(0,0,0,0.05)',
+                      overflow: 'hidden',
+                      height: '100%',
+                      width: '100%',
+                      transition: 'transform 0.4s ease, box-shadow 0.4s ease',
+                      '&:hover': {
+                        transform: 'translateY(-8px)',
+                        boxShadow: '0 15px 30px rgba(233, 118, 43, 0.4)',
+                      },
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        p: 2,
+                        background:
+                          'linear-gradient(135deg, #41644A 0%, #0D4715 100%)',
+                        color: '#fff',
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Typography variant="h4" fontWeight="bold">
+                          {demographicStats[demoStep].value}
+                        </Typography>
+                        <Avatar
+                          sx={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
+                        >
+                          {demographicStats[demoStep].icon}
+                        </Avatar>
+                      </Box>
+
+                      <Typography variant="body2" sx={{ mt: 1 }}>
+                        {demographicStats[demoStep].label}
+                      </Typography>
+                    </Box>
+
+                    <Box sx={{ p: 2, display: 'flex', alignItems: 'center' }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ color: '#41644A', fontWeight: 'bold' }}
+                      >
+                        Community Category
                       </Typography>
                     </Box>
                   </Card>
@@ -792,30 +865,32 @@ const BarangayDashboard = () => {
               <Card
                 sx={{
                   borderRadius: 2,
-                  boxShadow: '0 4px 8px rgba(0,0,0,0.05)',
+                  boxShadow: '0 10px 25px rgba(233, 118, 43, 0.4)',
                   display: 'flex',
                   flexDirection: 'column',
-                  height: '320px',
+                  height: '600px',
                   overflow: 'hidden',
                 }}
               >
                 <Box
                   sx={{
-                    p: 1.5,
+                    p: 3,
                     borderBottom: '1px solid rgba(0,0,0,0.05)',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     flexShrink: 0,
-                    backgroundColor: 'rgba(65, 100, 74, 0.03)',
+                    // 1. Added Gradient Background
+                    background:
+                      'linear-gradient(135deg, #41644A 0%, #0D4715 100%)',
                   }}
                 >
                   <Typography
                     variant="h6"
                     sx={{
                       fontWeight: 'bold',
-                      color: '#0D4715',
-                      fontSize: '1rem',
+                      color: '#FFFFFF',
+                      fontSize: '1.25rem',
                     }}
                   >
                     {activeStep === 0
@@ -824,14 +899,14 @@ const BarangayDashboard = () => {
                       ? 'Mission & Vision'
                       : 'About Barangay 145'}
                   </Typography>
-                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                  <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
                     <IconButton
                       size="small"
                       onClick={handleBack}
                       sx={{
-                        color: '#41644A',
+                        color: '#FFFFFF',
                         '&:hover': {
-                          backgroundColor: 'rgba(65, 100, 74, 0.1)',
+                          backgroundColor: 'rgba(255, 255, 255, 0.2)',
                         },
                       }}
                     >
@@ -841,9 +916,9 @@ const BarangayDashboard = () => {
                       size="small"
                       onClick={handleNext}
                       sx={{
-                        color: '#41644A',
+                        color: '#FFFFFF',
                         '&:hover': {
-                          backgroundColor: 'rgba(65, 100, 74, 0.1)',
+                          backgroundColor: 'rgba(255, 255, 255, 0.2)',
                         },
                       }}
                     >
@@ -960,99 +1035,104 @@ const BarangayDashboard = () => {
                           overflow: 'auto',
                         }}
                       >
-                        <Grid container spacing={1.5} sx={{ height: '100%' }}>
-                          <Grid item xs={12} sm={6} sx={{ display: 'flex' }}>
-                            <Box
+                        {/* SINGLE BOX SPLIT INTO 2 */}
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            flexDirection: 'row', // 🔴 THIS IS THE KEY
+                            height: '100%',
+                            borderRadius: 2,
+                            overflow: 'hidden',
+                            backgroundColor: 'rgba(65, 100, 74, 0.05)',
+                          }}
+                        >
+                          {/* LEFT — MISSION */}
+                          <Box
+                            sx={{
+                              flex: 1, // 50%
+                              p: 2,
+                              borderRight: '1px solid rgba(0,0,0,0.08)',
+                              display: 'flex',
+                              flexDirection: 'column',
+                            }}
+                          >
+                            <Typography
+                              variant="h6"
                               sx={{
-                                p: 1.5,
-                                borderRadius: 1.5,
-                                backgroundColor: 'rgba(65, 100, 74, 0.05)',
-                                width: '100%',
+                                fontWeight: 'bold',
+                                color: '#0D4715',
+                                mb: 1,
                                 display: 'flex',
-                                flexDirection: 'column',
+                                alignItems: 'center',
                               }}
                             >
-                              <Typography
-                                variant="subtitle1"
+                              <Avatar
                                 sx={{
-                                  fontWeight: 'bold',
-                                  color: '#0D4715',
-                                  mb: 1,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  fontSize: '0.95rem',
+                                  width: 32,
+                                  height: 32,
+                                  mr: 1,
+                                  backgroundColor: '#41644A',
                                 }}
                               >
-                                <Avatar
-                                  sx={{
-                                    width: 28,
-                                    height: 28,
-                                    mr: 1,
-                                    backgroundColor: '#41644A',
-                                  }}
-                                >
-                                  <DescriptionIcon sx={{ fontSize: '1rem' }} />
-                                </Avatar>
-                                Our Mission
-                              </Typography>
-                              <Typography
-                                variant="body2"
-                                color="#41644A"
-                                sx={{ lineHeight: 1.5, fontSize: '0.8rem' }}
-                              >
-                                {missionVision.mission}
-                              </Typography>
-                            </Box>
-                          </Grid>
-                          <Grid item xs={12} sm={6} sx={{ display: 'flex' }}>
-                            <Box
+                                <DescriptionIcon />
+                              </Avatar>
+                              Mission
+                            </Typography>
+
+                            <Typography
+                              variant="body2"
+                              sx={{ color: '#41644A', lineHeight: 1.6 }}
+                            >
+                              {missionVision.mission}
+                            </Typography>
+                          </Box>
+
+                          {/* RIGHT — VISION */}
+                          <Box
+                            sx={{
+                              flex: 1, // 50%
+                              p: 2,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              backgroundColor: 'rgba(233, 118, 43, 0.05)',
+                            }}
+                          >
+                            <Typography
+                              variant="h6"
                               sx={{
-                                p: 1.5,
-                                borderRadius: 1.5,
-                                backgroundColor: 'rgba(233, 118, 43, 0.05)',
-                                width: '100%',
+                                fontWeight: 'bold',
+                                color: '#0D4715',
+                                mb: 1,
                                 display: 'flex',
-                                flexDirection: 'column',
+                                alignItems: 'center',
                               }}
                             >
-                              <Typography
-                                variant="subtitle1"
+                              <Avatar
                                 sx={{
-                                  fontWeight: 'bold',
-                                  color: '#0D4715',
-                                  mb: 1,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  fontSize: '0.95rem',
+                                  width: 32,
+                                  height: 32,
+                                  mr: 1,
+                                  backgroundColor: '#E9762B',
                                 }}
                               >
-                                <Avatar
-                                  sx={{
-                                    width: 28,
-                                    height: 28,
-                                    mr: 1,
-                                    backgroundColor: '#E9762B',
-                                  }}
-                                >
-                                  <InfoIcon sx={{ fontSize: '1rem' }} />
-                                </Avatar>
-                                Our Vision
-                              </Typography>
-                              <Typography
-                                variant="body2"
-                                color="#41644A"
-                                sx={{ lineHeight: 1.5, fontSize: '0.8rem' }}
-                              >
-                                {missionVision.vision}
-                              </Typography>
-                            </Box>
-                          </Grid>
-                        </Grid>
+                                <InfoIcon />
+                              </Avatar>
+                              Vision
+                            </Typography>
+
+                            <Typography
+                              variant="body2"
+                              sx={{ color: '#41644A', lineHeight: 1.6 }}
+                            >
+                              {missionVision.vision}
+                            </Typography>
+                          </Box>
+                        </Box>
                       </Box>
 
                       {/* About Slide */}
                       <Box sx={{ minWidth: '100%', px: 1 }}>
-                        <Grid container spacing={2}>
+                        <Grid container spacing={2} sx={{ height: '100%' }}>
                           <Grid item xs={12} md={6}>
                             <Box
                               sx={{
@@ -1100,6 +1180,8 @@ const BarangayDashboard = () => {
                               </Typography>
                             </Box>
                           </Grid>
+
+                          {/* --- MODIFIED SECTION: BARANGAY OFFICIALS HORIZONTAL --- */}
                           <Grid item xs={12} md={6}>
                             <Box
                               sx={{
@@ -1107,6 +1189,8 @@ const BarangayDashboard = () => {
                                 borderRadius: 2,
                                 backgroundColor: 'rgba(233, 118, 43, 0.05)',
                                 height: '100%',
+                                display: 'flex',
+                                flexDirection: 'column',
                               }}
                             >
                               <Typography
@@ -1131,27 +1215,78 @@ const BarangayDashboard = () => {
                                 </Avatar>
                                 Barangay Officials
                               </Typography>
-                              <List dense>
+
+                              {/* Horizontal Scroll Container */}
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  flexDirection: 'row',
+                                  overflowX: 'auto',
+                                  gap: 2,
+                                  pb: 1, // Space for scrollbar
+                                  // Custom Scrollbar Styling
+                                  '&::-webkit-scrollbar': { height: 6 },
+                                  '&::-webkit-scrollbar-thumb': {
+                                    backgroundColor: '#E9762B',
+                                    borderRadius: 10,
+                                  },
+                                }}
+                              >
                                 {about.officials.map((official, index) => (
-                                  <ListItem key={index} sx={{ py: 0.5 }}>
-                                    <ListItemText
-                                      primary={official.name}
-                                      secondary={official.position}
-                                      primaryTypographyProps={{
-                                        variant: 'body2',
+                                  <Box
+                                    key={index}
+                                    sx={{
+                                      minWidth: '140px', // Ensures items don't shrink
+                                      flexShrink: 0,
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      alignItems: 'center',
+                                      textAlign: 'center',
+                                      p: 1.5,
+                                      borderRadius: 2,
+                                      backgroundColor: 'rgba(255,255,255, 0.4)',
+                                      border:
+                                        '1px solid rgba(233, 118, 43, 0.2)',
+                                    }}
+                                  >
+                                    <Avatar
+                                      sx={{
+                                        width: 50,
+                                        height: 50,
+                                        mb: 1,
+                                        bgcolor: '#E9762B',
+                                        color: 'white',
+                                      }}
+                                    >
+                                      {official.name.charAt(0)}
+                                    </Avatar>
+                                    <Typography
+                                      variant="body2"
+                                      sx={{
                                         fontWeight: 'bold',
                                         color: '#0D4715',
+                                        fontSize: '0.85rem',
+                                        mb: 0.25,
                                       }}
-                                      secondaryTypographyProps={{
-                                        variant: 'caption',
+                                    >
+                                      {official.name}
+                                    </Typography>
+                                    <Typography
+                                      variant="caption"
+                                      sx={{
                                         color: '#41644A',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 500,
                                       }}
-                                    />
-                                  </ListItem>
+                                    >
+                                      {official.position}
+                                    </Typography>
+                                  </Box>
                                 ))}
-                              </List>
+                              </Box>
                             </Box>
                           </Grid>
+                          {/* --- END MODIFIED SECTION --- */}
                         </Grid>
                       </Box>
                     </Box>
@@ -1183,257 +1318,81 @@ const BarangayDashboard = () => {
                 </Box>
               </Card>
 
-              {/* Compact Demographics */}
-              <Card
-                sx={{
-                  borderRadius: 2,
-                  boxShadow: '0 4px 8px rgba(0,0,0,0.05)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  flexShrink: 0,
-                }}
-              >
-                <Box
-                  sx={{
-                    p: 2,
-                    borderBottom: '1px solid rgba(0,0,0,0.05)',
-                    flexShrink: 0,
-                  }}
-                >
-                  <Typography
-                    variant="h6"
-                    sx={{ fontWeight: 'bold', color: '#0D4715' }}
-                  >
-                    Community Demographics
-                  </Typography>
-                </Box>
-                <Box sx={{ p: 2 }}>
-                  <Grid container spacing={2}>
-                    <Grid item xs={6} sm={4} md={2}>
-                      <Box sx={{ mb: 2 }}>
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            mb: 0.5,
-                          }}
-                        >
-                          <Typography variant="body2" color="#41644A">
-                            Senior Citizens
-                          </Typography>
-                          <Typography variant="body2" fontWeight="bold">
-                            {demographics.seniorCitizens.count} (
-                            {demographics.seniorCitizens.percentage}%)
-                          </Typography>
-                        </Box>
-                        <LinearProgress
-                          variant="determinate"
-                          value={demographics.seniorCitizens.percentage}
-                          sx={{
-                            height: 6,
-                            borderRadius: 3,
-                            backgroundColor: 'rgba(65, 100, 74, 0.2)',
-                            '& .MuiLinearProgress-bar': {
-                              backgroundColor: '#41644A',
-                            },
-                          }}
-                        />
-                      </Box>
-                    </Grid>
-                    <Grid item xs={6} sm={4} md={2}>
-                      <Box sx={{ mb: 2 }}>
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            mb: 0.5,
-                          }}
-                        >
-                          <Typography variant="body2" color="#41644A">
-                            Solo Parents
-                          </Typography>
-                          <Typography variant="body2" fontWeight="bold">
-                            {demographics.soloParents.count} (
-                            {demographics.soloParents.percentage}%)
-                          </Typography>
-                        </Box>
-                        <LinearProgress
-                          variant="determinate"
-                          value={demographics.soloParents.percentage}
-                          sx={{
-                            height: 6,
-                            borderRadius: 3,
-                            backgroundColor: 'rgba(233, 118, 43, 0.2)',
-                            '& .MuiLinearProgress-bar': {
-                              backgroundColor: '#E9762B',
-                            },
-                          }}
-                        />
-                      </Box>
-                    </Grid>
-                    <Grid item xs={6} sm={4} md={2}>
-                      <Box sx={{ mb: 2 }}>
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            mb: 0.5,
-                          }}
-                        >
-                          <Typography variant="body2" color="#41644A">
-                            PWD
-                          </Typography>
-                          <Typography variant="body2" fontWeight="bold">
-                            {demographics.personsWithDisability.count} (
-                            {demographics.personsWithDisability.percentage}%)
-                          </Typography>
-                        </Box>
-                        <LinearProgress
-                          variant="determinate"
-                          value={demographics.personsWithDisability.percentage}
-                          sx={{
-                            height: 6,
-                            borderRadius: 3,
-                            backgroundColor: 'rgba(233, 118, 43, 0.2)',
-                            '& .MuiLinearProgress-bar': {
-                              backgroundColor: '#E9762B',
-                            },
-                          }}
-                        />
-                      </Box>
-                    </Grid>
-                    <Grid item xs={6} sm={4} md={2}>
-                      <Box sx={{ mb: 2 }}>
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            mb: 0.5,
-                          }}
-                        >
-                          <Typography variant="body2" color="#41644A">
-                            Job Seekers
-                          </Typography>
-                          <Typography variant="body2" fontWeight="bold">
-                            {demographics.jobSeekers.count} (
-                            {demographics.jobSeekers.percentage}%)
-                          </Typography>
-                        </Box>
-                        <LinearProgress
-                          variant="determinate"
-                          value={demographics.jobSeekers.percentage}
-                          sx={{
-                            height: 6,
-                            borderRadius: 3,
-                            backgroundColor: 'rgba(65, 100, 74, 0.2)',
-                            '& .MuiLinearProgress-bar': {
-                              backgroundColor: '#41644A',
-                            },
-                          }}
-                        />
-                      </Box>
-                    </Grid>
-                    <Grid item xs={6} sm={4} md={2}>
-                      <Box sx={{ mb: 2 }}>
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            mb: 0.5,
-                          }}
-                        >
-                          <Typography variant="body2" color="#41644A">
-                            Youth
-                          </Typography>
-                          <Typography variant="body2" fontWeight="bold">
-                            {demographics.youth.count} (
-                            {demographics.youth.percentage}%)
-                          </Typography>
-                        </Box>
-                        <LinearProgress
-                          variant="determinate"
-                          value={demographics.youth.percentage}
-                          sx={{
-                            height: 6,
-                            borderRadius: 3,
-                            backgroundColor: 'rgba(65, 100, 74, 0.2)',
-                            '& .MuiLinearProgress-bar': {
-                              backgroundColor: '#41644A',
-                            },
-                          }}
-                        />
-                      </Box>
-                    </Grid>
-                    <Grid item xs={6} sm={4} md={2}>
-                      <Box sx={{ mb: 2 }}>
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            mb: 0.5,
-                          }}
-                        >
-                          <Typography variant="body2" color="#41644A">
-                            Children
-                          </Typography>
-                          <Typography variant="body2" fontWeight="bold">
-                            {demographics.children.count} (
-                            {demographics.children.percentage}%)
-                          </Typography>
-                        </Box>
-                        <LinearProgress
-                          variant="determinate"
-                          value={demographics.children.percentage}
-                          sx={{
-                            height: 6,
-                            borderRadius: 3,
-                            backgroundColor: 'rgba(233, 118, 43, 0.2)',
-                            '& .MuiLinearProgress-bar': {
-                              backgroundColor: '#E9762B',
-                            },
-                          }}
-                        />
-                      </Box>
-                    </Grid>
-                  </Grid>
-                </Box>
-              </Card>
-
               {/* Recent Activities */}
               <Card
                 sx={{
-                  borderRadius: 2,
-                  boxShadow: '0 4px 8px rgba(0,0,0,0.05)',
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 3,
+                  boxShadow: '0 2px 12px rgba(0,0,0,0.03)',
                   display: 'flex',
-                  flexDirection: 'column',
+                  flexDirection: 'column', // Ensures the footer sits at the bottom
                   height: '280px',
                   mt: 'auto',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  mb: 2, // Added margin bottom to ensure shadow isn't clipped
+                  '&:active': {
+                    boxShadow: '0 8px 24px rgba(255, 140, 0, 0.4)',
+                    transform: 'scale(0.99)',
+                  },
                 }}
               >
                 <Box
                   sx={{
-                    p: 2,
-                    borderBottom: '1px solid rgba(0,0,0,0.05)',
+                    p: 2.5,
+                    borderBottom: '1px solid rgba(0,0,0,0.06)',
                     flexShrink: 0,
+                    background:
+                      'linear-gradient(135deg, #41644A 0%, #0D4715 100%)',
                   }}
                 >
                   <Typography
                     variant="h6"
-                    sx={{ fontWeight: 'bold', color: '#0D4715' }}
+                    sx={{
+                      fontWeight: '700',
+                      color: '#ffffff',
+                      fontSize: '1.1rem',
+                    }}
                   >
                     Recent Activities
                   </Typography>
                 </Box>
-                <Box sx={{ p: 2, flex: 1, overflow: 'auto', minHeight: 0 }}>
+
+                {/* Scrollable Content Area */}
+                <Box
+                  sx={{
+                    p: 2,
+                    flex: 1, // Takes up remaining space
+                    overflow: 'auto',
+                    minHeight: 0, // Critical for flex scrolling
+                    '&::-webkit-scrollbar': { width: '6px' },
+                    '&::-webkit-scrollbar-track': {
+                      backgroundColor: 'transparent',
+                    },
+                    '&::-webkit-scrollbar-thumb': {
+                      backgroundColor: '#E0E0E0',
+                      borderRadius: '10px',
+                    },
+                  }}
+                >
                   <List>
                     {recentActivities.map((activity) => (
-                      <ListItem key={activity.id} sx={{ px: 0, py: 1 }}>
-                        <ListItemIcon sx={{ minWidth: 36 }}>
+                      <ListItem
+                        key={activity.id}
+                        sx={{
+                          px: 0,
+                          py: 1.5,
+                          borderBottom: '1px dashed rgba(0,0,0,0.05)',
+                          '&:last-child': { borderBottom: 'none' },
+                        }}
+                      >
+                        <ListItemIcon sx={{ minWidth: 40 }}>
                           <Avatar
                             sx={{
-                              width: 32,
-                              height: 32,
+                              width: 36,
+                              height: 36,
                               backgroundColor: activity.color,
+                              fontSize: '1rem',
                             }}
                           >
                             {activity.icon}
@@ -1443,10 +1402,20 @@ const BarangayDashboard = () => {
                           primary={activity.action}
                           secondary={
                             <Box>
-                              <Typography variant="body2" color="#41644A">
+                              <Typography
+                                variant="body2"
+                                sx={{ color: '#37474F', fontWeight: 500 }}
+                              >
                                 {activity.detail}
                               </Typography>
-                              <Typography variant="caption" color="#0D4715">
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: '#78909C',
+                                  display: 'block',
+                                  mt: 0.3,
+                                }}
+                              >
                                 {activity.time}
                               </Typography>
                             </Box>
@@ -1454,6 +1423,7 @@ const BarangayDashboard = () => {
                           primaryTypographyProps={{
                             variant: 'body2',
                             fontWeight: 'bold',
+                            color: '#1B5E20',
                           }}
                         />
                       </ListItem>
@@ -1480,15 +1450,22 @@ const BarangayDashboard = () => {
                   flexShrink: 0,
                 }}
               >
-                <Box sx={{ p: 2, borderBottom: '1px solid rgba(0,0,0,0.05)' }}>
+                <Box
+                  sx={{
+                    p: 2,
+                    borderBottom: '1px solid rgba(0,0,0,0.05)',
+                    background:
+                      'linear-gradient(135deg, #41644A 0%, #0D4715 100%)',
+                  }}
+                >
                   <Typography
                     variant="h6"
-                    sx={{ fontWeight: 'bold', color: '#0D4715' }}
+                    sx={{ fontWeight: 'bold', color: '#ffffff' }}
                   >
                     Quick Actions
                   </Typography>
                 </Box>
-                <Box sx={{ p: 2 }}>
+                <Box sx={{ p: 2.2 }}>
                   <Grid container spacing={2} justifyContent="center">
                     {quickActions.map((action) => (
                       <Grid item xs={12} sm={6} md={6} key={action.id}>
@@ -1552,6 +1529,9 @@ const BarangayDashboard = () => {
                   boxShadow: '0 4px 8px rgba(0,0,0,0.05)',
                   flexShrink: 0,
                   overflow: 'hidden',
+                  height: '370px', // Fixed height to match layout
+                  display: 'flex',
+                  flexDirection: 'column',
                 }}
               >
                 {/* Calendar Header */}
@@ -1658,11 +1638,13 @@ const BarangayDashboard = () => {
                     p: 2,
                     borderBottom: '1px solid rgba(0,0,0,0.05)',
                     flexShrink: 0,
+                    background:
+                      'linear-gradient(135deg, #41644A 0%, #0D4715 100%)',
                   }}
                 >
                   <Typography
                     variant="h6"
-                    sx={{ fontWeight: 'bold', color: '#0D4715' }}
+                    sx={{ fontWeight: 'bold', color: '#ffffff' }}
                   >
                     Upcoming Events
                   </Typography>

@@ -71,7 +71,7 @@ import {
   Folder as FolderIcon,
   Dashboard as DashboardIcon,
   Article as ArticleIcon,
-   CheckCircle as CheckCircleIcon,
+  CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
 import { useMediaQuery } from '@mui/material';
 
@@ -515,9 +515,6 @@ export default function Indigency() {
 
         // Create a URL that points to a verification page
         // Using window.location.origin to get the current domain
-        const verificationUrl = `${
-          window.location.origin
-        }/verify-certificate?id=${display.indigency_id || 'draft'}`;
 
         const qrContent = `CERTIFICATE VERIFICATION:
                 𝗧𝗿𝗮𝗻𝘀𝗮𝗰𝘁𝗶𝗼𝗻 𝗡𝗼: ${display.transaction_number || 'N/A'}
@@ -529,7 +526,7 @@ export default function Indigency() {
                 }
                 Document Type: Indigency
                
-                Ⓒ RRMS | BARANGAY 145
+                Ⓒ BRRMS | BARANGAY 145
                 CALOOCAN CITY
                 ALL RIGHTS RESERVED
                 `;
@@ -571,7 +568,8 @@ export default function Indigency() {
       date_issued: data.date_issued,
       transaction_number: data.transaction_number, // Include transaction number
       use_signature: data.use_signature ? 1 : 0, // Added for e-signature
-      signature_id: data.use_signature && data.signature_id ? data.signature_id : null, // Added for e-signature
+      signature_id:
+        data.use_signature && data.signature_id ? data.signature_id : null, // Added for e-signature
     };
   }
 
@@ -655,7 +653,7 @@ export default function Indigency() {
   }
 
   function handleEdit(record) {
-    setFormData({ 
+    setFormData({
       ...record,
       use_signature: Boolean(record.use_signature),
       signature_id: record.signature_id || null,
@@ -663,10 +661,12 @@ export default function Indigency() {
     setEditingId(record.indigency_id);
     setIsFormOpen(true);
     setActiveTab('form');
-    
+
     // Set selected signature if available
     if (record.signature_id) {
-      const sig = signatures.find((s) => s.signature_id === record.signature_id);
+      const sig = signatures.find(
+        (s) => s.signature_id === record.signature_id
+      );
       setSelectedSignature(sig || null);
     } else {
       setSelectedSignature(null);
@@ -701,7 +701,7 @@ export default function Indigency() {
 
   function handleView(record) {
     setSelectedRecord(record); // Set selected record for display
-    setFormData({ 
+    setFormData({
       ...record,
       use_signature: Boolean(record.use_signature),
       signature_id: record.signature_id || null,
@@ -709,10 +709,12 @@ export default function Indigency() {
     setEditingId(record.indigency_id); // To indicate viewing a specific record
     setIsFormOpen(true); // Keep the form open with the record details
     setActiveTab('form');
-    
+
     // Set selected signature if available
     if (record.signature_id) {
-      const sig = signatures.find((s) => s.signature_id === record.signature_id);
+      const sig = signatures.find(
+        (s) => s.signature_id === record.signature_id
+      );
       setSelectedSignature(sig || null);
     } else {
       setSelectedSignature(null);
@@ -899,15 +901,6 @@ export default function Indigency() {
   }
 
   // Function to handle QR code click
-  const handleQrCodeClick = () => {
-    if (display.indigency_id) {
-      const verificationUrl = `${window.location.origin}/verify-certificate?id=${display.indigency_id}`;
-      window.open(verificationUrl, '_blank');
-    } else {
-      // Show a dialog with the certificate details (for unsaved draft)
-      setQrDialogOpen(true);
-    }
-  };
 
   const handleZoomIn = () => {
     setZoomLevel((prev) => Math.min(prev + 0.1, 2)); // Max zoom: 2x (200%)
@@ -1117,18 +1110,6 @@ export default function Indigency() {
                 </Box>
 
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Tooltip title="Verify Certificate">
-                    <Button
-                      variant="outlined"
-                      color="primary"
-                      onClick={handleQrCodeClick}
-                      startIcon={<QrCodeIcon />}
-                      disabled={!display.indigency_id}
-                      size="small"
-                    >
-                      Verify
-                    </Button>
-                  </Tooltip>
                   <Tooltip title="Download PDF">
                     <Button
                       variant="contained"
@@ -1606,76 +1587,6 @@ export default function Indigency() {
                     ></div>
 
                     {/* QR Code */}
-                    {qrCodeUrl && (
-                      <div style={{ marginTop: '15px' }}>
-                        <div
-                          onClick={handleQrCodeClick}
-                          style={{
-                            cursor: 'pointer',
-                            position: 'relative',
-                            display: 'inline-block',
-                          }}
-                          title="Click to view certificate details"
-                        >
-                          <img
-                            src={qrCodeUrl}
-                            alt="Verification QR Code"
-                            style={{
-                              width: '150px',
-                              height: '150px',
-                              border: '2px solid #000',
-                              padding: '5px',
-                              background: '#fff',
-                            }}
-                          />
-                          <div
-                            style={{
-                              position: 'absolute',
-                              top: 0,
-                              left: 0,
-                              right: 0,
-                              bottom: 0,
-                              backgroundColor: 'rgba(255,255,255,0)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              opacity: 0,
-                              transition: 'opacity 0.3s',
-                              borderRadius: '4px',
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.opacity = '0.7';
-                              e.currentTarget.style.backgroundColor =
-                                'rgba(255,255,255,0.8)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.opacity = '0';
-                              e.currentTarget.style.backgroundColor =
-                                'rgba(255,255,255,0)';
-                            }}
-                          >
-                            <QrCodeIcon
-                              sx={{
-                                fontSize: 40,
-                                color: theme.palette.success.main,
-                              }}
-                            />
-                          </div>
-                        </div>
-                        <div
-                          style={{
-                            fontSize: '8pt',
-                            color: '#666',
-                            marginTop: '5px',
-                            fontWeight: 'normal',
-                          }}
-                        >
-                          {display.date_created
-                            ? formatDateTimeDisplay(display.date_created)
-                            : new Date().toLocaleString()}
-                        </div>
-                      </div>
-                    )}
                   </div>
 
                   {/* Punong Barangay */}
@@ -1722,7 +1633,10 @@ export default function Indigency() {
                     <div
                       style={{
                         position: 'relative',
-                        marginTop: display.use_signature && display.signature_path ? '-35px' : '-5px', // Adjust overlap based on whether signature is present
+                        marginTop:
+                          display.use_signature && display.signature_path
+                            ? '-35px'
+                            : '-5px', // Adjust overlap based on whether signature is present
                         height: '60px',
                         display: 'flex',
                         alignItems: 'center',
@@ -1748,7 +1662,10 @@ export default function Indigency() {
                         borderTop: '2.5px solid #000',
                         width: '90%',
                         margin: 'auto',
-                        marginTop: display.use_signature && display.signature_path ? '5px' : '-2px', // Adjust spacing based on signature presence
+                        marginTop:
+                          display.use_signature && display.signature_path
+                            ? '5px'
+                            : '-2px', // Adjust spacing based on signature presence
                       }}
                     ></div>
 
@@ -2452,19 +2369,6 @@ export default function Indigency() {
           <Button onClick={() => setQrDialogOpen(false)} color="primary">
             Close
           </Button>
-          {display.indigency_id && (
-            <Button
-              onClick={() => {
-                const verificationUrl = `${window.location.origin}/verify-certificate?id=${display.indigency_id}`;
-                window.open(verificationUrl, '_blank');
-                setQrDialogOpen(false);
-              }}
-              variant="contained"
-              color="primary"
-            >
-              Go to Verification Page
-            </Button>
-          )}
         </DialogActions>
       </Dialog>
     </ThemeProvider>
@@ -3422,7 +3326,7 @@ function CertificateVerification() {
                       margin: 'auto',
                     }}
                   ></div>
-                  
+
                   {/* E-Signature */}
                   {certificate.use_signature && certificate.signature_path ? (
                     <div

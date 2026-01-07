@@ -9,7 +9,10 @@ import Logo145 from '../../assets/Logo145.png';
 import BagongPilipinas from '../../assets/BagongPilipinas.png';
 import WordName from '../../assets/WordName.png';
 import { useCertificateManager } from '../../hooks/useCertificateManager';
-import { getSignatures, getSignatureImageUrl } from '../../services/signatureService';
+import {
+  getSignatures,
+  getSignatureImageUrl,
+} from '../../services/signatureService';
 
 // Import Material UI components
 import {
@@ -222,7 +225,7 @@ export default function BusinessClearance() {
     const token = getToken();
     return {
       'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` })
+      ...(token && { Authorization: `Bearer ${token}` }),
     };
   };
 
@@ -242,11 +245,8 @@ export default function BusinessClearance() {
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
-  const { 
-    saveCertificate, 
-    getValidityPeriod,
-    calculateExpirationDate 
-  } = useCertificateManager('Business Clearance');
+  const { saveCertificate, getValidityPeriod, calculateExpirationDate } =
+    useCertificateManager('Business Clearance');
 
   const [formData, setFormData] = useState({
     resident_id: '',
@@ -255,7 +255,8 @@ export default function BusinessClearance() {
     nature_of_business: '', // New field
     date_issued: new Date().toISOString().split('T')[0],
     date_expired: '', // New field - will be calculated automatically
-    remarks: 'They are operating under the jurisdiction of our Brgy. 145, being issued under the requirement of the New Local Code under Republic Act 7160 for securing their permit.', // Default remarks
+    remarks:
+      'They are operating under the jurisdiction of our Brgy. 145, being issued under the requirement of the New Local Code under Republic Act 7160 for securing their permit.', // Default remarks
     request_reason: '',
     transaction_number: '', // Transaction number field
     use_signature: false, // Added for e-signature
@@ -268,15 +269,15 @@ export default function BusinessClearance() {
       const issuedDate = new Date(formData.date_issued);
       const expiredDate = new Date(issuedDate);
       expiredDate.setFullYear(expiredDate.getFullYear() + 1);
-      
+
       // Format as YYYY-MM-DD
       const formattedDate = expiredDate.toISOString().split('T')[0];
-      
+
       // Only update if the date has actually changed to avoid infinite loops
       if (formattedDate !== formData.date_expired) {
-        setFormData(prev => ({
+        setFormData((prev) => ({
           ...prev,
-          date_expired: formattedDate
+          date_expired: formattedDate,
         }));
       }
     }
@@ -374,7 +375,8 @@ export default function BusinessClearance() {
     );
 
     // Add or update the certificate
-    existingCertificates[certificateData.business_clearance_id] = certificateData;
+    existingCertificates[certificateData.business_clearance_id] =
+      certificateData;
 
     // Store back to localStorage
     localStorage.setItem('certificates', JSON.stringify(existingCertificates));
@@ -383,7 +385,7 @@ export default function BusinessClearance() {
   async function loadResidents() {
     try {
       const res = await fetch(`${apiBase}/residents`, {
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
       });
       const data = await res.json();
       setResidents(data);
@@ -410,7 +412,7 @@ export default function BusinessClearance() {
   async function loadRecords() {
     try {
       const res = await fetch(`${apiBase}/business-clearance`, {
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
       });
       const data = await res.json();
       setRecords(
@@ -533,12 +535,40 @@ export default function BusinessClearance() {
       request_reason: data.request_reason,
       transaction_number: data.transaction_number, // Include transaction number
       use_signature: data.use_signature ? 1 : 0, // Added for e-signature
-      signature_id: data.use_signature && data.signature_id ? data.signature_id : null, // Added for e-signature
+      signature_id:
+        data.use_signature && data.signature_id ? data.signature_id : null, // Added for e-signature
     };
+  }
+
+  function validateFormData(data) {
+    const required = [
+      'full_name',
+      'address',
+      'nature_of_business',
+      'date_issued',
+      'date_expired',
+      'request_reason',
+    ];
+    const missing = required.filter((k) => {
+      const v = data[k];
+      return (
+        v === null ||
+        v === undefined ||
+        (typeof v === 'string' && v.trim() === '')
+      );
+    });
+    return { valid: missing.length === 0, missing };
   }
 
   async function handleCreate() {
     try {
+      // Client-side validation to avoid 400 Bad Request from the server
+      const validation = validateFormData(formData);
+      if (!validation.valid) {
+        alert(`Missing required fields: ${validation.missing.join(', ')}`);
+        return;
+      }
+
       // Generate a transaction number for new certificates
       const transactionNumber = generateTransactionNumber();
       const validityPeriod = getValidityPeriod('Business Clearance');
@@ -554,9 +584,24 @@ export default function BusinessClearance() {
         headers: getAuthHeaders(),
         body: JSON.stringify(toServerPayload(updatedFormData)),
       });
-      if (!res.ok) throw new Error('Create failed');
+
+      if (!res.ok) {
+        // Try to get server error message to show to user
+        let errMsg = `Create failed (status ${res.status})`;
+        try {
+          const body = await res.json();
+          if (body && body.error) errMsg = body.error;
+        } catch (err) {
+          // ignore JSON parse errors
+        }
+        throw new Error(errMsg);
+      }
+
       const created = await res.json();
-      const newRec = { ...updatedFormData, business_clearance_id: created.business_clearance_id };
+      const newRec = {
+        ...updatedFormData,
+        business_clearance_id: created.business_clearance_id,
+      };
 
       setRecords([newRec, ...records]);
       setSelectedRecord(newRec);
@@ -571,7 +616,7 @@ export default function BusinessClearance() {
       setActiveTab('records');
     } catch (e) {
       console.error(e);
-      alert('Failed to create record');
+      alert(`Failed to create record: ${e.message}`);
     }
   }
 
@@ -591,7 +636,7 @@ export default function BusinessClearance() {
       if (!res.ok) throw new Error('Update failed');
       const updatedData = await res.json();
       // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
-      const updated = { 
+      const updated = {
         ...updatedData,
         business_clearance_id: updatedData.business_clearance_id,
         full_name: updatedData.full_name,
@@ -611,7 +656,10 @@ export default function BusinessClearance() {
         signature_path: updatedData.signature_path || null,
       };
       // Remove old record and add new one
-      setRecords([updated, ...records.filter((r) => r.business_clearance_id !== editingId)]);
+      setRecords([
+        updated,
+        ...records.filter((r) => r.business_clearance_id !== editingId),
+      ]);
       setSelectedRecord(updated);
 
       // Save to certificates table
@@ -629,7 +677,7 @@ export default function BusinessClearance() {
   }
 
   function handleEdit(record) {
-    setFormData({ 
+    setFormData({
       ...record,
       use_signature: Boolean(record.use_signature),
       signature_id: record.signature_id || null,
@@ -637,10 +685,12 @@ export default function BusinessClearance() {
     setEditingId(record.business_clearance_id);
     setIsFormOpen(true);
     setActiveTab('form');
-    
+
     // Set selected signature if available
     if (record.signature_id) {
-      const sig = signatures.find((s) => s.signature_id === record.signature_id);
+      const sig = signatures.find(
+        (s) => s.signature_id === record.signature_id
+      );
       setSelectedSignature(sig || null);
     } else {
       setSelectedSignature(null);
@@ -649,7 +699,7 @@ export default function BusinessClearance() {
 
   function handleView(record) {
     setSelectedRecord(record); // Set selected record for display
-    setFormData({ 
+    setFormData({
       ...record,
       use_signature: Boolean(record.use_signature),
       signature_id: record.signature_id || null,
@@ -657,10 +707,12 @@ export default function BusinessClearance() {
     setEditingId(record.business_clearance_id); // To indicate viewing a specific record
     setIsFormOpen(true); // Keep the form open with the record details
     setActiveTab('form');
-    
+
     // Set selected signature if available
     if (record.signature_id) {
-      const sig = signatures.find((s) => s.signature_id === record.signature_id);
+      const sig = signatures.find(
+        (s) => s.signature_id === record.signature_id
+      );
       setSelectedSignature(sig || null);
     } else {
       setSelectedSignature(null);
@@ -699,7 +751,7 @@ export default function BusinessClearance() {
     const expiredDate = new Date(issuedDate);
     expiredDate.setFullYear(expiredDate.getFullYear() + 1);
     const formattedExpiredDate = expiredDate.toISOString().split('T')[0];
-    
+
     setFormData({
       resident_id: '',
       full_name: '',
@@ -707,7 +759,8 @@ export default function BusinessClearance() {
       nature_of_business: '',
       date_issued: currentDate,
       date_expired: formattedExpiredDate,
-      remarks: 'They are operating under the jurisdiction of our Brgy. 145, being issued under the requirement of the New Local Code under Republic Act 7160 for securing their permit.',
+      remarks:
+        'They are operating under the jurisdiction of our Brgy. 145, being issued under the requirement of the New Local Code under Republic Act 7160 for securing their permit.',
       request_reason: '',
       transaction_number: '',
       use_signature: false, // Added for e-signature
@@ -779,7 +832,9 @@ export default function BusinessClearance() {
       });
       pdf.addImage(imgData, 'PNG', 0, 0, 8.5, 11);
 
-      const fileName = `Business_Clearance_${display.business_clearance_id}_${display.full_name.replace(/\s+/g, '_')}.pdf`;
+      const fileName = `Business_Clearance_${
+        display.business_clearance_id
+      }_${display.full_name.replace(/\s+/g, '_')}.pdf`;
       pdf.save(fileName);
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -918,17 +973,27 @@ export default function BusinessClearance() {
 
   return (
     <ThemeProvider theme={theme}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', bgcolor: 'background.default' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100vh',
+          overflow: 'hidden',
+          bgcolor: 'background.default',
+        }}
+      >
         {/* TOP HEADER */}
         <Paper elevation={2} sx={{ zIndex: 10, borderRadius: 0 }}>
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'space-between',
-            p: 2,
-            bgcolor: 'primary.main',
-            color: 'white'
-          }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              p: 2,
+              bgcolor: 'primary.main',
+              color: 'white',
+            }}
+          >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Avatar src={Logo145} sx={{ width: 48, height: 48 }} />
               <Box>
@@ -940,25 +1005,29 @@ export default function BusinessClearance() {
                 </Typography>
               </Box>
             </Box>
-            
+
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Badge badgeContent={records.length} color="secondary">
-                <Chip 
+                <Chip
                   icon={<FolderIcon />}
-                  label="Total Records" 
-                  sx={{ 
-                    bgcolor: "rgba(255,255,255,0.2)", 
-                    color: "white",
-                    fontWeight: 600
-                  }} 
+                  label="Total Records"
+                  sx={{
+                    bgcolor: 'rgba(255,255,255,0.2)',
+                    color: 'white',
+                    fontWeight: 600,
+                  }}
                 />
               </Badge>
-              
-              <Button 
-                variant="contained" 
-                color="secondary" 
-                startIcon={<AddIcon />} 
-                onClick={() => { resetForm(); setIsFormOpen(true); setActiveTab("form"); }}
+
+              <Button
+                variant="contained"
+                color="secondary"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  resetForm();
+                  setIsFormOpen(true);
+                  setActiveTab('form');
+                }}
                 sx={{ borderRadius: 20, px: 3 }}
               >
                 New Certificate
@@ -967,26 +1036,35 @@ export default function BusinessClearance() {
           </Box>
 
           {/* NAVIGATION TABS */}
-          <Box sx={{ bgcolor: "background.paper", borderBottom: 1, borderColor: "divider" }}>
-            <Box sx={{ maxWidth: 1200, mx: "auto" }}>
-              <Tabs 
-                value={activeTab} 
-                onChange={(e, nv) => setActiveTab(nv)} 
+          <Box
+            sx={{
+              bgcolor: 'background.paper',
+              borderBottom: 1,
+              borderColor: 'divider',
+            }}
+          >
+            <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
+              <Tabs
+                value={activeTab}
+                onChange={(e, nv) => setActiveTab(nv)}
                 variant="fullWidth"
-                sx={{ 
-                  "& .MuiTabs-indicator": { height: 3, borderRadius: "3px 3px 0 0" },
-                  minHeight: 48
+                sx={{
+                  '& .MuiTabs-indicator': {
+                    height: 3,
+                    borderRadius: '3px 3px 0 0',
+                  },
+                  minHeight: 48,
                 }}
               >
-                <Tab 
-                  icon={<ArticleIcon />} 
-                  label="Form" 
+                <Tab
+                  icon={<ArticleIcon />}
+                  label="Form"
                   value="form"
                   iconPosition="start"
                 />
-                <Tab 
-                  icon={<FolderIcon />} 
-                  label={`Records (${records.length})`} 
+                <Tab
+                  icon={<FolderIcon />}
+                  label={`Records (${records.length})`}
                   value="records"
                   iconPosition="start"
                 />
@@ -998,61 +1076,82 @@ export default function BusinessClearance() {
         {/* MAIN CONTENT AREA */}
         <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           {/* LEFT: Certificate preview */}
-          <Box sx={{ 
-            flex: 1, 
-            overflow: 'auto', 
-            display: 'flex', 
-            flexDirection: 'column', 
-            bgcolor: 'background.default',
-            p: 2,
-            [theme.breakpoints.down('lg')]: { display: activeTab === "form" ? 'none' : 'flex' }
-          }}>
+          <Box
+            sx={{
+              flex: 1,
+              overflow: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              bgcolor: 'background.default',
+              p: 2,
+              [theme.breakpoints.down('lg')]: {
+                display: activeTab === 'form' ? 'none' : 'flex',
+              },
+            }}
+          >
             {/* ZOOM CONTROLS */}
             <Paper elevation={1} sx={{ p: 2, mb: 2, borderRadius: 2 }}>
-              <Box sx={{ 
-                display: "flex", 
-                justifyContent: "space-between", 
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: 1
-              }}>
-                <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 1,
+                }}
+              >
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                   <Tooltip title="Zoom Out">
-                    <IconButton onClick={handleZoomOut} color="primary" size="small">
+                    <IconButton
+                      onClick={handleZoomOut}
+                      color="primary"
+                      size="small"
+                    >
                       <ZoomOutIcon />
                     </IconButton>
                   </Tooltip>
-                  <Typography variant="body2" sx={{ 
-                    minWidth: 60, 
-                    textAlign: "center", 
-                    fontWeight: 600,
-                    px: 1,
-                    py: 0.5,
-                    bgcolor: "background.paper",
-                    borderRadius: 1,
-                    color: "#000000"
-                  }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      minWidth: 60,
+                      textAlign: 'center',
+                      fontWeight: 600,
+                      px: 1,
+                      py: 0.5,
+                      bgcolor: 'background.paper',
+                      borderRadius: 1,
+                      color: '#000000',
+                    }}
+                  >
                     {Math.round(zoomLevel * 100)}%
                   </Typography>
                   <Tooltip title="Zoom In">
-                    <IconButton onClick={handleZoomIn} color="primary" size="small">
+                    <IconButton
+                      onClick={handleZoomIn}
+                      color="primary"
+                      size="small"
+                    >
                       <ZoomInIcon />
                     </IconButton>
                   </Tooltip>
                   <Tooltip title="Reset Zoom">
-                    <IconButton onClick={handleResetZoom} color="primary" size="small">
+                    <IconButton
+                      onClick={handleResetZoom}
+                      color="primary"
+                      size="small"
+                    >
                       <ResetIcon />
                     </IconButton>
                   </Tooltip>
                 </Box>
 
-                <Box sx={{ display: "flex", gap: 1 }}>
+                <Box sx={{ display: 'flex', gap: 1 }}>
                   <Tooltip title="Verify Certificate">
-                    <Button 
-                      variant="outlined" 
-                      color="primary" 
-                      onClick={handleQrCodeClick} 
-                      startIcon={<QrCodeIcon />} 
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      onClick={handleQrCodeClick}
+                      startIcon={<QrCodeIcon />}
                       disabled={!display.business_clearance_id}
                       size="small"
                     >
@@ -1060,21 +1159,23 @@ export default function BusinessClearance() {
                     </Button>
                   </Tooltip>
                   <Tooltip title="Download PDF">
-                    <Button 
-                      variant="contained" 
-                      color="secondary" 
-                      onClick={generatePDF} 
-                      disabled={!display.business_clearance_id || isGeneratingPDF} 
+                    <Button
+                      variant="contained"
+                      color="secondary"
+                      onClick={generatePDF}
+                      disabled={
+                        !display.business_clearance_id || isGeneratingPDF
+                      }
                       startIcon={<FileTextIcon />}
                       size="small"
                     >
-                      {isGeneratingPDF ? "Generating..." : "Download"}
+                      {isGeneratingPDF ? 'Generating...' : 'Download'}
                     </Button>
                   </Tooltip>
                   <Tooltip title="Print">
-                    <Button 
-                      variant="outlined" 
-                      onClick={handlePrint} 
+                    <Button
+                      variant="outlined"
+                      onClick={handlePrint}
                       disabled={!display.business_clearance_id}
                       startIcon={<PrintIcon />}
                       size="small"
@@ -1087,15 +1188,22 @@ export default function BusinessClearance() {
             </Paper>
 
             {/* CERTIFICATE PREVIEW */}
-            <Box sx={{ 
-              display: "flex", 
-              justifyContent: "center", 
-              alignItems: "flex-start", 
-              flex: 1, 
-              overflow: "auto",
-              p: 1
-            }}>
-              <Box sx={{ transform: `scale(${zoomLevel})`, transformOrigin: "top center" }}>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'flex-start',
+                flex: 1,
+                overflow: 'auto',
+                p: 1,
+              }}
+            >
+              <Box
+                sx={{
+                  transform: `scale(${zoomLevel})`,
+                  transformOrigin: 'top center',
+                }}
+              >
                 <div
                   id="certificate-preview"
                   style={{
@@ -1304,7 +1412,8 @@ export default function BusinessClearance() {
                       To whom it may concern:
                     </p>
                     <p style={{ margin: 0, textIndent: '50px' }}>
-                      This is to certify that this Business Clearance for Business Permit is issued to:
+                      This is to certify that this Business Clearance for
+                      Business Permit is issued to:
                     </p>
                   </div>
 
@@ -1336,7 +1445,6 @@ export default function BusinessClearance() {
                         {display.full_name || ''}
                       </span>
                       <br />
-
                       <span
                         style={{
                           color: 'red', // Using theme orange
@@ -1356,9 +1464,7 @@ export default function BusinessClearance() {
                           justifyContent: 'space-between',
                           width: '640px',
                         }}
-                      >
-
-                      </div>
+                      ></div>
                       <span
                         style={{
                           color: 'red', // Using theme orange
@@ -1378,8 +1484,7 @@ export default function BusinessClearance() {
                           justifyContent: 'space-between',
                           width: '640px',
                         }}
-                      >
-                       </div>
+                      ></div>
                       <span
                         style={{
                           color: 'red', // Using theme orange
@@ -1390,7 +1495,9 @@ export default function BusinessClearance() {
                         Date Issued:
                       </span>{' '}
                       <span style={{ color: 'black', marginLeft: '10px' }}>
-                        {display.date_issued ? formatDateDisplay(display.date_issued) : ''}
+                        {display.date_issued
+                          ? formatDateDisplay(display.date_issued)
+                          : ''}
                       </span>
                       <br />
                       <div
@@ -1399,9 +1506,7 @@ export default function BusinessClearance() {
                           justifyContent: 'space-between',
                           width: '640px',
                         }}
-                      >
-                       
-                        </div>
+                      ></div>
                       <span
                         style={{
                           color: 'red', // Using theme orange
@@ -1412,7 +1517,9 @@ export default function BusinessClearance() {
                         Date Expired:
                       </span>{' '}
                       <span style={{ color: 'black', marginLeft: '10px' }}>
-                        {display.date_expired ? formatDateDisplay(display.date_expired) : ''}
+                        {display.date_expired
+                          ? formatDateDisplay(display.date_expired)
+                          : ''}
                       </span>
                       <br />
                       <div
@@ -1421,30 +1528,39 @@ export default function BusinessClearance() {
                           justifyContent: 'space-between',
                           width: '640px',
                         }}
-                      > 
-                      </div>
-                     
-                      <span
+                      ></div>
+                      <div
                         style={{
-                          color: 'red', // Using theme orange
-                          fontWeight: 'bold',
+                          display: 'flex',
+                          alignItems: 'flex-start',
                           fontFamily: '"Times New Roman", serif',
                         }}
                       >
-                        Remarks:
-                      </span>{' '}
-                      <span
-                        style={{
-                          color: 'black',
-                          fontWeight: 'bold',
-                          fontFamily: '"Times New Roman", serif',
-                        }}
-                      >
-                        {display.remarks || ''}
-                      </span>{' '}
-                      <br />
+                        <span
+                          style={{
+                            color: 'red',
+                            fontWeight: 'bold',
+                            marginRight: '6px',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          Remarks:
+                        </span>
 
                         <span
+                          style={{
+                            color: 'black',
+                            fontWeight: 'bold',
+                            whiteSpace: 'normal',
+                            wordBreak: 'break-word',
+                            overflowWrap: 'break-word',
+                            flex: 1,
+                          }}
+                        >
+                          {display.remarks}
+                        </span>
+                      </div>
+                      <span
                         style={{
                           color: 'red', // Using theme orange
                           fontWeight: 'bold',
@@ -1452,11 +1568,11 @@ export default function BusinessClearance() {
                         }}
                       >
                         This Business Clearance is issued for:
-                      </span> Barangay Permit for{' '}
+                      </span>{' '}
+                      Barangay Permit for{' '}
                       <span style={{ color: 'black' }}>
                         {display.full_name || ''}
                       </span>
-
                       <br />
                       <span
                         style={{
@@ -1621,7 +1737,10 @@ export default function BusinessClearance() {
                     <div
                       style={{
                         position: 'relative',
-                        marginTop: display.use_signature && display.signature_path ? '-35px' : '-5px', // Adjust overlap based on whether signature is present
+                        marginTop:
+                          display.use_signature && display.signature_path
+                            ? '-35px'
+                            : '-5px', // Adjust overlap based on whether signature is present
                         height: '60px',
                         display: 'flex',
                         alignItems: 'center',
@@ -1647,7 +1766,10 @@ export default function BusinessClearance() {
                         borderTop: '2.5px solid #000',
                         width: '90%',
                         margin: 'auto',
-                        marginTop: display.use_signature && display.signature_path ? '5px' : '-2px', // Adjust spacing based on signature presence
+                        marginTop:
+                          display.use_signature && display.signature_path
+                            ? '5px'
+                            : '-2px', // Adjust spacing based on signature presence
                       }}
                     ></div>
 
@@ -1699,22 +1821,43 @@ export default function BusinessClearance() {
           </Box>
 
           {/* RIGHT: FORM/RECORDS PANEL */}
-          <Box sx={{ 
-            width: { xs: '100%', md: '50%', lg: '40%' }, 
-            bgcolor: "background.paper", 
-            borderLeft: { xs: 0, md: 1 }, 
-            borderColor: "divider",
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden'
-          }}>
+          <Box
+            sx={{
+              width: { xs: '100%', md: '50%', lg: '40%' },
+              bgcolor: 'background.paper',
+              borderLeft: { xs: 0, md: 1 },
+              borderColor: 'divider',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
             {/* FORM */}
-            {activeTab === "form" && (
-              <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <Paper elevation={0} sx={{ p: 3, borderBottom: 1, borderColor: "divider" }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+            {activeTab === 'form' && (
+              <Box
+                sx={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                }}
+              >
+                <Paper
+                  elevation={0}
+                  sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}
+                >
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontWeight: 600,
+                      mb: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                    }}
+                  >
                     <ArticleIcon color="primary" />
-                    {editingId ? "Edit Certificate" : "New Business Clearance"}
+                    {editingId ? 'Edit Certificate' : 'New Business Clearance'}
                   </Typography>
                   {selectedRecord && !editingId && (
                     <Typography variant="body2" color="text.secondary">
@@ -1723,12 +1866,16 @@ export default function BusinessClearance() {
                   )}
                 </Paper>
 
-                <Box sx={{ flex: 1, overflow: "auto", p: 3 }}>
+                <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
                   <Stack spacing={3}>
                     <Autocomplete
                       options={residents}
-                      getOptionLabel={(option) => option.full_name || ""}
-                      value={residents.find((r) => r.full_name === formData.full_name) || null}
+                      getOptionLabel={(option) => option.full_name || ''}
+                      value={
+                        residents.find(
+                          (r) => r.full_name === formData.full_name
+                        ) || null
+                      }
                       onChange={(e, nv) => {
                         if (nv) {
                           setFormData({
@@ -1742,95 +1889,119 @@ export default function BusinessClearance() {
                         }
                       }}
                       renderInput={(params) => (
-                        <TextField 
-                          {...params} 
-                          label="Full Name" 
-                          variant="outlined" 
-                          fullWidth 
+                        <TextField
+                          {...params}
+                          label="Full Name"
+                          variant="outlined"
+                          fullWidth
                           size="small"
                           required
                         />
                       )}
                     />
 
-                    <TextField 
-                      label="Address" 
-                      variant="outlined" 
-                      fullWidth 
+                    <TextField
+                      label="Address"
+                      variant="outlined"
+                      fullWidth
                       size="small"
-                      multiline 
+                      multiline
                       rows={2}
-                      value={formData.address} 
-                      onChange={(e) => setFormData({ ...formData, address: e.target.value })} 
+                      value={formData.address}
+                      onChange={(e) =>
+                        setFormData({ ...formData, address: e.target.value })
+                      }
                       required
                     />
 
-                    <TextField 
-                      label="Nature of Business" 
-                      variant="outlined" 
-                      fullWidth 
+                    <TextField
+                      label="Nature of Business"
+                      variant="outlined"
+                      fullWidth
                       size="small"
-                      value={formData.nature_of_business} 
-                      onChange={(e) => setFormData({ ...formData, nature_of_business: e.target.value })} 
+                      value={formData.nature_of_business}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          nature_of_business: e.target.value,
+                        })
+                      }
                       required
                     />
 
                     <Grid container spacing={2}>
                       <Grid item xs={12} sm={6}>
-                        <TextField 
-                          label="Date Issued" 
-                          type="date" 
-                          variant="outlined" 
-                          fullWidth 
+                        <TextField
+                          label="Date Issued"
+                          type="date"
+                          variant="outlined"
+                          fullWidth
                           size="small"
-                          InputLabelProps={{ shrink: true }} 
-                          value={formData.date_issued} 
-                          onChange={(e) => setFormData({ ...formData, date_issued: e.target.value })} 
+                          InputLabelProps={{ shrink: true }}
+                          value={formData.date_issued}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              date_issued: e.target.value,
+                            })
+                          }
                           required
                         />
                       </Grid>
                       <Grid item xs={12} sm={6}>
-                        <TextField 
-                          label="Date Expired" 
-                          type="date" 
-                          variant="outlined" 
-                          fullWidth 
+                        <TextField
+                          label="Date Expired"
+                          type="date"
+                          variant="outlined"
+                          fullWidth
                           size="small"
-                          InputLabelProps={{ shrink: true }} 
-                          value={formData.date_expired} 
-                          onChange={(e) => setFormData({ ...formData, date_expired: e.target.value })} 
+                          InputLabelProps={{ shrink: true }}
+                          value={formData.date_expired}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              date_expired: e.target.value,
+                            })
+                          }
                           required
                           InputProps={{
                             readOnly: true,
-                            style: { backgroundColor: '#f5f5f5' }
+                            style: { backgroundColor: '#f5f5f5' },
                           }}
                           helperText="Automatically set to 1 year from issue date"
                         />
                       </Grid>
                     </Grid>
 
-                    <TextField 
-                      label="Remarks" 
-                      variant="outlined" 
-                      fullWidth 
+                    <TextField
+                      label="Remarks"
+                      variant="outlined"
+                      fullWidth
                       size="small"
-                      multiline 
+                      multiline
                       rows={2}
-                      value={formData.remarks} 
-                      onChange={(e) => setFormData({ ...formData, remarks: e.target.value })} 
+                      value={formData.remarks}
+                      onChange={(e) =>
+                        setFormData({ ...formData, remarks: e.target.value })
+                      }
                       required
                     />
 
-                    <TextField 
-                      label="Request Reason" 
-                      variant="outlined" 
-                      fullWidth 
+                    <TextField
+                      label="Request Reason"
+                      variant="outlined"
+                      fullWidth
                       size="small"
-                      multiline 
+                      multiline
                       rows={2}
                       placeholder="Business registration, License application, etc."
-                      value={formData.request_reason} 
-                      onChange={(e) => setFormData({ ...formData, request_reason: e.target.value })} 
+                      value={formData.request_reason}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          request_reason: e.target.value,
+                        })
+                      }
                       required
                     />
 
@@ -1889,22 +2060,22 @@ export default function BusinessClearance() {
                       />
                     )}
 
-                    <Box sx={{ display: "flex", gap: 2, pt: 2 }}>
-                      <Button 
-                        onClick={handleSubmit} 
-                        variant="contained" 
-                        startIcon={<SaveIcon />} 
-                        fullWidth 
+                    <Box sx={{ display: 'flex', gap: 2, pt: 2 }}>
+                      <Button
+                        onClick={handleSubmit}
+                        variant="contained"
+                        startIcon={<SaveIcon />}
+                        fullWidth
                         color="primary"
                         size="large"
                       >
-                        {editingId ? "Update" : "Save"}
+                        {editingId ? 'Update' : 'Save'}
                       </Button>
                       {(editingId || isFormOpen) && (
-                        <Button 
-                          onClick={resetForm} 
-                          variant="outlined" 
-                          startIcon={<CloseIcon />} 
+                        <Button
+                          onClick={resetForm}
+                          variant="outlined"
+                          startIcon={<CloseIcon />}
                           color="primary"
                           size="large"
                         >
@@ -1918,67 +2089,134 @@ export default function BusinessClearance() {
             )}
 
             {/* RECORDS */}
-            {activeTab === "records" && (
-              <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <Paper elevation={0} sx={{ p: 3, borderBottom: 1, borderColor: "divider" }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            {activeTab === 'records' && (
+              <Box
+                sx={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                }}
+              >
+                <Paper
+                  elevation={0}
+                  sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}
+                >
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontWeight: 600,
+                      mb: 2,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                    }}
+                  >
                     <FolderIcon color="primary" />
                     Certificate Records
                   </Typography>
-                  <TextField 
-                    fullWidth 
-                    size="small" 
-                    placeholder="Search by name, address, or nature of business" 
-                    value={searchTerm} 
-                    onChange={(e) => setSearchTerm(e.target.value)} 
-                    InputProps={{ 
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Search by name, address, or nature of business"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
                           <SearchIcon />
                         </InputAdornment>
-                      ) 
-                    }} 
+                      ),
+                    }}
                   />
                 </Paper>
 
-                <Box sx={{ flex: 1, overflow: "auto", p: 2 }}>
+                <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
                   {filteredRecords.length === 0 ? (
-                    <Paper sx={{ p: 4, textAlign: "center", color: "text.secondary" }}>
+                    <Paper
+                      sx={{
+                        p: 4,
+                        textAlign: 'center',
+                        color: 'text.secondary',
+                      }}
+                    >
                       <FolderIcon sx={{ fontSize: 48, mb: 2, opacity: 0.3 }} />
                       <Typography variant="h6" gutterBottom>
-                        {searchTerm ? "No records found" : "No records yet"}
+                        {searchTerm ? 'No records found' : 'No records yet'}
                       </Typography>
                       <Typography variant="body2">
-                        {searchTerm ? "Try a different search term" : "Create your first certificate to get started"}
+                        {searchTerm
+                          ? 'Try a different search term'
+                          : 'Create your first certificate to get started'}
                       </Typography>
                     </Paper>
                   ) : (
                     <Stack spacing={2}>
                       {filteredRecords.map((record) => (
-                        <Card key={record.business_clearance_id} sx={{ 
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                          borderLeft: 4,
-                          borderColor: "primary.main",
-                        }}>
+                        <Card
+                          key={record.business_clearance_id}
+                          sx={{
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            borderLeft: 4,
+                            borderColor: 'primary.main',
+                          }}
+                        >
                           <CardContent sx={{ p: 2 }}>
-                            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'flex-start',
+                              }}
+                            >
                               <Box sx={{ flex: 1 }}>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5, color: "#000000" }}>
+                                <Typography
+                                  variant="subtitle1"
+                                  sx={{
+                                    fontWeight: 600,
+                                    mb: 0.5,
+                                    color: '#000000',
+                                  }}
+                                >
                                   {record.full_name}
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                  sx={{ mb: 1 }}
+                                >
                                   {record.address}
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                                  Nature of Business: {record.nature_of_business}
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                  sx={{ mb: 1 }}
+                                >
+                                  Nature of Business:{' '}
+                                  {record.nature_of_business}
                                 </Typography>
-                                <Box sx={{ display: "flex", alignItems: "center", mb: 1, gap: 1 }}>
-                                  <Typography variant="caption" color="text.secondary">
-                                    Issued: {formatDateDisplay(record.date_issued)}
+                                <Box
+                                  sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    mb: 1,
+                                    gap: 1,
+                                  }}
+                                >
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                  >
+                                    Issued:{' '}
+                                    {formatDateDisplay(record.date_issued)}
                                   </Typography>
-                                  <Typography variant="caption" color="text.secondary">
-                                    Expires: {formatDateDisplay(record.date_expired)}
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                  >
+                                    Expires:{' '}
+                                    {formatDateDisplay(record.date_expired)}
                                   </Typography>
                                 </Box>
                                 {record.use_signature && (
@@ -1991,29 +2229,31 @@ export default function BusinessClearance() {
                                   />
                                 )}
                               </Box>
-                              <Box sx={{ display: "flex", gap: 0.5 }}>
+                              <Box sx={{ display: 'flex', gap: 0.5 }}>
                                 <Tooltip title="View">
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleView(record)} 
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleView(record)}
                                     color="primary"
                                   >
                                     <EyeIcon />
                                   </IconButton>
                                 </Tooltip>
                                 <Tooltip title="Edit">
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleEdit(record)} 
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleEdit(record)}
                                     color="success"
                                   >
                                     <EditIcon />
                                   </IconButton>
                                 </Tooltip>
                                 <Tooltip title="Delete">
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleDelete(record.business_clearance_id)} 
+                                  <IconButton
+                                    size="small"
+                                    onClick={() =>
+                                      handleDelete(record.business_clearance_id)
+                                    }
                                     color="error"
                                   >
                                     <DeleteIcon />
@@ -2029,12 +2269,11 @@ export default function BusinessClearance() {
                 </Box>
               </Box>
             )}
-
           </Box>
         </Box>
 
         {/* FLOATING ACTION BUTTON FOR MOBILE */}
-        {isMobile && activeTab !== "form" && (
+        {isMobile && activeTab !== 'form' && (
           <Fab
             color="primary"
             aria-label="add"
@@ -2043,7 +2282,11 @@ export default function BusinessClearance() {
               bottom: 16,
               right: 16,
             }}
-            onClick={() => { resetForm(); setIsFormOpen(true); setActiveTab("form"); }}
+            onClick={() => {
+              resetForm();
+              setIsFormOpen(true);
+              setActiveTab('form');
+            }}
           >
             <AddIcon />
           </Fab>

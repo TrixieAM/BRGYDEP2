@@ -9,7 +9,10 @@ import Logo145 from '../../assets/Logo145.png';
 import BagongPilipinas from '../../assets/BagongPilipinas.png';
 import WordName from '../../assets/WordName.png';
 import { useCertificateManager } from '../../hooks/useCertificateManager';
-import { getSignatures, getSignatureImageUrl } from '../../services/signatureService';
+import {
+  getSignatures,
+  getSignatureImageUrl,
+} from '../../services/signatureService';
 
 // Import Material UI components
 import {
@@ -223,7 +226,7 @@ export default function SoloParentForm() {
     const token = getToken();
     return {
       'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` })
+      ...(token && { Authorization: `Bearer ${token}` }),
     };
   };
 
@@ -239,17 +242,16 @@ export default function SoloParentForm() {
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(0.75); // Default zoom level
   const [signatures, setSignatures] = useState([]);
-  const [selectedSecretarySignature, setSelectedSecretarySignature] = useState(null);
-  const [selectedCaptainSignature, setSelectedCaptainSignature] = useState(null);
+  const [selectedSecretarySignature, setSelectedSecretarySignature] =
+    useState(null);
+  const [selectedCaptainSignature, setSelectedCaptainSignature] =
+    useState(null);
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // Add this after the imports and before the component function
-  const { 
-    saveCertificate, 
-    getValidityPeriod,
-    calculateExpirationDate 
-  } = useCertificateManager('Solo Parent');
+  const { saveCertificate, getValidityPeriod, calculateExpirationDate } =
+    useCertificateManager('Solo Parent');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -268,8 +270,38 @@ export default function SoloParentForm() {
 
   const [children, setChildren] = useState([]);
 
-  const employmentOptions = ['Employed', 'Unemployed', 'Self-Employed', 'Business Owner', 'Freelancer', 'Contract Worker', 'Others'];
-  const educationOptions = ['Nursery', 'Kindergarten', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12', 'College 1st Year', 'College 2nd Year', 'College 3rd Year', 'College 4th Year', 'College 5th Year', 'Graduate School', 'Others'];
+  const employmentOptions = [
+    'Employed',
+    'Unemployed',
+    'Self-Employed',
+    'Business Owner',
+    'Freelancer',
+    'Contract Worker',
+    'Others',
+  ];
+  const educationOptions = [
+    'Nursery',
+    'Kindergarten',
+    'Grade 1',
+    'Grade 2',
+    'Grade 3',
+    'Grade 4',
+    'Grade 5',
+    'Grade 6',
+    'Grade 7',
+    'Grade 8',
+    'Grade 9',
+    'Grade 10',
+    'Grade 11',
+    'Grade 12',
+    'College 1st Year',
+    'College 2nd Year',
+    'College 3rd Year',
+    'College 4th Year',
+    'College 5th Year',
+    'Graduate School',
+    'Others',
+  ];
   const genderOptions = ['Male', 'Female', 'Others'];
   const relationshipOptions = ['Son', 'Daughter', 'Others'];
 
@@ -399,7 +431,7 @@ export default function SoloParentForm() {
   async function loadResidents() {
     try {
       const res = await fetch(`${apiBase}/residents`, {
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
       });
       const data = await res.json();
       // Format dates properly when loading residents - extract only YYYY-MM-DD
@@ -432,7 +464,7 @@ export default function SoloParentForm() {
   async function loadRecords() {
     try {
       const res = await fetch(`${apiBase}/solo-parent-records`, {
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
       });
       const data = await res.json();
       setRecords(
@@ -471,9 +503,12 @@ export default function SoloParentForm() {
 
   async function loadChildren(soloParentId) {
     try {
-      const res = await fetch(`${apiBase}/solo-parent-records/${soloParentId}/children`, {
-        headers: getAuthHeaders()
-      });
+      const res = await fetch(
+        `${apiBase}/solo-parent-records/${soloParentId}/children`,
+        {
+          headers: getAuthHeaders(),
+        }
+      );
       const data = await res.json();
       setChildren(
         Array.isArray(data)
@@ -512,7 +547,9 @@ export default function SoloParentForm() {
       data.secretary_signature_id &&
       !data.sec_signature_path
     ) {
-      const secSig = signatures.find((s) => s.signature_id === data.secretary_signature_id);
+      const secSig = signatures.find(
+        (s) => s.signature_id === data.secretary_signature_id
+      );
       if (secSig) {
         data = {
           ...data,
@@ -529,7 +566,9 @@ export default function SoloParentForm() {
       data.captain_signature_id &&
       !data.cap_signature_path
     ) {
-      const capSig = signatures.find((s) => s.signature_id === data.captain_signature_id);
+      const capSig = signatures.find(
+        (s) => s.signature_id === data.captain_signature_id
+      );
       if (capSig) {
         data = {
           ...data,
@@ -560,9 +599,9 @@ export default function SoloParentForm() {
         𝗧𝗿𝗮𝗻𝘀𝗮𝗰𝘁𝗶𝗼𝗻 𝗡𝗼: ${display.transaction_number || 'N/A'}
         Name: ${display.name}
         Date Issued: ${
-        display.dateCreated
-        ? formatDateTimeDisplay(display.dateCreated)
-        : new Date().toLocaleString()
+          display.dateCreated
+            ? formatDateTimeDisplay(display.dateCreated)
+            : new Date().toLocaleString()
         }
         Document Type: Solo Parent Certification
        
@@ -607,15 +646,25 @@ export default function SoloParentForm() {
       date_issued: data.dateIssued,
       transaction_number: data.transaction_number,
       use_signature: data.use_signature ? 1 : 0,
-      secretary_signature_id: data.use_signature && data.secretary_signature_id ? data.secretary_signature_id : null,
-      captain_signature_id: data.use_signature && data.captain_signature_id ? data.captain_signature_id : null,
+      secretary_signature_id:
+        data.use_signature && data.secretary_signature_id
+          ? data.secretary_signature_id
+          : null,
+      captain_signature_id:
+        data.use_signature && data.captain_signature_id
+          ? data.captain_signature_id
+          : null,
     };
-    
+
     // Only add resident_id if it's a valid value
-    if (data.resident_id && data.resident_id !== '' && data.resident_id !== null) {
+    if (
+      data.resident_id &&
+      data.resident_id !== '' &&
+      data.resident_id !== null
+    ) {
       payload.resident_id = data.resident_id;
     }
-    
+
     return payload;
   }
 
@@ -677,16 +726,19 @@ export default function SoloParentForm() {
       setSelectedRecord(newRec);
 
       // Save to certificates table using saveCertificate hook
-      await saveCertificate({
-        resident_id: newRec.resident_id,
-        full_name: newRec.name,
-        certificate_type: 'Solo Parent',
-        request_reason: 'Solo Parent', // Use request_reason field
-        reason: 'Solo Parent', // Also set reason field as backup
-        validity_period: newRec.validity_period,
-        date_issued: newRec.dateIssued,
-        reference_id: soloParentId, // Add reference to solo parent record
-      }, true);
+      await saveCertificate(
+        {
+          resident_id: newRec.resident_id,
+          full_name: newRec.name,
+          certificate_type: 'Solo Parent',
+          request_reason: 'Solo Parent', // Use request_reason field
+          reason: 'Solo Parent', // Also set reason field as backup
+          validity_period: newRec.validity_period,
+          date_issued: newRec.dateIssued,
+          reference_id: soloParentId, // Add reference to solo parent record
+        },
+        true
+      );
 
       // Store the new certificate data (can still use newRec for local storage/QR)
       storeCertificateData(newRec);
@@ -702,18 +754,22 @@ export default function SoloParentForm() {
   async function handleUpdate() {
     try {
       // Get the current record to preserve resident_id if needed
-      const currentRecord = records.find(r => r.id === editingId);
-      
-      if (currentRecord && currentRecord.name === formData.name && !formData.resident_id) {
+      const currentRecord = records.find((r) => r.id === editingId);
+
+      if (
+        currentRecord &&
+        currentRecord.name === formData.name &&
+        !formData.resident_id
+      ) {
         formData.resident_id = currentRecord.resident_id;
       }
-      
+
       const validityPeriod = getValidityPeriod('Solo Parent');
       const updatedFormData = {
         ...formData,
         validity_period: validityPeriod, // Add validity period
       };
-      
+
       const res = await fetch(`${apiBase}/solo-parent-records/${editingId}`, {
         method: 'PUT',
         headers: getAuthHeaders(),
@@ -721,18 +777,21 @@ export default function SoloParentForm() {
       });
       if (!res.ok) throw new Error('Update failed');
       const updatedData = await res.json();
-      
+
       // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
       const newSoloParentId = updatedData.solo_parent_id;
-      
-      // Update children for the new record
-      await fetch(`${apiBase}/solo-parent-records/${newSoloParentId}/children`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(childrenToServerPayload()),
-      });
 
-      const updated = { 
+      // Update children for the new record
+      await fetch(
+        `${apiBase}/solo-parent-records/${newSoloParentId}/children`,
+        {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(childrenToServerPayload()),
+        }
+      );
+
+      const updated = {
         ...updatedData,
         id: newSoloParentId,
         name: updatedData.full_name,
@@ -758,28 +817,31 @@ export default function SoloParentForm() {
         cap_designation: updatedData.cap_designation,
         cap_signature_path: updatedData.cap_signature_path,
       };
-      
+
       // Remove old record and add new one
       setRecords([updated, ...records.filter((r) => r.id !== editingId)]);
       setSelectedRecord(updated);
 
       // Save to certificates table using saveCertificate hook
-      await saveCertificate({
-        resident_id: updated.resident_id,
-        full_name: updated.name,
-        certificate_type: 'Solo Parent',
-        request_reason: 'Solo Parent', // Use request_reason field
-        reason: 'Solo Parent', // Also set reason field as backup
-        validity_period: updated.validity_period,
-        date_issued: updated.dateIssued,
-        reference_id: editingId, // Add reference to solo parent record
-      }, false);
+      await saveCertificate(
+        {
+          resident_id: updated.resident_id,
+          full_name: updated.name,
+          certificate_type: 'Solo Parent',
+          request_reason: 'Solo Parent', // Use request_reason field
+          reason: 'Solo Parent', // Also set reason field as backup
+          validity_period: updated.validity_period,
+          date_issued: updated.dateIssued,
+          reference_id: editingId, // Add reference to solo parent record
+        },
+        false
+      );
 
       // Store the updated certificate data (can still use updated for local storage/QR)
       storeCertificateData(updated);
 
       await loadChildren(editingId);
-      
+
       resetForm();
       setActiveTab('records');
     } catch (e) {
@@ -791,7 +853,7 @@ export default function SoloParentForm() {
   function handleEdit(record) {
     // Find the resident from the residents list to get the resident_id
     const resident = residents.find((r) => r.full_name === record.name);
-    
+
     setFormData({
       ...record,
       resident_id: resident ? resident.resident_id : record.resident_id,
@@ -803,17 +865,21 @@ export default function SoloParentForm() {
     setIsFormOpen(true);
     setActiveTab('form');
     loadChildren(record.id);
-    
+
     // Set selected signatures if they exist
     if (record.secretary_signature_id) {
-      const secSig = signatures.find((s) => s.signature_id === record.secretary_signature_id);
+      const secSig = signatures.find(
+        (s) => s.signature_id === record.secretary_signature_id
+      );
       setSelectedSecretarySignature(secSig || null);
     } else {
       setSelectedSecretarySignature(null);
     }
-    
+
     if (record.captain_signature_id) {
-      const capSig = signatures.find((s) => s.signature_id === record.captain_signature_id);
+      const capSig = signatures.find(
+        (s) => s.signature_id === record.captain_signature_id
+      );
       setSelectedCaptainSignature(capSig || null);
     } else {
       setSelectedCaptainSignature(null);
@@ -853,17 +919,21 @@ export default function SoloParentForm() {
     setIsFormOpen(true); // Keep the form open with the record details
     setActiveTab('form');
     loadChildren(record.id);
-    
+
     // Set selected signatures if they exist
     if (record.secretary_signature_id) {
-      const secSig = signatures.find((s) => s.signature_id === record.secretary_signature_id);
+      const secSig = signatures.find(
+        (s) => s.signature_id === record.secretary_signature_id
+      );
       setSelectedSecretarySignature(secSig || null);
     } else {
       setSelectedSecretarySignature(null);
     }
-    
+
     if (record.captain_signature_id) {
-      const capSig = signatures.find((s) => s.signature_id === record.captain_signature_id);
+      const capSig = signatures.find(
+        (s) => s.signature_id === record.captain_signature_id
+      );
       setSelectedCaptainSignature(capSig || null);
     } else {
       setSelectedCaptainSignature(null);
@@ -953,7 +1023,10 @@ export default function SoloParentForm() {
       });
       pdf.addImage(imgData, 'PNG', 0, 0, 8.5, 11);
 
-      const fileName = `Solo_Parent_${display.id}_${display.name.replace(/\s+/g, '_')}.pdf`;
+      const fileName = `Solo_Parent_${display.id}_${display.name.replace(
+        /\s+/g,
+        '_'
+      )}.pdf`;
       pdf.save(fileName);
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -1116,28 +1189,38 @@ export default function SoloParentForm() {
   const updateChild = (index, field, value) => {
     const updatedChildren = [...children];
     updatedChildren[index] = { ...updatedChildren[index], [field]: value };
-    
+
     // If birthday is updated, calculate the age
     if (field === 'birthday' && value) {
       updatedChildren[index].age = calculateAge(value);
     }
-    
+
     setChildren(updatedChildren);
   };
 
   return (
     <ThemeProvider theme={theme}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', bgcolor: 'background.default' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100vh',
+          overflow: 'hidden',
+          bgcolor: 'background.default',
+        }}
+      >
         {/* TOP HEADER */}
         <Paper elevation={2} sx={{ zIndex: 10, borderRadius: 0 }}>
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'space-between',
-            p: 2,
-            bgcolor: 'primary.main',
-            color: 'white'
-          }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              p: 2,
+              bgcolor: 'primary.main',
+              color: 'white',
+            }}
+          >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Avatar src={Logo145} sx={{ width: 48, height: 48 }} />
               <Box>
@@ -1149,25 +1232,29 @@ export default function SoloParentForm() {
                 </Typography>
               </Box>
             </Box>
-            
+
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Badge badgeContent={records.length} color="secondary">
-                <Chip 
+                <Chip
                   icon={<FolderIcon />}
-                  label="Total Records" 
-                  sx={{ 
-                    bgcolor: "rgba(255,255,255,0.2)", 
-                    color: "white",
-                    fontWeight: 600
-                  }} 
+                  label="Total Records"
+                  sx={{
+                    bgcolor: 'rgba(255,255,255,0.2)',
+                    color: 'white',
+                    fontWeight: 600,
+                  }}
                 />
               </Badge>
-              
-              <Button 
-                variant="contained" 
-                color="secondary" 
-                startIcon={<AddIcon />} 
-                onClick={() => { resetForm(); setIsFormOpen(true); setActiveTab("form"); }}
+
+              <Button
+                variant="contained"
+                color="secondary"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  resetForm();
+                  setIsFormOpen(true);
+                  setActiveTab('form');
+                }}
                 sx={{ borderRadius: 20, px: 3 }}
               >
                 New Certificate
@@ -1176,26 +1263,35 @@ export default function SoloParentForm() {
           </Box>
 
           {/* NAVIGATION TABS */}
-          <Box sx={{ bgcolor: "background.paper", borderBottom: 1, borderColor: "divider" }}>
-            <Box sx={{ maxWidth: 1200, mx: "auto" }}>
-              <Tabs 
-                value={activeTab} 
-                onChange={(e, nv) => setActiveTab(nv)} 
+          <Box
+            sx={{
+              bgcolor: 'background.paper',
+              borderBottom: 1,
+              borderColor: 'divider',
+            }}
+          >
+            <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
+              <Tabs
+                value={activeTab}
+                onChange={(e, nv) => setActiveTab(nv)}
                 variant="fullWidth"
-                sx={{ 
-                  "& .MuiTabs-indicator": { height: 3, borderRadius: "3px 3px 0 0" },
-                  minHeight: 48
+                sx={{
+                  '& .MuiTabs-indicator': {
+                    height: 3,
+                    borderRadius: '3px 3px 0 0',
+                  },
+                  minHeight: 48,
                 }}
               >
-                <Tab 
-                  icon={<ArticleIcon />} 
-                  label="Form" 
+                <Tab
+                  icon={<ArticleIcon />}
+                  label="Form"
                   value="form"
                   iconPosition="start"
                 />
-                <Tab 
-                  icon={<FolderIcon />} 
-                  label={`Records (${records.length})`} 
+                <Tab
+                  icon={<FolderIcon />}
+                  label={`Records (${records.length})`}
                   value="records"
                   iconPosition="start"
                 />
@@ -1207,61 +1303,82 @@ export default function SoloParentForm() {
         {/* MAIN CONTENT AREA */}
         <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           {/* LEFT: Certificate preview */}
-          <Box sx={{ 
-            flex: 1, 
-            overflow: 'auto', 
-            display: 'flex', 
-            flexDirection: 'column', 
-            bgcolor: 'background.default',
-            p: 2,
-            [theme.breakpoints.down('lg')]: { display: activeTab === "form" ? 'none' : 'flex' }
-          }}>
+          <Box
+            sx={{
+              flex: 1,
+              overflow: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              bgcolor: 'background.default',
+              p: 2,
+              [theme.breakpoints.down('lg')]: {
+                display: activeTab === 'form' ? 'none' : 'flex',
+              },
+            }}
+          >
             {/* ZOOM CONTROLS */}
             <Paper elevation={1} sx={{ p: 2, mb: 2, borderRadius: 2 }}>
-              <Box sx={{ 
-                display: "flex", 
-                justifyContent: "space-between", 
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: 1
-              }}>
-                <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 1,
+                }}
+              >
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                   <Tooltip title="Zoom Out">
-                    <IconButton onClick={handleZoomOut} color="primary" size="small">
+                    <IconButton
+                      onClick={handleZoomOut}
+                      color="primary"
+                      size="small"
+                    >
                       <ZoomOutIcon />
                     </IconButton>
                   </Tooltip>
-                  <Typography variant="body2" sx={{ 
-                    minWidth: 60, 
-                    textAlign: "center", 
-                    fontWeight: 600,
-                    px: 1,
-                    py: 0.5,
-                    bgcolor: "background.paper",
-                    borderRadius: 1,
-                    color: "#000000"
-                  }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      minWidth: 60,
+                      textAlign: 'center',
+                      fontWeight: 600,
+                      px: 1,
+                      py: 0.5,
+                      bgcolor: 'background.paper',
+                      borderRadius: 1,
+                      color: '#000000',
+                    }}
+                  >
                     {Math.round(zoomLevel * 100)}%
                   </Typography>
                   <Tooltip title="Zoom In">
-                    <IconButton onClick={handleZoomIn} color="primary" size="small">
+                    <IconButton
+                      onClick={handleZoomIn}
+                      color="primary"
+                      size="small"
+                    >
                       <ZoomInIcon />
                     </IconButton>
                   </Tooltip>
                   <Tooltip title="Reset Zoom">
-                    <IconButton onClick={handleResetZoom} color="primary" size="small">
+                    <IconButton
+                      onClick={handleResetZoom}
+                      color="primary"
+                      size="small"
+                    >
                       <ResetIcon />
                     </IconButton>
                   </Tooltip>
                 </Box>
 
-                <Box sx={{ display: "flex", gap: 1 }}>
+                <Box sx={{ display: 'flex', gap: 1 }}>
                   <Tooltip title="Verify Certificate">
-                    <Button 
-                      variant="outlined" 
-                      color="primary" 
-                      onClick={handleQrCodeClick} 
-                      startIcon={<QrCodeIcon />} 
+                    <Button
+                      variant="outlined"
+                      color="primary"
+                      onClick={handleQrCodeClick}
+                      startIcon={<QrCodeIcon />}
                       disabled={!display.id}
                       size="small"
                     >
@@ -1269,21 +1386,21 @@ export default function SoloParentForm() {
                     </Button>
                   </Tooltip>
                   <Tooltip title="Download PDF">
-                    <Button 
-                      variant="contained" 
-                      color="secondary" 
-                      onClick={generatePDF} 
-                      disabled={!display.id || isGeneratingPDF} 
+                    <Button
+                      variant="contained"
+                      color="secondary"
+                      onClick={generatePDF}
+                      disabled={!display.id || isGeneratingPDF}
                       startIcon={<FileTextIcon />}
                       size="small"
                     >
-                      {isGeneratingPDF ? "Generating..." : "Download"}
+                      {isGeneratingPDF ? 'Generating...' : 'Download'}
                     </Button>
                   </Tooltip>
                   <Tooltip title="Print">
-                    <Button 
-                      variant="outlined" 
-                      onClick={handlePrint} 
+                    <Button
+                      variant="outlined"
+                      onClick={handlePrint}
                       disabled={!display.id}
                       startIcon={<PrintIcon />}
                       size="small"
@@ -1296,15 +1413,22 @@ export default function SoloParentForm() {
             </Paper>
 
             {/* CERTIFICATE PREVIEW */}
-            <Box sx={{ 
-              display: "flex", 
-              justifyContent: "center", 
-              alignItems: "flex-start", 
-              flex: 1, 
-              overflow: "auto",
-              p: 1
-            }}>
-              <Box sx={{ transform: `scale(${zoomLevel})`, transformOrigin: "top center" }}>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'flex-start',
+                flex: 1,
+                overflow: 'auto',
+                p: 1,
+              }}
+            >
+              <Box
+                sx={{
+                  transform: `scale(${zoomLevel})`,
+                  transformOrigin: 'top center',
+                }}
+              >
                 <div
                   id="certificate-preview"
                   style={{
@@ -1378,7 +1502,8 @@ export default function SoloParentForm() {
                   >
                     <div
                       style={{
-                        fontFamily: 'Lucida Calligraphy, "Times New Roman", serif',
+                        fontFamily:
+                          'Lucida Calligraphy, "Times New Roman", serif',
                       }}
                     >
                       Republic Of the Philippines
@@ -1494,9 +1619,9 @@ export default function SoloParentForm() {
                     <p style={{ marginBottom: '20px' }}>
                       <strong>
                         Upon verification, she is currently not in any form of
-                        relationship and is qualified to apply for a Solo Parent ID
-                        based on the classification set forth by RA 8972, otherwise
-                        known as the Solo Parents Welfare Act 2000.
+                        relationship and is qualified to apply for a Solo Parent
+                        ID based on the classification set forth by RA 8972,
+                        otherwise known as the Solo Parents Welfare Act 2000.
                       </strong>
                     </p>
 
@@ -1650,10 +1775,9 @@ export default function SoloParentForm() {
                             textAlign: 'center',
                           }}
                         >
-                          {display.employmentStatus === 'Others' 
+                          {display.employmentStatus === 'Others'
                             ? display.employmentRemarks || 'Employment Status'
-                            : display.employmentStatus || 'Employment Status'
-                          }
+                            : display.employmentStatus || 'Employment Status'}
                         </span>
                         .
                       </strong>
@@ -1675,8 +1799,8 @@ export default function SoloParentForm() {
                         >
                           {display.name || 'Name'}
                         </span>
-                        , qualification to apply for a Solo Parent ID and receive all
-                        benefits that go with it.
+                        , qualification to apply for a Solo Parent ID and
+                        receive all benefits that go with it.
                       </strong>
                     </p>
 
@@ -1697,9 +1821,18 @@ export default function SoloParentForm() {
                             ? (() => {
                                 const date = new Date(display.dateIssued);
                                 const day = date.getDate();
-                                const month = date.toLocaleString('default', { month: 'long' });
+                                const month = date.toLocaleString('default', {
+                                  month: 'long',
+                                });
                                 const year = date.getFullYear();
-                                const suffix = day % 10 === 1 && day !== 11 ? 'st' : day % 10 === 2 && day !== 12 ? 'nd' : day % 10 === 3 && day !== 13 ? 'rd' : 'th';
+                                const suffix =
+                                  day % 10 === 1 && day !== 11
+                                    ? 'st'
+                                    : day % 10 === 2 && day !== 12
+                                    ? 'nd'
+                                    : day % 10 === 3 && day !== 13
+                                    ? 'rd'
+                                    : 'th';
                                 return `${day}${suffix} day of ${month}, ${year}`;
                               })()
                             : '__________________'}
@@ -1747,7 +1880,9 @@ export default function SoloParentForm() {
                               }}
                             >
                               <img
-                                src={getSignatureImageUrl(display.sec_signature_path)}
+                                src={getSignatureImageUrl(
+                                  display.sec_signature_path
+                                )}
                                 alt="Secretary Signature"
                                 style={{
                                   maxWidth: '180px',
@@ -1781,7 +1916,12 @@ export default function SoloParentForm() {
                           </>
                         ) : (
                           <>
-                            <div style={{ fontWeight: 'bold', marginBottom: '3px' }}>
+                            <div
+                              style={{
+                                fontWeight: 'bold',
+                                marginBottom: '3px',
+                              }}
+                            >
                               ROSALINA P. ANORE
                             </div>
                             <div
@@ -1791,7 +1931,9 @@ export default function SoloParentForm() {
                                 margin: '0 auto 8px auto',
                               }}
                             ></div>
-                            <div style={{ fontWeight: 'bold' }}>Brgy. Secretary</div>
+                            <div style={{ fontWeight: 'bold' }}>
+                              Brgy. Secretary
+                            </div>
                           </>
                         )}
                       </div>
@@ -1810,7 +1952,9 @@ export default function SoloParentForm() {
                               }}
                             >
                               <img
-                                src={getSignatureImageUrl(display.cap_signature_path)}
+                                src={getSignatureImageUrl(
+                                  display.cap_signature_path
+                                )}
                                 alt="Captain Signature"
                                 style={{
                                   maxWidth: '180px',
@@ -1839,12 +1983,17 @@ export default function SoloParentForm() {
                               }}
                             ></div>
                             <div style={{ fontWeight: 'bold' }}>
-                             Barangay Captain
+                              Barangay Captain
                             </div>
                           </>
                         ) : (
                           <>
-                            <div style={{ fontWeight: 'bold', marginBottom: '3px' }}>
+                            <div
+                              style={{
+                                fontWeight: 'bold',
+                                marginBottom: '3px',
+                              }}
+                            >
                               ARNOLD DONDONAYOS
                             </div>
                             <div
@@ -1854,7 +2003,9 @@ export default function SoloParentForm() {
                                 margin: '0 auto 8px auto',
                               }}
                             ></div>
-                            <div style={{ fontWeight: 'bold' }}>Barangay Captain</div>
+                            <div style={{ fontWeight: 'bold' }}>
+                              Barangay Captain
+                            </div>
                           </>
                         )}
                       </div>
@@ -1981,22 +2132,45 @@ export default function SoloParentForm() {
           </Box>
 
           {/* RIGHT: FORM/RECORDS PANEL */}
-          <Box sx={{ 
-            width: { xs: '100%', md: '50%', lg: '40%' }, 
-            bgcolor: "background.paper", 
-            borderLeft: { xs: 0, md: 1 }, 
-            borderColor: "divider",
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden'
-          }}>
+          <Box
+            sx={{
+              width: { xs: '100%', md: '50%', lg: '40%' },
+              bgcolor: 'background.paper',
+              borderLeft: { xs: 0, md: 1 },
+              borderColor: 'divider',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
             {/* FORM */}
-            {activeTab === "form" && (
-              <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <Paper elevation={0} sx={{ p: 3, borderBottom: 1, borderColor: "divider" }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+            {activeTab === 'form' && (
+              <Box
+                sx={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                }}
+              >
+                <Paper
+                  elevation={0}
+                  sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}
+                >
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontWeight: 600,
+                      mb: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                    }}
+                  >
                     <ArticleIcon color="primary" />
-                    {editingId ? "Edit Certificate" : "New Solo Parent Certification"}
+                    {editingId
+                      ? 'Edit Certificate'
+                      : 'New Solo Parent Certification'}
                   </Typography>
                   {selectedRecord && !editingId && (
                     <Typography variant="body2" color="text.secondary">
@@ -2005,12 +2179,15 @@ export default function SoloParentForm() {
                   )}
                 </Paper>
 
-                <Box sx={{ flex: 1, overflow: "auto", p: 3 }}>
+                <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
                   <Stack spacing={3}>
                     <Autocomplete
                       options={residents}
-                      getOptionLabel={(option) => option.full_name || ""}
-                      value={residents.find((r) => r.full_name === formData.name) || null}
+                      getOptionLabel={(option) => option.full_name || ''}
+                      value={
+                        residents.find((r) => r.full_name === formData.name) ||
+                        null
+                      }
                       onChange={(e, nv) => {
                         if (nv) {
                           setFormData({
@@ -2023,62 +2200,64 @@ export default function SoloParentForm() {
                           });
                         } else {
                           // If no resident is selected, keep the current resident_id if it exists
-                          setFormData({ 
-                            ...formData, 
+                          setFormData({
+                            ...formData,
                             name: '',
                             // Don't reset resident_id to null if it already exists
                           });
                         }
                       }}
                       renderInput={(params) => (
-                        <TextField 
-                          {...params} 
-                          label="Full Name" 
-                          variant="outlined" 
-                          fullWidth 
+                        <TextField
+                          {...params}
+                          label="Full Name"
+                          variant="outlined"
+                          fullWidth
                           size="small"
                           required
                         />
                       )}
                     />
 
-                    <TextField 
-                      label="Address" 
-                      variant="outlined" 
-                      fullWidth 
+                    <TextField
+                      label="Address"
+                      variant="outlined"
+                      fullWidth
                       size="small"
-                      multiline 
+                      multiline
                       rows={2}
-                      value={formData.address} 
-                      onChange={(e) => setFormData({ ...formData, address: e.target.value })} 
+                      value={formData.address}
+                      onChange={(e) =>
+                        setFormData({ ...formData, address: e.target.value })
+                      }
                       required
                     />
 
                     <Grid container spacing={2}>
                       <Grid item xs={12} sm={6}>
-                        <TextField 
-                          label="Birthday" 
-                          type="date" 
-                          variant="outlined" 
-                          fullWidth 
+                        <TextField
+                          label="Birthday"
+                          type="date"
+                          variant="outlined"
+                          fullWidth
                           size="small"
-                          InputLabelProps={{ shrink: true }} 
-                          value={formData.birthday} 
+                          InputLabelProps={{ shrink: true }}
+                          value={formData.birthday}
                           onChange={(e) => {
                             const dob = e.target.value;
                             const age = calculateAge(dob);
                             setFormData({ ...formData, birthday: dob, age });
-                          }} 
+                          }}
                           required
                         />
                       </Grid>
                       <Grid item xs={12} sm={6}>
-                        <TextField 
-                          label="Age" 
-                          variant="outlined" 
-                          fullWidth 
+                        <TextField
+                          label="Age"
+                          variant="outlined"
+                          fullWidth
                           size="small"
-                          value={formData.age} 
+                          value={formData.age}
                           InputProps={{ readOnly: true }}
                           sx={{
                             '& .MuiOutlinedInput-root': {
@@ -2089,27 +2268,40 @@ export default function SoloParentForm() {
                       </Grid>
                     </Grid>
 
-                    <TextField 
-                      label="Resident Since Year" 
-                      variant="outlined" 
-                      fullWidth 
+                    <TextField
+                      label="Resident Since Year"
+                      variant="outlined"
+                      fullWidth
                       size="small"
-                      value={formData.residentsSinceYear} 
-                      onChange={(e) => setFormData({ ...formData, residentsSinceYear: e.target.value })} 
+                      value={formData.residentsSinceYear}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          residentsSinceYear: e.target.value,
+                        })
+                      }
                     />
 
-                    <TextField 
-                      label="Unwed Since Year" 
-                      variant="outlined" 
-                      fullWidth 
+                    <TextField
+                      label="Unwed Since Year"
+                      variant="outlined"
+                      fullWidth
                       size="small"
-                      value={formData.unwedSinceYear} 
-                      onChange={(e) => setFormData({ ...formData, unwedSinceYear: e.target.value })} 
+                      value={formData.unwedSinceYear}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          unwedSinceYear: e.target.value,
+                        })
+                      }
                     />
 
                     {/* Employment Section */}
                     <Box sx={{ mt: 2 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                      <Typography
+                        variant="subtitle2"
+                        sx={{ fontWeight: 'bold', mb: 1 }}
+                      >
                         Employment Information
                       </Typography>
                       <FormControl fullWidth size="small" variant="outlined">
@@ -2117,10 +2309,17 @@ export default function SoloParentForm() {
                         <Select
                           value={formData.employmentStatus}
                           label="Employment Status"
-                          onChange={(e) => setFormData({ ...formData, employmentStatus: e.target.value })}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              employmentStatus: e.target.value,
+                            })
+                          }
                         >
                           {employmentOptions.map((status) => (
-                            <MenuItem key={status} value={status}>{status}</MenuItem>
+                            <MenuItem key={status} value={status}>
+                              {status}
+                            </MenuItem>
                           ))}
                         </Select>
                       </FormControl>
@@ -2134,7 +2333,12 @@ export default function SoloParentForm() {
                           multiline
                           rows={2}
                           value={formData.employmentRemarks}
-                          onChange={(e) => setFormData({ ...formData, employmentRemarks: e.target.value })}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              employmentRemarks: e.target.value,
+                            })
+                          }
                           sx={{ mt: 1 }}
                         />
                       )}
@@ -2142,8 +2346,18 @@ export default function SoloParentForm() {
 
                     {/* Children Section */}
                     <Box sx={{ mt: 2 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          mb: 1,
+                        }}
+                      >
+                        <Typography
+                          variant="subtitle2"
+                          sx={{ fontWeight: 'bold' }}
+                        >
                           Children Information
                         </Typography>
                         <Button
@@ -2157,15 +2371,35 @@ export default function SoloParentForm() {
                       </Box>
 
                       {children.length === 0 ? (
-                        <Typography variant="body2" sx={{ color: 'grey.500', fontStyle: 'italic', textAlign: 'center', py: 2 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: 'grey.500',
+                            fontStyle: 'italic',
+                            textAlign: 'center',
+                            py: 2,
+                          }}
+                        >
                           No children added yet
                         </Typography>
                       ) : (
                         <Stack spacing={2}>
                           {children.map((child, index) => (
-                            <Card key={child.id || index} sx={{ p: 2, bgcolor: 'grey.50' }}>
-                              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                                <Typography variant="subtitle2">Child {index + 1}</Typography>
+                            <Card
+                              key={child.id || index}
+                              sx={{ p: 2, bgcolor: 'grey.50' }}
+                            >
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  mb: 1,
+                                }}
+                              >
+                                <Typography variant="subtitle2">
+                                  Child {index + 1}
+                                </Typography>
                                 <IconButton
                                   size="small"
                                   onClick={() => removeChild(index)}
@@ -2182,7 +2416,9 @@ export default function SoloParentForm() {
                                     size="small"
                                     fullWidth
                                     value={child.name}
-                                    onChange={(e) => updateChild(index, 'name', e.target.value)}
+                                    onChange={(e) =>
+                                      updateChild(index, 'name', e.target.value)
+                                    }
                                   />
                                 </Grid>
                                 <Grid item xs={6}>
@@ -2194,7 +2430,13 @@ export default function SoloParentForm() {
                                     fullWidth
                                     InputLabelProps={{ shrink: true }}
                                     value={child.birthday}
-                                    onChange={(e) => updateChild(index, 'birthday', e.target.value)}
+                                    onChange={(e) =>
+                                      updateChild(
+                                        index,
+                                        'birthday',
+                                        e.target.value
+                                      )
+                                    }
                                   />
                                 </Grid>
                                 <Grid item xs={6}>
@@ -2206,20 +2448,34 @@ export default function SoloParentForm() {
                                     value={child.age}
                                     InputProps={{ readOnly: true }}
                                     sx={{
-                                      '& .MuiOutlinedInput-root': { bgcolor: 'grey.100' },
+                                      '& .MuiOutlinedInput-root': {
+                                        bgcolor: 'grey.100',
+                                      },
                                     }}
                                   />
                                 </Grid>
                                 <Grid item xs={12}>
-                                  <FormControl fullWidth size="small" variant="outlined">
+                                  <FormControl
+                                    fullWidth
+                                    size="small"
+                                    variant="outlined"
+                                  >
                                     <InputLabel>Education Level</InputLabel>
                                     <Select
                                       value={child.level}
                                       label="Education Level"
-                                      onChange={(e) => updateChild(index, 'level', e.target.value)}
+                                      onChange={(e) =>
+                                        updateChild(
+                                          index,
+                                          'level',
+                                          e.target.value
+                                        )
+                                      }
                                     >
                                       {educationOptions.map((level) => (
-                                        <MenuItem key={level} value={level}>{level}</MenuItem>
+                                        <MenuItem key={level} value={level}>
+                                          {level}
+                                        </MenuItem>
                                       ))}
                                     </Select>
                                   </FormControl>
@@ -2232,35 +2488,70 @@ export default function SoloParentForm() {
                                       size="small"
                                       fullWidth
                                       value={child.levelRemarks}
-                                      onChange={(e) => updateChild(index, 'levelRemarks', e.target.value)}
+                                      onChange={(e) =>
+                                        updateChild(
+                                          index,
+                                          'levelRemarks',
+                                          e.target.value
+                                        )
+                                      }
                                     />
                                   </Grid>
                                 )}
                                 <Grid item xs={6}>
-                                  <FormControl fullWidth size="small" variant="outlined">
+                                  <FormControl
+                                    fullWidth
+                                    size="small"
+                                    variant="outlined"
+                                  >
                                     <InputLabel>Gender</InputLabel>
                                     <Select
                                       value={child.gender}
                                       label="Gender"
-                                      onChange={(e) => updateChild(index, 'gender', e.target.value)}
+                                      onChange={(e) =>
+                                        updateChild(
+                                          index,
+                                          'gender',
+                                          e.target.value
+                                        )
+                                      }
                                     >
                                       {genderOptions.map((gender) => (
-                                        <MenuItem key={gender} value={gender}>{gender}</MenuItem>
+                                        <MenuItem key={gender} value={gender}>
+                                          {gender}
+                                        </MenuItem>
                                       ))}
                                     </Select>
                                   </FormControl>
                                 </Grid>
                                 <Grid item xs={6}>
-                                  <FormControl fullWidth size="small" variant="outlined">
+                                  <FormControl
+                                    fullWidth
+                                    size="small"
+                                    variant="outlined"
+                                  >
                                     <InputLabel>Relationship</InputLabel>
                                     <Select
                                       value={child.relationship}
                                       label="Relationship"
-                                      onChange={(e) => updateChild(index, 'relationship', e.target.value)}
+                                      onChange={(e) =>
+                                        updateChild(
+                                          index,
+                                          'relationship',
+                                          e.target.value
+                                        )
+                                      }
                                     >
-                                      {relationshipOptions.map((relationship) => (
-                                        <MenuItem key={relationship} value={relationship}>{relationship}</MenuItem>
-                                      ))}
+                                      {relationshipOptions.map(
+                                        (relationship) => (
+                                          <MenuItem
+                                            key={relationship}
+                                            value={relationship}
+                                          >
+                                            {relationship}
+                                          </MenuItem>
+                                        )
+                                      )}
                                     </Select>
                                   </FormControl>
                                 </Grid>
@@ -2272,7 +2563,13 @@ export default function SoloParentForm() {
                                       size="small"
                                       fullWidth
                                       value={child.relationshipRemarks}
-                                      onChange={(e) => updateChild(index, 'relationshipRemarks', e.target.value)}
+                                      onChange={(e) =>
+                                        updateChild(
+                                          index,
+                                          'relationshipRemarks',
+                                          e.target.value
+                                        )
+                                      }
                                     />
                                   </Grid>
                                 )}
@@ -2283,15 +2580,17 @@ export default function SoloParentForm() {
                       )}
                     </Box>
 
-                    <TextField 
-                      label="Date Issued" 
-                      type="date" 
-                      variant="outlined" 
-                      fullWidth 
+                    <TextField
+                      label="Date Issued"
+                      type="date"
+                      variant="outlined"
+                      fullWidth
                       size="small"
-                      InputLabelProps={{ shrink: true }} 
-                      value={formData.dateIssued} 
-                      onChange={(e) => setFormData({ ...formData, dateIssued: e.target.value })} 
+                      InputLabelProps={{ shrink: true }}
+                      value={formData.dateIssued}
+                      onChange={(e) =>
+                        setFormData({ ...formData, dateIssued: e.target.value })
+                      }
                       required
                     />
 
@@ -2384,22 +2683,22 @@ export default function SoloParentForm() {
                       </>
                     )}
 
-                    <Box sx={{ display: "flex", gap: 2, pt: 2 }}>
-                      <Button 
-                        onClick={handleSubmit} 
-                        variant="contained" 
-                        startIcon={<SaveIcon />} 
-                        fullWidth 
+                    <Box sx={{ display: 'flex', gap: 2, pt: 2 }}>
+                      <Button
+                        onClick={handleSubmit}
+                        variant="contained"
+                        startIcon={<SaveIcon />}
+                        fullWidth
                         color="primary"
                         size="large"
                       >
-                        {editingId ? "Update" : "Save"}
+                        {editingId ? 'Update' : 'Save'}
                       </Button>
                       {(editingId || isFormOpen) && (
-                        <Button 
-                          onClick={resetForm} 
-                          variant="outlined" 
-                          startIcon={<CloseIcon />} 
+                        <Button
+                          onClick={resetForm}
+                          variant="outlined"
+                          startIcon={<CloseIcon />}
                           color="primary"
                           size="large"
                         >
@@ -2413,101 +2712,162 @@ export default function SoloParentForm() {
             )}
 
             {/* RECORDS */}
-            {activeTab === "records" && (
-              <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <Paper elevation={0} sx={{ p: 3, borderBottom: 1, borderColor: "divider" }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+            {activeTab === 'records' && (
+              <Box
+                sx={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                }}
+              >
+                <Paper
+                  elevation={0}
+                  sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}
+                >
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontWeight: 600,
+                      mb: 2,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                    }}
+                  >
                     <FolderIcon color="primary" />
                     Certificate Records
                   </Typography>
-                  <TextField 
-                    fullWidth 
-                    size="small" 
-                    placeholder="Search by name, address, or contact number" 
-                    value={searchTerm} 
-                    onChange={(e) => setSearchTerm(e.target.value)} 
-                    InputProps={{ 
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Search by name, address, or contact number"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
                           <SearchIcon />
                         </InputAdornment>
-                      ) 
-                    }} 
+                      ),
+                    }}
                   />
                 </Paper>
 
-                <Box sx={{ flex: 1, overflow: "auto", p: 2 }}>
+                <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
                   {filteredRecords.length === 0 ? (
-                    <Paper sx={{ p: 4, textAlign: "center", color: "text.secondary" }}>
+                    <Paper
+                      sx={{
+                        p: 4,
+                        textAlign: 'center',
+                        color: 'text.secondary',
+                      }}
+                    >
                       <FolderIcon sx={{ fontSize: 48, mb: 2, opacity: 0.3 }} />
                       <Typography variant="h6" gutterBottom>
-                        {searchTerm ? "No records found" : "No records yet"}
+                        {searchTerm ? 'No records found' : 'No records yet'}
                       </Typography>
                       <Typography variant="body2">
-                        {searchTerm ? "Try a different search term" : "Create your first certificate to get started"}
+                        {searchTerm
+                          ? 'Try a different search term'
+                          : 'Create your first certificate to get started'}
                       </Typography>
                     </Paper>
                   ) : (
                     <Stack spacing={2}>
                       {filteredRecords.map((record) => (
-                        <Card key={record.id} sx={{ 
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                          borderLeft: 4,
-                          borderColor: "primary.main",
-                        }}>
+                        <Card
+                          key={record.id}
+                          sx={{
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            borderLeft: 4,
+                            borderColor: 'primary.main',
+                          }}
+                        >
                           <CardContent sx={{ p: 2 }}>
-                            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'flex-start',
+                              }}
+                            >
                               <Box sx={{ flex: 1 }}>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5, color: "#000000" }}>
+                                <Typography
+                                  variant="subtitle1"
+                                  sx={{
+                                    fontWeight: 600,
+                                    mb: 0.5,
+                                    color: '#000000',
+                                  }}
+                                >
                                   {record.name}
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                  sx={{ mb: 1 }}
+                                >
                                   {record.address}
                                 </Typography>
-                                <Box sx={{ display: "flex", alignItems: "center", mb: 1, gap: 1 }}>
+                                <Box
+                                  sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    mb: 1,
+                                    gap: 1,
+                                  }}
+                                >
                                   {record.contactNo && (
-                                    <Typography variant="caption" color="text.secondary">
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                    >
                                       {record.contactNo}
                                     </Typography>
                                   )}
-                                  <Typography variant="caption" color="text.secondary">
-                                    Issued: {formatDateDisplay(record.dateIssued)}
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                  >
+                                    Issued:{' '}
+                                    {formatDateDisplay(record.dateIssued)}
                                   </Typography>
                                   {record.use_signature && (
-                                    <Chip 
+                                    <Chip
                                       icon={<ArticleIcon />}
-                                      label="E-Signed" 
-                                      size="small" 
-                                      color="success" 
-                                      variant="outlined" 
+                                      label="E-Signed"
+                                      size="small"
+                                      color="success"
+                                      variant="outlined"
                                     />
                                   )}
                                 </Box>
                               </Box>
-                              <Box sx={{ display: "flex", gap: 0.5 }}>
+                              <Box sx={{ display: 'flex', gap: 0.5 }}>
                                 <Tooltip title="View">
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleView(record)} 
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleView(record)}
                                     color="primary"
                                   >
                                     <EyeIcon />
                                   </IconButton>
                                 </Tooltip>
                                 <Tooltip title="Edit">
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleEdit(record)} 
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleEdit(record)}
                                     color="success"
                                   >
                                     <EditIcon />
                                   </IconButton>
                                 </Tooltip>
                                 <Tooltip title="Delete">
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleDelete(record.id)} 
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleDelete(record.id)}
                                     color="error"
                                   >
                                     <DeleteIcon />
@@ -2523,12 +2883,11 @@ export default function SoloParentForm() {
                 </Box>
               </Box>
             )}
-
           </Box>
         </Box>
 
         {/* FLOATING ACTION BUTTON FOR MOBILE */}
-        {isMobile && activeTab !== "form" && (
+        {isMobile && activeTab !== 'form' && (
           <Fab
             color="primary"
             aria-label="add"
@@ -2537,7 +2896,11 @@ export default function SoloParentForm() {
               bottom: 16,
               right: 16,
             }}
-            onClick={() => { resetForm(); setIsFormOpen(true); setActiveTab("form"); }}
+            onClick={() => {
+              resetForm();
+              setIsFormOpen(true);
+              setActiveTab('form');
+            }}
           >
             <AddIcon />
           </Fab>
@@ -2626,10 +2989,9 @@ export default function SoloParentForm() {
                 Employment Status:
               </Typography>
               <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {display.employmentStatus === 'Others' 
+                {display.employmentStatus === 'Others'
                   ? display.employmentRemarks || 'N/A'
-                  : display.employmentStatus || 'N/A'
-                }
+                  : display.employmentStatus || 'N/A'}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
@@ -2685,7 +3047,10 @@ export default function SoloParentForm() {
                 </Typography>
                 <Stack spacing={1}>
                   {children.map((child, index) => (
-                    <Box key={child.id || index} sx={{ p: 1, bgcolor: 'grey.50', borderRadius: 1 }}>
+                    <Box
+                      key={child.id || index}
+                      sx={{ p: 1, bgcolor: 'grey.50', borderRadius: 1 }}
+                    >
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
                         {child.name} - {child.age} years old
                       </Typography>
@@ -3182,10 +3547,9 @@ function SoloParentVerification() {
                     textAlign: 'center',
                   }}
                 >
-                  {record.employmentStatus === 'Others' 
+                  {record.employmentStatus === 'Others'
                     ? record.employmentRemarks || 'Employment Status'
-                    : record.employmentStatus || 'Employment Status'
-                  }
+                    : record.employmentStatus || 'Employment Status'}
                 </span>
                 .
               </strong>
@@ -3225,7 +3589,9 @@ function SoloParentVerification() {
                     fontStyle: 'italic',
                   }}
                 >
-                  {record.dateIssued ? formatDate(record.dateIssued) : '__________________'}
+                  {record.dateIssued
+                    ? formatDate(record.dateIssued)
+                    : '__________________'}
                 </span>
                 .
               </strong>
@@ -3289,7 +3655,7 @@ function SoloParentVerification() {
                         marginBottom: '3px',
                       }}
                     >
-                     ROSALINA P. ANORE
+                      ROSALINA P. ANORE
                     </div>
                     <div
                       style={{
@@ -3298,9 +3664,7 @@ function SoloParentVerification() {
                         margin: '0 auto 8px auto',
                       }}
                     ></div>
-                    <div style={{ fontWeight: 'bold' }}>
-                      Brgy. Secretary
-                    </div>
+                    <div style={{ fontWeight: 'bold' }}>Brgy. Secretary</div>
                   </>
                 ) : (
                   <>
@@ -3352,7 +3716,7 @@ function SoloParentVerification() {
                         marginBottom: '3px',
                       }}
                     >
-                     ARNOLD DONDONAYOS
+                      ARNOLD DONDONAYOS
                     </div>
                     <div
                       style={{
@@ -3361,9 +3725,7 @@ function SoloParentVerification() {
                         margin: '0 auto 8px auto',
                       }}
                     ></div>
-                    <div style={{ fontWeight: 'bold' }}>
-                     Barangay Captain
-                    </div>
+                    <div style={{ fontWeight: 'bold' }}>Barangay Captain</div>
                   </>
                 ) : (
                   <>
