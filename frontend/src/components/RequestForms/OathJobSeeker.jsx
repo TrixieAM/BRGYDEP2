@@ -8,8 +8,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
 import { useCertificateManager } from '../../hooks/useCertificateManager';
-
-
+import { getSignatures, getSignatureImageUrl } from '../../services/signatureService';
 
 // Import Material UI components at the top of your file
 import {
@@ -46,6 +45,9 @@ import {
   Fab,
   AppBar,
   Toolbar,
+  Checkbox,
+  FormControlLabel,
+  Divider,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -233,25 +235,28 @@ export default function OathJobSeeker() {
   const [qrCodeUrl, setQrCodeUrl] = useState(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [residents, setResidents] = useState([]);
+  const [signatures, setSignatures] = useState([]);
+  const [selectedSignature, setSelectedSignature] = useState(null);
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // Add this after the imports and before the component function
-const { 
-  saveCertificate, 
-  getValidityPeriod,
-  calculateExpirationDate 
-} = useCertificateManager('Oath of Undertaking Job Seeker');
-
+  const { 
+    saveCertificate, 
+    getValidityPeriod,
+    calculateExpirationDate 
+  } = useCertificateManager('Oath of Undertaking Job Seeker');
 
   const [formData, setFormData] = useState({
-  resident_id: null,  // Add this field
-  name: '',
-  address: '',
-  dob: '',
-  age: '',
-  dateIssued: new Date().toISOString().split('T')[0],
-});
+    resident_id: null,  // Add this field
+    name: '',
+    address: '',
+    dob: '',
+    age: '',
+    dateIssued: new Date().toISOString().split('T')[0],
+    use_signature: false, // Add e-signature field
+    signature_id: null,   // Add signature ID field
+  });
 
   // ---------- HELPERS ----------
   function formatDate(dateString) {
@@ -442,157 +447,194 @@ const {
     }
   }
 
+  // ---------- LOAD SIGNATURES ----------
+  async function loadSignatures() {
+    try {
+      const data = await getSignatures();
+      setSignatures(data);
+    } catch (err) {
+      console.warn('Could not load signatures:', err);
+    }
+  }
+
   useEffect(() => {
     loadResidents();
+    loadSignatures();
   }, []);
   
   async function loadRecords() {
-  try {
-    const res = await fetch(`${apiBase}/oath-job`, { headers: getAuthHeaders() });
-    const data = await res.json();
-    setRecords(
-      Array.isArray(data)
-        ? data.map((r) => ({
-            id: r.id,
-            // Make sure to include resident_id from the API response
-            resident_id: r.resident_id || null,
-            name: r.full_name,
-            address: r.address,
-            dob: r.dob?.slice(0, 10) || '',
-            age: String(r.age ?? ''),
-            dateIssued: r.date_issued?.slice(0, 10) || '',
-            dateCreated: r.date_created || null,
-            transaction_number: r.transaction_number || generateTransactionNumber(),
-          }))
-        : []
-    );
-  } catch (e) {
-    console.error('loadRecords error', e);
+    try {
+      const res = await fetch(`${apiBase}/oath-job`, { headers: getAuthHeaders() });
+      const data = await res.json();
+      setRecords(
+        Array.isArray(data)
+          ? data.map((r) => ({
+              id: r.id,
+              // Make sure to include resident_id from the API response
+              resident_id: r.resident_id || null,
+              name: r.full_name,
+              address: r.address,
+              dob: r.dob?.slice(0, 10) || '',
+              age: r.age || calculateAge(r.dob?.slice(0, 10)), // Calculate age if not provided
+              dateIssued: r.date_issued?.slice(0, 10) || '',
+              dateCreated: r.date_created || null,
+              transaction_number: r.transaction_number || generateTransactionNumber(),
+              use_signature: Boolean(r.use_signature),
+              signature_id: r.signature_id || null,
+              official_name: r.official_name || null,
+              designation: r.designation || null,
+              signature_path: r.signature_path || null,
+            }))
+          : []
+      );
+    } catch (e) {
+      console.error('loadRecords error', e);
+    }
   }
-}
 
   useEffect(() => {
     loadRecords();
   }, []);
 
   function toServerPayload(data) {
-  return {
-    resident_id: data.resident_id || null,  // This should already be correct
-    full_name: data.name,
-    age: data.age ? Number(data.age) : null,
-    address: data.address || null,
-    date_issued: data.dateIssued,
-    transaction_number: data.transaction_number,
-  };
-}
+    return {
+      resident_id: data.resident_id || null,
+      full_name: data.name,
+      age: data.age ? Number(data.age) : null,
+      address: data.address || null,
+      date_issued: data.dateIssued,
+      transaction_number: data.transaction_number,
+      use_signature: data.use_signature ? 1 : 0,
+      signature_id: data.use_signature && data.signature_id ? data.signature_id : null,
+    };
+  }
 
   // Update the handleCreate function
-async function handleCreate() {
-  try {
-    // Generate a transaction number for new certificates
-    const transactionNumber = generateTransactionNumber();
-    const validityPeriod = getValidityPeriod('Oath of Undertaking Job Seeker');
-    const updatedFormData = {
-      ...formData,
-      transaction_number: transactionNumber,
-      dateCreated: new Date().toISOString(), // Add current timestamp
-      validity_period: validityPeriod, // Add validity period
-    };
+  async function handleCreate() {
+    try {
+      // Generate a transaction number for new certificates
+      const transactionNumber = generateTransactionNumber();
+      const validityPeriod = getValidityPeriod('Oath of Undertaking Job Seeker');
+      const updatedFormData = {
+        ...formData,
+        transaction_number: transactionNumber,
+        dateCreated: new Date().toISOString(), // Add current timestamp
+        validity_period: validityPeriod, // Add validity period
+      };
 
-    const res = await fetch(`${apiBase}/oath-job`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(toServerPayload(updatedFormData)),
-    });
-    if (!res.ok) throw new Error('Create failed');
-    const created = await res.json();
-    const newRec = {
-      ...updatedFormData,
-      id: created.id,
-    };
-    setRecords([newRec, ...records]);
-    setSelectedRecord(newRec);
-    storeCertificateData(newRec);
-    
-    // Save to certificates table using the hook
-    await saveCertificate({
-      resident_id: newRec.resident_id,
-      full_name: newRec.name,
-      certificate_type: 'Oath of Undertaking Job Seeker',
-      request_reason: 'Job Application', // Explicitly set the reason
-      validity_period: newRec.validity_period,
-      date_issued: newRec.dateIssued,
-      reference_id: created.id, // Add reference to the oath record
-    }, true);
-    
-    resetForm();
-    setActiveTab('records');
-  } catch (e) {
-    console.error(e);
-    alert('Failed to create record');
+      const res = await fetch(`${apiBase}/oath-job`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(toServerPayload(updatedFormData)),
+      });
+      if (!res.ok) throw new Error('Create failed');
+      const created = await res.json();
+      const newRec = {
+        ...updatedFormData,
+        id: created.id,
+        official_name: created.official_name,
+        designation: created.designation,
+        signature_path: created.signature_path,
+      };
+      setRecords([newRec, ...records]);
+      setSelectedRecord(newRec);
+      storeCertificateData(newRec);
+      
+      // Save to certificates table using the hook
+      await saveCertificate({
+        resident_id: newRec.resident_id,
+        full_name: newRec.name,
+        certificate_type: 'Oath of Undertaking Job Seeker',
+        request_reason: 'Job Application', // Explicitly set the reason
+        validity_period: newRec.validity_period,
+        date_issued: newRec.dateIssued,
+        reference_id: created.id, // Add reference to the oath record
+      }, true);
+      
+      resetForm();
+      setActiveTab('records');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to create record');
+    }
   }
-}
 
-// Update the handleUpdate function
-async function handleUpdate() {
-  try {
-    const validityPeriod = getValidityPeriod('Oath of Undertaking Job Seeker');
-    const updatedFormData = {
-      ...formData,
-      validity_period: validityPeriod, // Add validity period
-    };
-    
-    const res = await fetch(`${apiBase}/oath-job/${editingId}`, {
-      method: 'PUT',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(toServerPayload(updatedFormData)),
-    });
-    if (!res.ok) throw new Error('Update failed');
-    const updatedData = await res.json();
-    // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
-    const updatedRec = { 
-      ...updatedData,
-      name: updatedData.full_name,
-      dateIssued: updatedData.date_issued?.split('T')[0] || '',
-      validity_period: validityPeriod
-    };
-    // Remove old record and add new one
-    setRecords([updatedRec, ...records.filter((r) => r.id !== editingId)]);
-    setSelectedRecord(updatedRec);
-    storeCertificateData(updatedRec);
-    
-    // Save to certificates table using the hook
-    await saveCertificate({
-      resident_id: updatedRec.resident_id,
-      full_name: updatedRec.name,
-      certificate_type: 'Oath of Undertaking Job Seeker',
-      request_reason: 'Job Application', // Explicitly set the reason
-      validity_period: updatedRec.validity_period,
-      date_issued: updatedRec.dateIssued,
-      reference_id: editingId, // Add reference to the oath record
-    }, false);
-    
-    resetForm();
-    setActiveTab('records');
-  } catch (e) {
-    console.error(e);
-    alert('Failed to update record');
+  // Update the handleUpdate function
+  async function handleUpdate() {
+    try {
+      const validityPeriod = getValidityPeriod('Oath of Undertaking Job Seeker');
+      const updatedFormData = {
+        ...formData,
+        validity_period: validityPeriod, // Add validity period
+      };
+      
+      const res = await fetch(`${apiBase}/oath-job/${editingId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(toServerPayload(updatedFormData)),
+      });
+      if (!res.ok) throw new Error('Update failed');
+      const updatedData = await res.json();
+      // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
+      const updatedRec = { 
+        ...updatedData,
+        name: updatedData.full_name,
+        dateIssued: updatedData.date_issued?.split('T')[0] || '',
+        validity_period: validityPeriod,
+        use_signature: Boolean(updatedData.use_signature),
+        signature_id: updatedData.signature_id,
+        official_name: updatedData.official_name,
+        designation: updatedData.designation,
+        signature_path: updatedData.signature_path,
+      };
+      // Remove old record and add new one
+      setRecords([updatedRec, ...records.filter((r) => r.id !== editingId)]);
+      setSelectedRecord(updatedRec);
+      storeCertificateData(updatedRec);
+      
+      // Save to certificates table using the hook
+      await saveCertificate({
+        resident_id: updatedRec.resident_id,
+        full_name: updatedRec.name,
+        certificate_type: 'Oath of Undertaking Job Seeker',
+        request_reason: 'Job Application', // Explicitly set the reason
+        validity_period: updatedRec.validity_period,
+        date_issued: updatedRec.dateIssued,
+        reference_id: editingId, // Add reference to the oath record
+      }, false);
+      
+      resetForm();
+      setActiveTab('records');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to update record');
+    }
   }
-}
+
   function handleEdit(record) {
-  setFormData({ 
-    ...record,
-    // Make sure we're preserving the resident_id
-    resident_id: record.resident_id || null,
-    // Ensure date fields are properly formatted
-    dob: record.dob || '',
-    age: record.age || '',
-    dateIssued: record.dateIssued || new Date().toISOString().split('T')[0],
-  });
-  setEditingId(record.id);
-  setIsFormOpen(true);
-  setActiveTab('form');
-}
+    setFormData({ 
+      ...record,
+      // Make sure we're preserving the resident_id
+      resident_id: record.resident_id || null,
+      // Ensure date fields are properly formatted
+      dob: record.dob || '',
+      age: record.age || calculateAge(record.dob), // Calculate age from DOB if not provided
+      dateIssued: record.dateIssued || new Date().toISOString().split('T')[0],
+      use_signature: Boolean(record.use_signature),
+      signature_id: record.signature_id || null,
+    });
+    setEditingId(record.id);
+    setIsFormOpen(true);
+    setActiveTab('form');
+    
+    // Set selected signature if exists
+    if (record.signature_id) {
+      const sig = signatures.find((s) => s.signature_id === record.signature_id);
+      setSelectedSignature(sig || null);
+    } else {
+      setSelectedSignature(null);
+    }
+  }
 
   async function handleDelete(id) {
     if (!window.confirm('Delete this record?')) return;
@@ -624,21 +666,32 @@ async function handleUpdate() {
     setEditingId(record.id);
     setIsFormOpen(true);
     setActiveTab('form');
+    
+    // Set selected signature if exists
+    if (record.signature_id) {
+      const sig = signatures.find((s) => s.signature_id === record.signature_id);
+      setSelectedSignature(sig || null);
+    } else {
+      setSelectedSignature(null);
+    }
   }
 
   function resetForm() {
-  setFormData({
-    resident_id: null, // Add this field
-    name: '',
-    address: '',
-    dob: '',
-    age: '',
-    dateIssued: new Date().toISOString().split('T')[0],
-  });
-  setEditingId(null);
-  setIsFormOpen(false);
-  setSelectedRecord(null);
-}
+    setFormData({
+      resident_id: null,
+      name: '',
+      address: '',
+      dob: '',
+      age: '',
+      dateIssued: new Date().toISOString().split('T')[0],
+      use_signature: false,
+      signature_id: null,
+    });
+    setEditingId(null);
+    setIsFormOpen(false);
+    setSelectedRecord(null);
+    setSelectedSignature(null);
+  }
 
   function handleSubmit() {
     if (editingId) handleUpdate();
@@ -647,10 +700,35 @@ async function handleUpdate() {
 
   // ---------- QR STORAGE & GENERATION ----------
   const display = useMemo(() => {
-    if (editingId || isFormOpen) return formData;
-    if (selectedRecord) return selectedRecord;
-    return formData;
-  }, [editingId, isFormOpen, selectedRecord, formData]);
+    let data = null;
+    if (editingId || isFormOpen) {
+      data = formData;
+    } else if (selectedRecord) {
+      data = selectedRecord;
+    } else {
+      data = formData;
+    }
+
+    // If signature is enabled, ensure signature data is available
+    if (
+      data &&
+      data.use_signature &&
+      data.signature_id &&
+      !data.signature_path
+    ) {
+      const sig = signatures.find((s) => s.signature_id === data.signature_id);
+      if (sig) {
+        return {
+          ...data,
+          official_name: sig.official_name,
+          designation: sig.designation,
+          signature_path: sig.signature_path,
+        };
+      }
+    }
+
+    return data;
+  }, [editingId, isFormOpen, selectedRecord, formData, signatures]);
 
   useEffect(() => {
     const generateQRCode = async () => {
@@ -914,7 +992,6 @@ async function handleUpdate() {
       ),
     [records, searchTerm]
   );
-
 
   // ---------- JSX ----------
   return (
@@ -1295,7 +1372,7 @@ async function handleUpdate() {
                   <div
                     style={{
                       position: 'absolute',
-                      bottom: '200px',
+                      bottom: '230px',
                       left: '95px',
                       width: '610px',
                       fontFamily: '"Times New Roman", serif',
@@ -1403,7 +1480,7 @@ async function handleUpdate() {
                   <div
                     style={{
                       position: 'absolute',
-                      bottom: '130px',
+                      bottom: '150px',
                       right: '30px',
                       width: '320px',
                       textAlign: 'center',
@@ -1433,7 +1510,7 @@ async function handleUpdate() {
                   <div
                     style={{
                       position: 'absolute',
-                      bottom: '40px',
+                      bottom: '50px',
                       right: '28px',
                       width: '320px',
                       textAlign: 'center',
@@ -1442,33 +1519,91 @@ async function handleUpdate() {
                       fontWeight: 'bold',
                     }}
                   >
-                    <div
-                      style={{
-                        fontWeight: 'bold',
-                        fontStyle: 'italic',
-                        marginBottom: '3px',
-                      }}
-                    >
-                      Roselyn Pestilos Anore
-                    </div>
-                    <div
-                      style={{
-                        borderTop: '1px solid #000',
-                        width: '80%',
-                        margin: '0 auto 6px auto',
-                      }}
-                    />
-                    <div
-                      style={{
-                        marginTop: '-4px',
-                        textAlign: 'center',
-                        fontFamily: '"Times New Roman", serif',
-                        fontSize: '12pt',
-                      }}
-                    >
-                      <div>Barangay Secretary</div>
-                      <div>(Barangay Official/Designation/Position)</div>
-                    </div>
+                    {/* E-Signature Section */}
+                    {display.use_signature && display.signature_path ? (
+                      <>
+                        <div
+                          style={{
+                            marginBottom: '-20px',
+                            height: '60px',
+                            display: 'flex',
+                            alignItems: 'flex-end',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <img
+                            src={getSignatureImageUrl(display.signature_path)}
+                            alt="Signature"
+                            style={{
+                              maxWidth: '180px',
+                              maxHeight: '60px',
+                              objectFit: 'contain',
+                              display: 'block',
+                            }}
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                        <div
+                          style={{
+                            fontWeight: 'bold',
+                            fontStyle: 'italic',
+                            marginBottom: '3px',
+                          }}
+                        >
+                          Roselyn Pestilos Anore
+                        </div>
+                        <div
+                          style={{
+                            borderTop: '1px solid #000',
+                            width: '80%',
+                            margin: '0 auto 6px auto',
+                          }}
+                        />
+                        <div
+                          style={{
+                            marginTop: '-4px',
+                            textAlign: 'center',
+                            fontFamily: '"Times New Roman", serif',
+                            fontSize: '12pt',
+                          }}
+                        >
+                          <div>Barangay Secretary</div>
+                          <div>(Barangay Official/Designation/Position)</div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div
+                          style={{
+                            fontWeight: 'bold',
+                            fontStyle: 'italic',
+                            marginBottom: '3px',
+                          }}
+                        >
+                          Roselyn Pestilos Anore
+                        </div>
+                        <div
+                          style={{
+                            borderTop: '1px solid #000',
+                            width: '80%',
+                            margin: '0 auto 6px auto',
+                          }}
+                        />
+                        <div
+                          style={{
+                            marginTop: '-4px',
+                            textAlign: 'center',
+                            fontFamily: '"Times New Roman", serif',
+                            fontSize: '12pt',
+                          }}
+                        >
+                          <div>Barangay Secretary</div>
+                          <div>(Barangay Official/Designation/Position)</div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </Box>
@@ -1534,43 +1669,43 @@ async function handleUpdate() {
                 <Box sx={{ flex: 1, overflow: "auto", p: 3 }}>
                   <Stack spacing={3}>
                     <Autocomplete
-  options={residents}
-  getOptionLabel={(option) => option.full_name || ''}
-  // Use resident_id instead of name for the value
-  value={residents.find((r) => r.resident_id === formData.resident_id) || null}
-  onChange={(e, value) => {
-    console.log('Selected resident object:', value);
-    if (value) {
-      setFormData({
-        ...formData,
-        resident_id: value.resident_id, // Use resident_id instead of id
-        name: value.full_name,
-        address: value.address || '',
-        dob: value.dob?.slice(0, 10) || '',
-        age: calculateAge(value.dob?.slice(0, 10)),
-      });
-    } else {
-      setFormData({
-        ...formData,
-        resident_id: null,
-        name: '',
-        address: '',
-        dob: '',
-        age: '',
-      });
-    }
-  }}
-  renderInput={(params) => (
-    <TextField
-      {...params}
-      label="Full Name *"
-      variant="outlined"
-      size="small"
-      fullWidth
-      required
-    />
-  )}
-/>
+                      options={residents}
+                      getOptionLabel={(option) => option.full_name || ''}
+                      // Use resident_id instead of name for the value
+                      value={residents.find((r) => r.resident_id === formData.resident_id) || null}
+                      onChange={(e, value) => {
+                        console.log('Selected resident object:', value);
+                        if (value) {
+                          setFormData({
+                            ...formData,
+                            resident_id: value.resident_id, // Use resident_id instead of id
+                            name: value.full_name,
+                            address: value.address || '',
+                            dob: value.dob?.slice(0, 10) || '',
+                            age: calculateAge(value.dob?.slice(0, 10)),
+                          });
+                        } else {
+                          setFormData({
+                            ...formData,
+                            resident_id: null,
+                            name: '',
+                            address: '',
+                            dob: '',
+                            age: '',
+                          });
+                        }
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Full Name *"
+                          variant="outlined"
+                          size="small"
+                          fullWidth
+                          required
+                        />
+                      )}
+                    />
 
                     <TextField
                       label="Address *"
@@ -1632,6 +1767,61 @@ async function handleUpdate() {
                       }
                       required
                     />
+
+                    <Divider sx={{ my: 2 }} />
+
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={formData.use_signature || false}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setFormData({
+                              ...formData,
+                              use_signature: checked,
+                              signature_id:
+                                checked && selectedSignature
+                                  ? selectedSignature.signature_id
+                                  : null,
+                            });
+                            if (!checked) {
+                              setSelectedSignature(null);
+                            }
+                          }}
+                          color="primary"
+                        />
+                      }
+                      label="Add E-Signature"
+                    />
+
+                    {formData.use_signature && (
+                      <Autocomplete
+                        options={signatures}
+                        getOptionLabel={(opt) =>
+                          `${opt.official_name} - ${opt.designation}`
+                        }
+                        value={selectedSignature}
+                        onChange={(e, newValue) => {
+                          setSelectedSignature(newValue);
+                          setFormData({
+                            ...formData,
+                            signature_id: newValue
+                              ? newValue.signature_id
+                              : null,
+                          });
+                        }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Select Signature"
+                            variant="outlined"
+                            fullWidth
+                            size="small"
+                            required
+                          />
+                        )}
+                      />
+                    )}
 
                     <Box sx={{ display: 'flex', gap: 1, pt: 1 }}>
                       <Button
@@ -1724,6 +1914,15 @@ async function handleUpdate() {
                                   <Typography variant="caption" color="text.secondary">
                                     Issued: {formatDateDisplay(record.dateIssued)}
                                   </Typography>
+                                  {record.use_signature && (
+                                    <Chip 
+                                      icon={<ArticleIcon />}
+                                      label="E-Signed" 
+                                      size="small" 
+                                      color="success" 
+                                      variant="outlined" 
+                                    />
+                                  )}
                                 </Box>
                               </Box>
                               <Box sx={{ display: "flex", gap: 0.5 }}>
@@ -1872,6 +2071,24 @@ async function handleUpdate() {
                   : 'N/A'}
               </Typography>
             </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                E-Signature:
+              </Typography>
+              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                {display.use_signature ? 'Enabled' : 'Disabled'}
+              </Typography>
+            </Grid>
+            {display.use_signature && (
+              <Grid item xs={12} md={6}>
+                <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                  Signed By:
+                </Typography>
+                <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                  {display.official_name || 'N/A'}
+                </Typography>
+              </Grid>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions>
@@ -1952,6 +2169,11 @@ function OathJobVerification() {
             dateIssued: data.date_issued,
             dateCreated: data.date_created,
             transaction_number: data.transaction_number,
+            use_signature: Boolean(data.use_signature),
+            signature_id: data.signature_id,
+            official_name: data.official_name,
+            designation: data.designation,
+            signature_path: data.signature_path,
           });
         } else {
           setError('Certificate not found.');
@@ -2110,7 +2332,7 @@ function OathJobVerification() {
               left: '80px',
               width: '640px',
               fontFamily: '"Times New Roman", serif',
-              fontSize: '12pt',
+              fontSize: '10pt',
               lineHeight: 1.6,
               textAlign: 'justify',
             }}
@@ -2124,6 +2346,7 @@ function OathJobVerification() {
                 fontWeight: 'bold',
                 textAlign: 'center',
                 fontStyle: 'italic',
+               
               }}
             >
               {record.name}
@@ -2177,7 +2400,7 @@ function OathJobVerification() {
               left: '100px',
               width: '610px',
               fontFamily: '"Times New Roman", serif',
-              fontSize: '12pt',
+              fontSize: '10pt',
               lineHeight: 1.2,
               textAlign: 'justify',
             }}
@@ -2342,24 +2565,82 @@ function OathJobVerification() {
               fontWeight: 'bold',
             }}
           >
-            <div
-              style={{
-                fontWeight: 'bold',
-                fontStyle: 'italic',
-                marginBottom: '3px',
-              }}
-            >
-              Roselyn Pestilos Anore
-            </div>
-            <div
-              style={{
-                borderTop: '1px solid #000',
-                width: '80%',
-                margin: '0 auto 6px auto',
-              }}
-            />
-            <div>Barangay Secretary</div>
-            <div>(Barangay Official/Designation/Position)</div>
+            {/* E-Signature Section */}
+            {record.use_signature && record.signature_path ? (
+              <>
+                <div
+                  style={{
+                    marginBottom: '5px',
+                    height: '60px',
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <img
+                    src={getSignatureImageUrl(record.signature_path)}
+                    alt="Signature"
+                    style={{
+                      maxWidth: '180px',
+                      maxHeight: '60px',
+                      objectFit: 'contain',
+                      display: 'block',
+                    }}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
+                </div>
+                <div
+                  style={{
+                    fontWeight: 'bold',
+                    fontStyle: 'italic',
+                    marginBottom: '3px',
+                  }}
+                >
+                   Roselyn Pestilos Anore
+                </div>
+                <div
+                  style={{
+                    borderTop: '1px solid #000',
+                    width: '80%',
+                    margin: '0 auto 6px auto',
+                  }}
+                />
+                <div
+                  style={{
+                    marginTop: '-4px',
+                    textAlign: 'center',
+                    fontFamily: '"Times New Roman", serif',
+                    fontSize: '12pt',
+                  }}
+                >
+                  <div>Barangay Secretary</div>
+                  <div>(Barangay Official/Designation/Position)</div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div
+                  style={{
+                    fontWeight: 'bold',
+                    fontStyle: 'italic',
+                    marginBottom: '3px',
+                  }}
+                >
+                  Roselyn Pestilos Anore
+                </div>
+                <div
+                  style={{
+                    borderTop: '1px solid #000',
+                    width: '80%',
+                    margin: '0 auto 6px auto',
+                  }}
+                />
+                <div>Barangay Secretary</div>
+                <div>(Barangay Official/Designation/Position)</div>
+              </>
+            )}
           </div>
         </div>
       </div>

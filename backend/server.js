@@ -34,6 +34,7 @@ const oathJobRoutes = require('./routes/oath-job.routes');
 const soloParentRoutes = require('./routes/solo-parent.routes');
 const verificationRoutes = require('./routes/verification.routes');
 const signatureRoutes = require('./routes/signature.routes');
+const reportsRoutes = require('./routes/reports.routes');
 
 /**
  * ROOT
@@ -70,6 +71,8 @@ app.use('/request-records', requestRecordsRoutes);
 app.use('/oath-job', oathJobRoutes);
 app.use('/solo-parent-records', soloParentRoutes);
 app.use('/api/signature', signatureRoutes);
+app.use('/api/reports', reportsRoutes);
+
 
 // Start server
 app.listen(PORT, () => {

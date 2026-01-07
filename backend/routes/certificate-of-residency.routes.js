@@ -11,8 +11,14 @@ router.use(verifyToken);
 // GET all active certificate of residency records
 router.get('/', async (req, res) => {
   try {
+    // Join with official_signature to get signature data
     const [rows] = await pool.query(
-      `SELECT * FROM certificate_of_residency WHERE is_active = TRUE ORDER BY certificate_of_residency_id DESC`
+      `SELECT cor.*, 
+              sig.signature_id, sig.official_name, sig.designation, sig.signature_path
+       FROM certificate_of_residency cor
+       LEFT JOIN official_signature sig ON cor.signature_id = sig.signature_id
+       WHERE cor.is_active = TRUE 
+       ORDER BY cor.date_created DESC, cor.certificate_of_residency_id DESC`
     );
     res.json(rows);
   } catch (err) {
@@ -24,12 +30,18 @@ router.get('/', async (req, res) => {
 // GET all records including historical (for transaction log)
 router.get('/transactions/all', async (req, res) => {
   try {
+    // Get all records including inactive ones for complete transaction history
+    // This shows all transactions including old ones that were edited
     const [rows] = await pool.query(
-      `SELECT * FROM certificate_of_residency ORDER BY date_created DESC, certificate_of_residency_id DESC`
+      `SELECT cor.*, 
+              sig.signature_id, sig.official_name, sig.designation, sig.signature_path
+       FROM certificate_of_residency cor
+       LEFT JOIN official_signature sig ON cor.signature_id = sig.signature_id
+       ORDER BY cor.date_created DESC, cor.certificate_of_residency_id DESC`
     );
     res.json(rows);
   } catch (err) {
-    console.error('Error fetching transaction history:', err);
+    console.error(err);
     res.status(500).json({ error: 'Failed to fetch transaction history' });
   }
 });
@@ -39,7 +51,11 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const [rows] = await pool.query(
-      `SELECT * FROM certificate_of_residency WHERE certificate_of_residency_id = ?`,
+      `SELECT cor.*, 
+              sig.signature_id, sig.official_name, sig.designation, sig.signature_path
+       FROM certificate_of_residency cor
+       LEFT JOIN official_signature sig ON cor.signature_id = sig.signature_id
+       WHERE cor.certificate_of_residency_id = ?`,
       [id]
     );
     if (rows.length === 0)
@@ -67,6 +83,8 @@ router.post('/', async (req, res) => {
       remarks,
       date_issued,
       transaction_number,
+      use_signature, // Added for e-signature
+      signature_id, // Added for e-signature
     } = req.body;
 
     if (!full_name || !address || !request_reason || !date_issued) {
@@ -78,8 +96,8 @@ router.post('/', async (req, res) => {
 
     const [result] = await pool.query(
       `INSERT INTO certificate_of_residency 
-        (resident_id, full_name, address, provincial_address, dob, age, civil_status, contact_no, request_reason, remarks, date_issued, transaction_number)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (resident_id, full_name, address, provincial_address, dob, age, civil_status, contact_no, request_reason, remarks, date_issued, transaction_number, use_signature, signature_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         resident_id,
         full_name,
@@ -93,11 +111,17 @@ router.post('/', async (req, res) => {
         remarks,
         date_issued,
         finalTransactionNumber,
+        use_signature ? 1 : 0,
+        use_signature && signature_id ? signature_id : null,
       ]
     );
 
     const [rows] = await pool.query(
-      `SELECT * FROM certificate_of_residency WHERE certificate_of_residency_id = ?`,
+      `SELECT cor.*, 
+              sig.signature_id, sig.official_name, sig.designation, sig.signature_path
+       FROM certificate_of_residency cor
+       LEFT JOIN official_signature sig ON cor.signature_id = sig.signature_id
+       WHERE cor.certificate_of_residency_id = ?`,
       [result.insertId]
     );
 
@@ -110,12 +134,9 @@ router.post('/', async (req, res) => {
 
 // UPDATE existing certificate of residency
 // When updating, we create a NEW record entry with a new transaction number
-// The old record remains in history (marked as inactive)
+// The old record remains in history (marked as inactive or kept active)
 router.put('/:id', async (req, res) => {
-  const connection = await pool.getConnection();
   try {
-    await connection.beginTransaction();
-
     const { id } = req.params;
     const {
       resident_id,
@@ -129,33 +150,37 @@ router.put('/:id', async (req, res) => {
       request_reason,
       remarks,
       date_issued,
+      transaction_number,
+      use_signature, // Added for e-signature
+      signature_id, // Added for e-signature
     } = req.body;
 
     // Get the existing record
-    const [existing] = await connection.query(
-      'SELECT * FROM certificate_of_residency WHERE certificate_of_residency_id = ?',
+    const [existing] = await pool.query(
+      `SELECT * FROM certificate_of_residency WHERE certificate_of_residency_id = ?`,
       [id]
     );
 
-    if (existing.length === 0) {
-      await connection.rollback();
+    if (existing.length === 0)
       return res.status(404).json({ error: 'Record not found' });
-    }
 
+    const oldRecord = existing[0];
+    
     // Generate a NEW transaction number for the new entry
     const newTransactionNumber = generateTransactionNumberForType('RES');
 
     // Mark the old record as inactive (to preserve it in history)
-    await connection.query(
-      `UPDATE certificate_of_residency SET is_active = FALSE, date_updated = NOW() WHERE certificate_of_residency_id = ?`,
+    await pool.query(
+      `UPDATE certificate_of_residency SET is_active = FALSE WHERE certificate_of_residency_id = ?`,
       [id]
     );
 
     // Create a NEW record entry with the updated data and new transaction number
-    const [result] = await connection.query(
+    // This ensures the transaction log shows a new entry
+    const [result] = await pool.query(
       `INSERT INTO certificate_of_residency 
-        (resident_id, full_name, address, provincial_address, dob, age, civil_status, contact_no, request_reason, remarks, date_issued, transaction_number)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (resident_id, full_name, address, provincial_address, dob, age, civil_status, contact_no, request_reason, remarks, date_issued, transaction_number, use_signature, signature_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         resident_id,
         full_name,
@@ -168,24 +193,26 @@ router.put('/:id', async (req, res) => {
         request_reason,
         remarks,
         date_issued,
-        newTransactionNumber,
+        newTransactionNumber, // New transaction number for the new entry
+        use_signature ? 1 : 0,
+        use_signature && signature_id ? signature_id : null,
       ]
     );
 
     // Get the newly created record
-    const [newRecord] = await connection.query(
-      'SELECT * FROM certificate_of_residency WHERE certificate_of_residency_id = ?',
+    const [newRecord] = await pool.query(
+      `SELECT cor.*, 
+              sig.signature_id, sig.official_name, sig.designation, sig.signature_path
+       FROM certificate_of_residency cor
+       LEFT JOIN official_signature sig ON cor.signature_id = sig.signature_id
+       WHERE cor.certificate_of_residency_id = ?`,
       [result.insertId]
     );
 
-    await connection.commit();
     res.json(newRecord[0]);
   } catch (err) {
-    await connection.rollback();
-    console.error('Error updating certificate of residency record:', err);
+    console.error(err);
     res.status(500).json({ error: 'Failed to update record' });
-  } finally {
-    connection.release();
   }
 });
 
@@ -207,4 +234,3 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
-

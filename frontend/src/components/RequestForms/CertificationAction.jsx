@@ -245,7 +245,7 @@ export default function CertificateOfAction() {
     transaction_number: '',
     is_active: 1,
     date_created: '',
-    use_signature: false,
+    use_signature: false, // Changed from Boolean(false) to just false
     signature_id: null,
   });
 
@@ -338,32 +338,42 @@ export default function CertificateOfAction() {
       const res = await fetch(`${apiBase}/certificate-of-action`, {
         headers: getAuthHeaders(),
       });
+      
+      if (!res.ok) {
+        throw new Error(`Failed to load records: ${res.status}`);
+      }
+      
       const data = await res.json();
+      
+      if (!Array.isArray(data)) {
+        console.warn('API did not return an array:', data);
+        setRecords([]);
+        return;
+      }
+      
       setRecords(
-        Array.isArray(data)
-          ? data.map((r) => ({
-              certificate_of_action_id: r.certificate_of_action_id,
-              resident_id: r.resident_id,
-              complainant_name: r.complainant_name,
-              respondent_name: r.respondent_name,
-              barangay_case_no: r.barangay_case_no,
-              request_reason: r.request_reason,
-              filed_date: r.filed_date ? r.filed_date.split('T')[0] : '',
-              date_issued: r.date_issued ? r.date_issued.split('T')[0] : '',
-              transaction_number:
-                r.transaction_number || generateTransactionNumber(),
-              is_active: r.is_active ?? 1,
-              date_created: r.date_created,
-              use_signature: r.use_signature || false,
-              signature_id: r.signature_id || null,
-              official_name: r.official_name || null,
-              designation: r.designation || null,
-              signature_path: r.signature_path || null,
-            }))
-          : []
+        data.map((r) => ({
+          certificate_of_action_id: r.certificate_of_action_id,
+          resident_id: r.resident_id,
+          complainant_name: r.complainant_name,
+          respondent_name: r.respondent_name,
+          barangay_case_no: r.barangay_case_no,
+          request_reason: r.request_reason,
+          filed_date: r.filed_date ? r.filed_date.split('T')[0] : '',
+          date_issued: r.date_issued ? r.date_issued.split('T')[0] : '',
+          transaction_number: r.transaction_number || generateTransactionNumber(),
+          is_active: r.is_active ?? 1,
+          date_created: r.date_created,
+          use_signature: Boolean(r.use_signature),
+          signature_id: r.signature_id || null,
+          official_name: r.official_name || null,
+          designation: r.designation || null,
+          signature_path: r.signature_path || null,
+        }))
       );
     } catch (e) {
       console.error('Failed to load certificate_of_action records', e);
+      alert('Failed to load records. Please try again later.');
     }
   }
 
@@ -453,9 +463,12 @@ export default function CertificateOfAction() {
       date_issued: data.date_issued || null,
       transaction_number: data.transaction_number,
       is_active: data.is_active ?? 1,
-      use_signature: data.use_signature ? 1 : 0,
+      use_signature: data.use_signature ? 1 : 0, // Ensure this is explicitly converted to 0 or 1
       signature_id:
         data.use_signature && data.signature_id ? data.signature_id : null,
+      // Add these missing fields
+      validity_period: data.validity_period,
+      date_created: data.date_created || new Date().toISOString(),
     };
   }
 
@@ -470,16 +483,27 @@ export default function CertificateOfAction() {
         date_created: new Date().toISOString(),
         validity_period: validityPeriod,
       };
+      
+      console.log('Sending payload:', toServerPayload(updated)); // Debug log
+      
       const res = await fetch(`${apiBase}/certificate-of-action`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(toServerPayload(updated)),
       });
-      if (!res.ok) throw new Error('Create failed');
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Server response:', errorText);
+        throw new Error(`Create failed: ${res.status} - ${errorText}`);
+      }
+      
       const created = await res.json();
       const newRec = {
         ...updated,
-        certificate_of_action_id: created.certificate_of_action_id,
+        certificate_of_action_id: created.certificate_of_action_id || `temp-${Date.now()}`,
+        // Include any other fields returned by the API
+        ...created,
       };
       setRecords([newRec, ...records]);
       setSelectedRecord(newRec);
@@ -495,9 +519,13 @@ export default function CertificateOfAction() {
       storeCertificateData(newRec);
       setIsFormOpen(false);
       setActiveTab('form');
+      resetForm(); // Explicitly reset the form
     } catch (e) {
       console.error(e);
-      alert('Failed to create record');
+      const errorMessage = e.response?.data?.message || e.message || 'Unknown error occurred';
+      alert(`Failed to create record: ${errorMessage}`);
+      // Don't reset form on error so user can retry
+      return;
     } finally {
       setIsLoading(false);
     }
@@ -511,12 +539,21 @@ export default function CertificateOfAction() {
         ...formData,
         validity_period: validityPeriod,
       };
+      
+      console.log('Sending update payload:', toServerPayload(updated)); // Debug log
+      
       const res = await fetch(`${apiBase}/certificate-of-action/${editingId}`, {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify(toServerPayload(updated)),
       });
-      if (!res.ok) throw new Error('Update failed');
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Server response:', errorText);
+        throw new Error(`Update failed: ${res.status} - ${errorText}`);
+      }
+      
       const updatedData = await res.json();
       const updatedRec = {
         ...updatedData,
@@ -539,9 +576,13 @@ export default function CertificateOfAction() {
       storeCertificateData(updatedRec);
       setIsFormOpen(false);
       setActiveTab('form');
+      resetForm(); // Explicitly reset the form
     } catch (e) {
       console.error(e);
-      alert('Failed to update record');
+      const errorMessage = e.response?.data?.message || e.message || 'Unknown error occurred';
+      alert(`Failed to update record: ${errorMessage}`);
+      // Don't reset form on error so user can retry
+      return;
     } finally {
       setIsLoading(false);
     }
@@ -550,9 +591,10 @@ export default function CertificateOfAction() {
   function handleEdit(record) {
     setFormData({
       ...record,
-      filed_date: record.filed_date || record.filedDate || '',
-      date_issued: record.date_issued || record.dateIssued || '',
-      use_signature: record.use_signature || false,
+      // Standardize to single field names
+      filed_date: record.filed_date || '',
+      date_issued: record.date_issued || '',
+      use_signature: Boolean(record.use_signature),
       signature_id: record.signature_id || null,
     });
     setEditingId(record.certificate_of_action_id);
@@ -616,7 +658,7 @@ export default function CertificateOfAction() {
       transaction_number: '',
       is_active: 1,
       date_created: '',
-      use_signature: false,
+      use_signature: false, // Changed from Boolean(false) to just false
       signature_id: null,
     });
     setEditingId(null);
@@ -626,6 +668,23 @@ export default function CertificateOfAction() {
   }
 
   function handleSubmit() {
+    // Validate required fields
+    if (!formData.complainant_name || !formData.respondent_name || 
+        !formData.barangay_case_no || !formData.request_reason) {
+      alert('Please fill in all required fields');
+      return;
+    }
+    
+    if (!formData.filed_date || !formData.date_issued) {
+      alert('Please select both filed date and issued date');
+      return;
+    }
+    
+    if (formData.use_signature && !formData.signature_id) {
+      alert('Please select a signature when e-signature is enabled');
+      return;
+    }
+    
     setPendingAction(() => (editingId ? handleUpdate : handleCreate));
     setShowConfirmDialog(true);
   }

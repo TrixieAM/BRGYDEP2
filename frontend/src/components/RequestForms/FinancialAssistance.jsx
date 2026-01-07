@@ -4,6 +4,7 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from '../../contexts/AuthContext';
+import { getSignatures, getSignatureImageUrl } from '../../services/signatureService';
 
 import CaloocanLogo from "../../assets/CaloocanLogo.png";
 import Logo145 from "../../assets/Logo145.png";
@@ -41,6 +42,9 @@ import {
   Fab,
   AppBar,
   Toolbar,
+  FormControlLabel,
+  Checkbox,
+  Divider,
 } from "@mui/material";
 
 import {
@@ -229,6 +233,9 @@ export default function FinancialAssistance() {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(0.75); // Default zoom level
+  const [signatures, setSignatures] = useState([]);
+  const [selectedSecretarySignature, setSelectedSecretarySignature] = useState(null);
+  const [selectedCaptainSignature, setSelectedCaptainSignature] = useState(null);
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -252,6 +259,9 @@ const {
     transaction_number: '', // New field for transaction number
     is_active: 1,
     date_created: '',
+    use_signature: false, // Add e-signature field
+    secretary_signature_id: null, // Add secretary signature ID field
+    captain_signature_id: null, // Add captain signature ID field
   });
 
   // Helper function to format date consistently without timezone issues
@@ -394,9 +404,20 @@ const {
     }
   }
 
+  // ---------- LOAD SIGNATURES ----------
+  async function loadSignatures() {
+    try {
+      const data = await getSignatures();
+      setSignatures(data);
+    } catch (err) {
+      console.warn('Could not load signatures:', err);
+    }
+  }
+
   useEffect(() => {
     loadResidents();
     loadRecords();
+    loadSignatures();
   }, []);
 
   async function loadRecords() {
@@ -422,6 +443,15 @@ const {
               transaction_number:
                 r.transaction_number || generateTransactionNumber(), // Generate if missing
               is_active: r.is_active ?? 1,
+              use_signature: Boolean(r.use_signature),
+              secretary_signature_id: r.secretary_signature_id || null,
+              captain_signature_id: r.captain_signature_id || null,
+              sec_official_name: r.sec_official_name || null,
+              sec_designation: r.sec_designation || null,
+              sec_signature_path: r.sec_signature_path || null,
+              cap_official_name: r.cap_official_name || null,
+              cap_designation: r.cap_designation || null,
+              cap_signature_path: r.cap_signature_path || null,
             }))
           : []
       );
@@ -440,10 +470,52 @@ const {
   }
 
   const display = useMemo(() => {
-    if (editingId || isFormOpen) return formData;
-    if (selectedRecord) return selectedRecord;
-    return formData;
-  }, [editingId, isFormOpen, selectedRecord, formData]);
+    let data = null;
+    if (editingId || isFormOpen) {
+      data = formData;
+    } else if (selectedRecord) {
+      data = selectedRecord;
+    } else {
+      data = formData;
+    }
+
+    // If signature is enabled, ensure signature data is available
+    if (
+      data &&
+      data.use_signature &&
+      data.secretary_signature_id &&
+      !data.sec_signature_path
+    ) {
+      const secSig = signatures.find((s) => s.signature_id === data.secretary_signature_id);
+      if (secSig) {
+        data = {
+          ...data,
+          sec_official_name: secSig.official_name,
+          sec_designation: secSig.designation,
+          sec_signature_path: secSig.signature_path,
+        };
+      }
+    }
+
+    if (
+      data &&
+      data.use_signature &&
+      data.captain_signature_id &&
+      !data.cap_signature_path
+    ) {
+      const capSig = signatures.find((s) => s.signature_id === data.captain_signature_id);
+      if (capSig) {
+        data = {
+          ...data,
+          cap_official_name: capSig.official_name,
+          cap_designation: capSig.designation,
+          cap_signature_path: capSig.signature_path,
+        };
+      }
+    }
+
+    return data;
+  }, [editingId, isFormOpen, selectedRecord, formData, signatures]);
 
   // Generate QR code with URL for PDF download
   useEffect(() => {
@@ -508,6 +580,9 @@ const {
       date_issued: data.date_issued,
       transaction_number: data.transaction_number, // Include transaction number
       is_active: data.is_active ?? 1,
+      use_signature: data.use_signature ? 1 : 0,
+      secretary_signature_id: data.use_signature && data.secretary_signature_id ? data.secretary_signature_id : null,
+      captain_signature_id: data.use_signature && data.captain_signature_id ? data.captain_signature_id : null,
     };
   }
 
@@ -531,7 +606,16 @@ async function handleCreate() {
     });
     if (!res.ok) throw new Error('Create failed');
     const created = await res.json();
-    const newRec = { ...updatedFormData, financial_assistance_id: created.financial_assistance_id };
+    const newRec = { 
+      ...updatedFormData, 
+      financial_assistance_id: created.financial_assistance_id,
+      sec_official_name: created.sec_official_name,
+      sec_designation: created.sec_designation,
+      sec_signature_path: created.sec_signature_path,
+      cap_official_name: created.cap_official_name,
+      cap_designation: created.cap_designation,
+      cap_signature_path: created.cap_signature_path,
+    };
 
     setRecords([newRec, ...records]);
     setSelectedRecord(newRec);
@@ -580,7 +664,16 @@ async function handleUpdate() {
       date_issued: updatedData.date_issued ? updatedData.date_issued.split('T')[0] : '',
       date_created: updatedData.date_created,
       transaction_number: updatedData.transaction_number,
-      validity_period: validityPeriod
+      validity_period: validityPeriod,
+      use_signature: Boolean(updatedData.use_signature),
+      secretary_signature_id: updatedData.secretary_signature_id,
+      captain_signature_id: updatedData.captain_signature_id,
+      sec_official_name: updatedData.sec_official_name,
+      sec_designation: updatedData.sec_designation,
+      sec_signature_path: updatedData.sec_signature_path,
+      cap_official_name: updatedData.cap_official_name,
+      cap_designation: updatedData.cap_designation,
+      cap_signature_path: updatedData.cap_signature_path,
     };
     // Remove old record and add new one
     setRecords([updated, ...records.filter((r) => r.financial_assistance_id !== editingId)]);
@@ -601,10 +694,30 @@ async function handleUpdate() {
 }
 
   function handleEdit(record) {
-    setFormData({ ...record });
+    setFormData({
+      ...record,
+      use_signature: Boolean(record.use_signature),
+      secretary_signature_id: record.secretary_signature_id || null,
+      captain_signature_id: record.captain_signature_id || null,
+    });
     setEditingId(record.financial_assistance_id);
     setIsFormOpen(true);
     setActiveTab('form');
+    
+    // Set selected signatures if they exist
+    if (record.secretary_signature_id) {
+      const secSig = signatures.find((s) => s.signature_id === record.secretary_signature_id);
+      setSelectedSecretarySignature(secSig || null);
+    } else {
+      setSelectedSecretarySignature(null);
+    }
+    
+    if (record.captain_signature_id) {
+      const capSig = signatures.find((s) => s.signature_id === record.captain_signature_id);
+      setSelectedCaptainSignature(capSig || null);
+    } else {
+      setSelectedCaptainSignature(null);
+    }
   }
 
   async function handleDelete(id) {
@@ -639,6 +752,21 @@ async function handleUpdate() {
     setEditingId(record.financial_assistance_id); // To indicate viewing a specific record
     setIsFormOpen(true); // Keep the form open with the record details
     setActiveTab('form');
+    
+    // Set selected signatures if they exist
+    if (record.secretary_signature_id) {
+      const secSig = signatures.find((s) => s.signature_id === record.secretary_signature_id);
+      setSelectedSecretarySignature(secSig || null);
+    } else {
+      setSelectedSecretarySignature(null);
+    }
+    
+    if (record.captain_signature_id) {
+      const capSig = signatures.find((s) => s.signature_id === record.captain_signature_id);
+      setSelectedCaptainSignature(capSig || null);
+    } else {
+      setSelectedCaptainSignature(null);
+    }
   }
 
   function resetForm() {
@@ -655,10 +783,15 @@ async function handleUpdate() {
       transaction_number: '',
       is_active: 1,
       date_created: '',
+      use_signature: false,
+      secretary_signature_id: null,
+      captain_signature_id: null,
     });
     setEditingId(null);
     setIsFormOpen(false);
     setSelectedRecord(null); // Clear selected record
+    setSelectedSecretarySignature(null);
+    setSelectedCaptainSignature(null);
   }
 
   function handleSubmit() {
@@ -1189,11 +1322,11 @@ async function handleUpdate() {
                 <div style={{ position: "absolute", whiteSpace: "pre-wrap", top: "300px", left: "80px", width: "640px", textAlign: "justify", fontFamily: '"Times New Roman", serif', fontSize: "12pt", fontWeight: "bold", color: "black" }}>
                   TO WHOM IT MAY CONCERN:
                   <p style={{ textIndent: "50px" }}>
-                    This is to certify that, <span style={{ textDecoration: "underline" }}>{formData.full_name || "____________________"}</span>, <span style={{ textDecoration: "underline" }}>{formData.age || "___"}</span> yrs. old, born on <span style={{ textDecoration: "underline" }}>{formData.dob ? new Date(formData.dob).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }) : "__________"}</span>, a bonafide resident at Barangay 145 with actual postal address located at <span style={{ textDecoration: "underline" }}>{formData.address || "____________________"}</span>, Barangay 145, Bagong Barrio, Caloocan City.
+                    This is to certify that, <span style={{ textDecoration: "underline" }}>{display.full_name || "____________________"}</span>, <span style={{ textDecoration: "underline" }}>{display.age || "___"}</span> yrs. old, born on <span style={{ textDecoration: "underline" }}>{display.dob ? new Date(display.dob).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }) : "__________"}</span>, a bonafide resident at Barangay 145 with actual postal address located at <span style={{ textDecoration: "underline" }}>{display.address || "____________________"}</span>, Barangay 145, Bagong Barrio, Caloocan City.
                   </p>
 
                   <p style={{ textIndent: "50px" }}>
-                    This further certifies that the above-mentioned name has a LOW SOURCE OF INCOME <span style={{ textDecoration: "underline" }}>{formData.occupation || "____________________"}</span> and is applying for <span style={{ textDecoration: "underline" }}>{formData.purpose || "____________________"}</span>, with monthly income not exceeding <span style={{ textDecoration: "underline" }}>{formData.monthly_income || "__________"}</span>.
+                    This further certifies that the above-mentioned name has a LOW SOURCE OF INCOME <span style={{ textDecoration: "underline" }}>{display.occupation || "____________________"}</span> and is applying for <span style={{ textDecoration: "underline" }}>{display.purpose || "____________________"}</span>, with monthly income not exceeding <span style={{ textDecoration: "underline" }}>{display.monthly_income || "__________"}</span>.
                   </p>
 
                   <p style={{ textIndent: "50px" }}>
@@ -1201,25 +1334,101 @@ async function handleUpdate() {
                   </p>
 
                   <p style={{ textIndent: "50px" }}>
-                    Issued this <span style={{ textDecoration: "underline" }}>{formData.date_issued ? (() => { const date = new Date(formData.date_issued); const day = date.getDate(); const month = date.toLocaleString("default", { month: "short" }); const year = date.getFullYear(); const suffix = day % 10 === 1 && day !== 11 ? "st" : day % 10 === 2 && day !== 12 ? "nd" : day % 10 === 3 && day !== 13 ? "rd" : "th"; return `${day}${suffix} day of ${month}, ${year}`; })() : "__________"}</span> at Barangay 145, Zone 13, District 1, Caloocan City.
+                    Issued this <span style={{ textDecoration: "underline" }}>{display.date_issued ? (() => { const date = new Date(display.date_issued); const day = date.getDate(); const month = date.toLocaleString("default", { month: "short" }); const year = date.getFullYear(); const suffix = day % 10 === 1 && day !== 11 ? "st" : day % 10 === 2 && day !== 12 ? "nd" : day % 10 === 3 && day !== 13 ? "rd" : "th"; return `${day}${suffix} day of ${month}, ${year}`; })() : "__________"}</span> at Barangay 145, Zone 13, District 1, Caloocan City.
                   </p>
                 </div>
 
                 {/* Signatures */}
-                <div style={{ position: "absolute", top: "600px", left: "80px", width: "250px", textAlign: "left", fontFamily: '"Times New Roman", serif', fontSize: "12pt", fontWeight: "bold" }}>
+                <div style={{ position: "absolute", top: "580px", left: "80px", width: "250px", textAlign: "left", fontFamily: '"Times New Roman", serif', fontSize: "12pt", fontWeight: "bold" }}>
                   <div style={{ color: "black" }}>Certified Correct:</div>
                   <br />
-                  <br />
-                  <div style={{ color: "black" }}>Roselyn Anore</div>
-                  <div style={{ color: "black" }}>Barangay Secretary</div>
+                  
+                  {/* Secretary Signature */}
+                  {display.use_signature && display.sec_signature_path ? (
+                    <>
+                      <div
+                        style={{
+                          marginBottom: '-15px',
+                          marginRight: '100px',
+                          height: '60px',
+                          display: 'flex',
+                          alignItems: 'flex-end',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <img
+                          src={getSignatureImageUrl(display.sec_signature_path)}
+                          alt="Secretary Signature"
+                          style={{
+                            maxWidth: '180px',
+                            maxHeight: '60px',
+                            objectFit: 'contain',
+                            display: 'block',
+                          }}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                      <div style={{ color: "black" }}>
+                       Roselyn Anore
+                      </div>
+                      <div style={{ color: "black" }}>
+                       Barangay Secretary
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ color: "black" }}>Roselyn Anore</div>
+                      <div style={{ color: "black" }}>Barangay Secretary</div>
+                    </>
+                  )}
                 </div>
 
                 <div style={{ position: "absolute", top: "700px", right: "20px", width: "300px", textAlign: "left", fontFamily: '"Times New Roman", serif', fontWeight: "bold" }}>
                   <div style={{ color: "black", fontSize: "12pt" }}>Attested:</div>
                   <br />
-                  <br />
-                  <div style={{ color: "black", fontSize: "16pt", fontStyle: "italic" }}>ARNOLD DONDONAYOS</div>
-                  <div style={{ fontStyle: "italic" }}>Barangay Chairman</div>
+                  
+                  {/* Captain Signature - positioned to overlap with the name */}
+                  {display.use_signature && display.cap_signature_path ? (
+                    <>
+                      <div
+                        style={{
+                           marginBottom: '-15px',
+                          marginRight: '100px',
+                          height: '60px',
+                          display: 'flex',
+                          alignItems: 'flex-end',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <img
+                          src={getSignatureImageUrl(display.cap_signature_path)}
+                          alt="Captain Signature"
+                          style={{
+                            maxWidth: '180px',
+                            maxHeight: '60px',
+                            objectFit: 'contain',
+                            display: 'block',
+                          }}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                      <div style={{ color: "black", fontSize: "16pt", fontStyle: "italic" }}>
+                       ARNOLD DONDONAYOS
+                      </div>
+                      <div style={{ fontStyle: "italic" }}>
+                       Barangay Chairman
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ color: "black", fontSize: "16pt", fontStyle: "italic" }}>ARNOLD DONDONAYOS</div>
+                      <div style={{ fontStyle: "italic" }}>Barangay Chairman</div>
+                    </>
+                  )}
                 </div>
 
                 {/* QR & Signature area (QR not embedded in the "paper" content visually; it's shown below) */}
@@ -1478,6 +1687,95 @@ async function handleUpdate() {
                       required
                     />
 
+                    <Divider sx={{ my: 2 }} />
+
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={formData.use_signature || false}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setFormData({
+                              ...formData,
+                              use_signature: checked,
+                              secretary_signature_id:
+                                checked && selectedSecretarySignature
+                                  ? selectedSecretarySignature.signature_id
+                                  : null,
+                              captain_signature_id:
+                                checked && selectedCaptainSignature
+                                  ? selectedCaptainSignature.signature_id
+                                  : null,
+                            });
+                            if (!checked) {
+                              setSelectedSecretarySignature(null);
+                              setSelectedCaptainSignature(null);
+                            }
+                          }}
+                          color="primary"
+                        />
+                      }
+                      label="Add E-Signatures"
+                    />
+
+                    {formData.use_signature && (
+                      <>
+                        <Autocomplete
+                          options={signatures}
+                          getOptionLabel={(opt) =>
+                            `${opt.official_name} - ${opt.designation}`
+                          }
+                          value={selectedSecretarySignature}
+                          onChange={(e, newValue) => {
+                            setSelectedSecretarySignature(newValue);
+                            setFormData({
+                              ...formData,
+                              secretary_signature_id: newValue
+                                ? newValue.signature_id
+                                : null,
+                            });
+                          }}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="Select Secretary Signature"
+                              variant="outlined"
+                              fullWidth
+                              size="small"
+                              required
+                            />
+                          )}
+                        />
+
+                        <Autocomplete
+                          options={signatures}
+                          getOptionLabel={(opt) =>
+                            `${opt.official_name} - ${opt.designation}`
+                          }
+                          value={selectedCaptainSignature}
+                          onChange={(e, newValue) => {
+                            setSelectedCaptainSignature(newValue);
+                            setFormData({
+                              ...formData,
+                              captain_signature_id: newValue
+                                ? newValue.signature_id
+                                : null,
+                            });
+                          }}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="Select Captain Signature"
+                              variant="outlined"
+                              fullWidth
+                              size="small"
+                              required
+                            />
+                          )}
+                        />
+                      </>
+                    )}
+
                     <Box sx={{ display: "flex", gap: 2, pt: 2 }}>
                       <Button 
                         onClick={handleSubmit} 
@@ -1571,6 +1869,15 @@ async function handleUpdate() {
                                   <Typography variant="caption" color="text.secondary">
                                     Issued: {formatDateDisplay(record.date_issued)}
                                   </Typography>
+                                  {record.use_signature && (
+                                    <Chip 
+                                      icon={<ArticleIcon />}
+                                      label="E-Signed" 
+                                      size="small" 
+                                      color="success" 
+                                      variant="outlined" 
+                                    />
+                                  )}
                                 </Box>
                               </Box>
                               <Box sx={{ display: "flex", gap: 0.5 }}>
@@ -1743,6 +2050,34 @@ async function handleUpdate() {
                   : 'N/A'}
               </Typography>
             </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                E-Signature:
+              </Typography>
+              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                {display.use_signature ? 'Enabled' : 'Disabled'}
+              </Typography>
+            </Grid>
+            {display.use_signature && (
+              <>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                    Secretary:
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                    {display.sec_official_name || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                    Captain:
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                    {display.cap_official_name || 'N/A'}
+                  </Typography>
+                </Grid>
+              </>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions>

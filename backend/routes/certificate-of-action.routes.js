@@ -76,6 +76,8 @@ router.post('/', async (req, res) => {
       filed_date,
       date_issued,
       transaction_number,
+      use_signature,  // Add this - was missing
+      signature_id,   // Add this - was missing
     } = req.body;
 
     if (!complainant_name || !respondent_name || !request_reason || !date_issued) {
@@ -205,4 +207,3 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
-

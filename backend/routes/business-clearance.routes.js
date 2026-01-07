@@ -11,8 +11,14 @@ router.use(verifyToken);
 // GET all active business clearance records
 router.get('/', async (req, res) => {
   try {
+    // Join with official_signature to get signature data
     const [rows] = await pool.query(
-      `SELECT * FROM business_clearance WHERE is_active = TRUE ORDER BY business_clearance_id DESC`
+      `SELECT bc.*, 
+              sig.signature_id, sig.official_name, sig.designation, sig.signature_path
+       FROM business_clearance bc
+       LEFT JOIN official_signature sig ON bc.signature_id = sig.signature_id
+       WHERE bc.is_active = TRUE 
+       ORDER BY bc.date_created DESC, bc.business_clearance_id DESC`
     );
     res.json(rows);
   } catch (err) {
@@ -24,12 +30,18 @@ router.get('/', async (req, res) => {
 // GET all records including historical (for transaction log)
 router.get('/transactions/all', async (req, res) => {
   try {
+    // Get all records including inactive ones for complete transaction history
+    // This shows all transactions including old ones that were edited
     const [rows] = await pool.query(
-      `SELECT * FROM business_clearance ORDER BY date_created DESC, business_clearance_id DESC`
+      `SELECT bc.*, 
+              sig.signature_id, sig.official_name, sig.designation, sig.signature_path
+       FROM business_clearance bc
+       LEFT JOIN official_signature sig ON bc.signature_id = sig.signature_id
+       ORDER BY bc.date_created DESC, bc.business_clearance_id DESC`
     );
     res.json(rows);
   } catch (err) {
-    console.error('Error fetching transaction history:', err);
+    console.error(err);
     res.status(500).json({ error: 'Failed to fetch transaction history' });
   }
 });
@@ -39,7 +51,11 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const [rows] = await pool.query(
-      `SELECT * FROM business_clearance WHERE business_clearance_id = ?`,
+      `SELECT bc.*, 
+              sig.signature_id, sig.official_name, sig.designation, sig.signature_path
+       FROM business_clearance bc
+       LEFT JOIN official_signature sig ON bc.signature_id = sig.signature_id
+       WHERE bc.business_clearance_id = ?`,
       [id]
     );
     if (rows.length === 0)
@@ -64,6 +80,8 @@ router.post('/', async (req, res) => {
       remarks,
       request_reason,
       transaction_number,
+      use_signature, // Added for e-signature
+      signature_id, // Added for e-signature
     } = req.body;
 
     if (!full_name || !address || !nature_of_business || !date_issued || !date_expired || !request_reason) {
@@ -73,42 +91,10 @@ router.post('/', async (req, res) => {
     const finalTransactionNumber =
       transaction_number || generateTransactionNumberForType('BUS');
 
-    const [existing] = await pool.query(
-      'SELECT business_clearance_id FROM business_clearance WHERE transaction_number = ?',
-      [finalTransactionNumber]
-    );
-
-    if (existing.length > 0) {
-      const newTransactionNumber = generateTransactionNumberForType('BUS');
-      const [result] = await pool.query(
-        `INSERT INTO business_clearance 
-          (resident_id, full_name, address, nature_of_business, date_issued, date_expired, remarks, request_reason, transaction_number)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          resident_id,
-          full_name,
-          address,
-          nature_of_business,
-          date_issued,
-          date_expired,
-          remarks || null,
-          request_reason,
-          newTransactionNumber,
-        ]
-      );
-
-      const [rows] = await pool.query(
-        `SELECT * FROM business_clearance WHERE business_clearance_id = ?`,
-        [result.insertId]
-      );
-
-      return res.status(201).json(rows[0]);
-    }
-
     const [result] = await pool.query(
       `INSERT INTO business_clearance 
-        (resident_id, full_name, address, nature_of_business, date_issued, date_expired, remarks, request_reason, transaction_number)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (resident_id, full_name, address, nature_of_business, date_issued, date_expired, remarks, request_reason, transaction_number, use_signature, signature_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         resident_id,
         full_name,
@@ -119,11 +105,17 @@ router.post('/', async (req, res) => {
         remarks || null,
         request_reason,
         finalTransactionNumber,
+        use_signature ? 1 : 0,
+        use_signature && signature_id ? signature_id : null,
       ]
     );
 
     const [rows] = await pool.query(
-      `SELECT * FROM business_clearance WHERE business_clearance_id = ?`,
+      `SELECT bc.*, 
+              sig.signature_id, sig.official_name, sig.designation, sig.signature_path
+       FROM business_clearance bc
+       LEFT JOIN official_signature sig ON bc.signature_id = sig.signature_id
+       WHERE bc.business_clearance_id = ?`,
       [result.insertId]
     );
 
@@ -136,12 +128,9 @@ router.post('/', async (req, res) => {
 
 // UPDATE existing business clearance
 // When updating, we create a NEW record entry with a new transaction number
-// The old record remains in history (marked as inactive)
+// The old record remains in history (marked as inactive or kept active)
 router.put('/:id', async (req, res) => {
-  const connection = await pool.getConnection();
   try {
-    await connection.beginTransaction();
-
     const { id } = req.params;
     const {
       resident_id,
@@ -152,33 +141,37 @@ router.put('/:id', async (req, res) => {
       date_expired,
       remarks,
       request_reason,
+      transaction_number,
+      use_signature, // Added for e-signature
+      signature_id, // Added for e-signature
     } = req.body;
 
     // Get the existing record
-    const [existing] = await connection.query(
-      'SELECT * FROM business_clearance WHERE business_clearance_id = ?',
+    const [existing] = await pool.query(
+      `SELECT * FROM business_clearance WHERE business_clearance_id = ?`,
       [id]
     );
 
-    if (existing.length === 0) {
-      await connection.rollback();
+    if (existing.length === 0)
       return res.status(404).json({ error: 'Record not found' });
-    }
 
+    const oldRecord = existing[0];
+    
     // Generate a NEW transaction number for the new entry
     const newTransactionNumber = generateTransactionNumberForType('BUS');
 
     // Mark the old record as inactive (to preserve it in history)
-    await connection.query(
-      `UPDATE business_clearance SET is_active = FALSE, date_updated = NOW() WHERE business_clearance_id = ?`,
+    await pool.query(
+      `UPDATE business_clearance SET is_active = FALSE WHERE business_clearance_id = ?`,
       [id]
     );
 
     // Create a NEW record entry with the updated data and new transaction number
-    const [result] = await connection.query(
+    // This ensures the transaction log shows a new entry
+    const [result] = await pool.query(
       `INSERT INTO business_clearance 
-        (resident_id, full_name, address, nature_of_business, date_issued, date_expired, remarks, request_reason, transaction_number)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (resident_id, full_name, address, nature_of_business, date_issued, date_expired, remarks, request_reason, transaction_number, use_signature, signature_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         resident_id,
         full_name,
@@ -188,24 +181,26 @@ router.put('/:id', async (req, res) => {
         date_expired,
         remarks || null,
         request_reason,
-        newTransactionNumber,
+        newTransactionNumber, // New transaction number for the new entry
+        use_signature ? 1 : 0,
+        use_signature && signature_id ? signature_id : null,
       ]
     );
 
     // Get the newly created record
-    const [newRecord] = await connection.query(
-      'SELECT * FROM business_clearance WHERE business_clearance_id = ?',
+    const [newRecord] = await pool.query(
+      `SELECT bc.*, 
+              sig.signature_id, sig.official_name, sig.designation, sig.signature_path
+       FROM business_clearance bc
+       LEFT JOIN official_signature sig ON bc.signature_id = sig.signature_id
+       WHERE bc.business_clearance_id = ?`,
       [result.insertId]
     );
 
-    await connection.commit();
     res.json(newRecord[0]);
   } catch (err) {
-    await connection.rollback();
-    console.error('Error updating business clearance record:', err);
+    console.error(err);
     res.status(500).json({ error: 'Failed to update record' });
-  } finally {
-    connection.release();
   }
 });
 
@@ -227,4 +222,3 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
-

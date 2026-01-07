@@ -9,6 +9,7 @@ import Logo145 from '../../assets/Logo145.png';
 import BagongPilipinas from '../../assets/BagongPilipinas.png';
 import WordName from '../../assets/WordName.png';
 import { useCertificateManager } from '../../hooks/useCertificateManager';
+import { getSignatures, getSignatureImageUrl } from '../../services/signatureService';
 
 // Import Material UI components
 import {
@@ -45,6 +46,9 @@ import {
   Fab,
   AppBar,
   Toolbar,
+  Checkbox,
+  FormControlLabel,
+  Divider,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -64,6 +68,7 @@ import {
   Folder as FolderIcon,
   Dashboard as DashboardIcon,
   Article as ArticleIcon,
+  CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
 import { useMediaQuery } from '@mui/material';
 
@@ -232,15 +237,17 @@ export default function PermitToTravel() {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(0.75); // Default zoom level
+  const [signatures, setSignatures] = useState([]);
+  const [selectedSignature, setSelectedSignature] = useState(null);
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // Add this after the imports and before the component function
-const { 
-  saveCertificate, 
-  getValidityPeriod,
-  calculateExpirationDate 
-} = useCertificateManager('Permit to Travel');
+  const { 
+    saveCertificate, 
+    getValidityPeriod,
+    calculateExpirationDate 
+  } = useCertificateManager('Permit to Travel');
 
   const [formData, setFormData] = useState({
     resident_id: '',
@@ -256,6 +263,8 @@ const {
     request_reason: '',
     date_issued: new Date().toISOString().split('T')[0],
     transaction_number: '', // New field for transaction number
+    use_signature: false, // Added for e-signature
+    signature_id: null, // Added for e-signature
   });
 
   const civilStatusOptions = [
@@ -406,9 +415,19 @@ const {
     }
   }
 
+  async function loadSignatures() {
+    try {
+      const data = await getSignatures();
+      setSignatures(data);
+    } catch (err) {
+      console.warn('Could not load signatures:', err);
+    }
+  }
+
   useEffect(() => {
     loadResidents();
     loadRecords();
+    loadSignatures();
   }, []);
 
   async function loadRecords() {
@@ -435,6 +454,11 @@ const {
               date_created: r.date_created,
               transaction_number:
                 r.transaction_number || generateTransactionNumber(), // Generate if missing
+              use_signature: Boolean(r.use_signature), // Added for e-signature
+              signature_id: r.signature_id || null, // Added for e-signature
+              official_name: r.official_name || null, // Added for e-signature
+              designation: r.designation || null, // Added for e-signature
+              signature_path: r.signature_path || null, // Added for e-signature
             }))
           : []
       );
@@ -453,10 +477,35 @@ const {
   }
 
   const display = useMemo(() => {
-    if (editingId || isFormOpen) return formData;
-    if (selectedRecord) return selectedRecord;
-    return formData;
-  }, [editingId, isFormOpen, selectedRecord, formData]);
+    let data = null;
+    if (editingId || isFormOpen) {
+      data = formData;
+    } else if (selectedRecord) {
+      data = selectedRecord;
+    } else {
+      data = formData;
+    }
+
+    // If signature is enabled, ensure signature data is available
+    if (
+      data &&
+      data.use_signature &&
+      data.signature_id &&
+      !data.signature_path
+    ) {
+      const sig = signatures.find((s) => s.signature_id === data.signature_id);
+      if (sig) {
+        return {
+          ...data,
+          official_name: sig.official_name,
+          designation: sig.designation,
+          signature_path: sig.signature_path,
+        };
+      }
+    }
+
+    return data;
+  }, [editingId, isFormOpen, selectedRecord, formData, signatures]);
 
   // Generate QR code with URL for PDF download
   useEffect(() => {
@@ -466,7 +515,6 @@ const {
         storeCertificateData(display);
 
         // Create a URL that points to a verification page
-        // Using window.location.origin to get the current domain
         const verificationUrl = `${
           window.location.origin
         }/verify-certificate?id=${display.permit_to_travel_id || 'draft'}`;
@@ -475,9 +523,9 @@ const {
         𝗧𝗿𝗮𝗻𝘀𝗮𝗰𝘁𝗶𝗼𝗻 𝗡𝗼: ${display.transaction_number || 'N/A'}
         Name: ${display.full_name}
         Date Issued: ${
-        display.date_created
-        ? formatDateTimeDisplay(display.date_created)
-        : new Date().toLocaleString()
+          display.date_created
+            ? formatDateTimeDisplay(display.date_created)
+            : new Date().toLocaleString()
         }
         Document Type: Permit to Travel
        
@@ -522,105 +570,144 @@ const {
       request_reason: data.request_reason,
       date_issued: data.date_issued,
       transaction_number: data.transaction_number, // Include transaction number
+      use_signature: data.use_signature ? 1 : 0, // Added for e-signature
+      signature_id: data.use_signature && data.signature_id ? data.signature_id : null, // Added for e-signature
     };
   }
 
   // Update the handleCreate function
-async function handleCreate() {
-  try {
-    // Generate a transaction number for new certificates
-    const transactionNumber = generateTransactionNumber();
-    const validityPeriod = getValidityPeriod('Permit to Travel');
-    const updatedFormData = {
-      ...formData,
-      transaction_number: transactionNumber,
-      date_created: new Date().toISOString(), // Add current timestamp
-      validity_period: validityPeriod, // Add validity period
-    };
+  async function handleCreate() {
+    try {
+      // Generate a transaction number for new certificates
+      const transactionNumber = generateTransactionNumber();
+      const validityPeriod = getValidityPeriod('Permit to Travel');
+      const updatedFormData = {
+        ...formData,
+        transaction_number: transactionNumber,
+        date_created: new Date().toISOString(), // Add current timestamp
+        validity_period: validityPeriod, // Add validity period
+      };
 
-    const res = await fetch(`${apiBase}/permit-to-travel`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(toServerPayload(updatedFormData)),
-    });
-    if (!res.ok) throw new Error('Create failed');
-    const created = await res.json();
-    const newRec = { ...updatedFormData, permit_to_travel_id: created.permit_to_travel_id };
+      const res = await fetch(`${apiBase}/permit-to-travel`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(toServerPayload(updatedFormData)),
+      });
+      if (!res.ok) throw new Error('Create failed');
+      const created = await res.json();
+      const newRec = { ...updatedFormData, permit_to_travel_id: created.permit_to_travel_id };
 
-    setRecords([newRec, ...records]);
-    setSelectedRecord(newRec);
+      setRecords([newRec, ...records]);
+      setSelectedRecord(newRec);
 
-    // Save to certificates table
-    await saveCertificate(newRec, true);
+      // Save to certificates table
+      await saveCertificate(newRec, true);
 
-    // Store the new certificate data
-    storeCertificateData(newRec);
+      // Store the new certificate data
+      storeCertificateData(newRec);
 
-    resetForm();
-    setActiveTab('records');
-  } catch (e) {
-    console.error(e);
-    alert('Failed to create record');
+      resetForm();
+      setActiveTab('records');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to create record');
+    }
   }
-}
 
-// Update the handleUpdate function
-async function handleUpdate() {
-  try {
-    const validityPeriod = getValidityPeriod('Permit to Travel');
-    const updatedFormData = {
-      ...formData,
-      validity_period: validityPeriod, // Add validity period
-    };
+  // Update the handleUpdate function
+  async function handleUpdate() {
+    try {
+      const validityPeriod = getValidityPeriod('Permit to Travel');
+      const updatedFormData = {
+        ...formData,
+        validity_period: validityPeriod, // Add validity period
+      };
 
-    const res = await fetch(`${apiBase}/permit-to-travel/${editingId}`, {
-      method: 'PUT',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(toServerPayload(updatedFormData)),
-    });
-    if (!res.ok) throw new Error('Update failed');
-    const updatedData = await res.json();
-    // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
-    const updated = { 
-      ...updatedData,
-      permit_to_travel_id: updatedData.permit_to_travel_id,
-      full_name: updatedData.full_name,
-      address: updatedData.address,
-      provincial_address: updatedData.provincial_address || '',
-      dob: updatedData.dob?.split('T')[0] || '',
-      age: String(updatedData.age ?? ''),
-      civil_status: updatedData.civil_status,
-      contact_no: updatedData.contact_no || '',
-      remarks: updatedData.remarks || '',
-      request_reason: updatedData.request_reason || '',
-      date_issued: updatedData.date_issued?.split('T')[0] || '',
-      date_created: updatedData.date_created,
-      transaction_number: updatedData.transaction_number,
-      validity_period: validityPeriod
-    };
-    // Remove old record and add new one
-    setRecords([updated, ...records.filter((r) => r.permit_to_travel_id !== editingId)]);
-    setSelectedRecord(updated);
+      const res = await fetch(`${apiBase}/permit-to-travel/${editingId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(toServerPayload(updatedFormData)),
+      });
+      if (!res.ok) throw new Error('Update failed');
+      const updatedData = await res.json();
+      // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
+      const updated = { 
+        ...updatedData,
+        permit_to_travel_id: updatedData.permit_to_travel_id,
+        full_name: updatedData.full_name,
+        address: updatedData.address,
+        provincial_address: updatedData.provincial_address || '',
+        dob: updatedData.dob?.split('T')[0] || '',
+        age: String(updatedData.age ?? ''),
+        civil_status: updatedData.civil_status,
+        contact_no: updatedData.contact_no || '',
+        remarks: updatedData.remarks || '',
+        request_reason: updatedData.request_reason || '',
+        date_issued: updatedData.date_issued?.split('T')[0] || '',
+        date_created: updatedData.date_created,
+        transaction_number: updatedData.transaction_number,
+        validity_period: validityPeriod,
+        use_signature: Boolean(updatedData.use_signature),
+        signature_id: updatedData.signature_id || null,
+        official_name: updatedData.official_name || null,
+        designation: updatedData.designation || null,
+        signature_path: updatedData.signature_path || null,
+      };
+      // Remove old record and add new one
+      setRecords([updated, ...records.filter((r) => r.permit_to_travel_id !== editingId)]);
+      setSelectedRecord(updated);
 
-    // Save to certificates table
-    await saveCertificate(updated, false);
+      // Save to certificates table
+      await saveCertificate(updated, false);
 
-    // Store the updated certificate data
-    storeCertificateData(updated);
+      // Store the updated certificate data
+      storeCertificateData(updated);
 
-    resetForm();
-    setActiveTab('records');
-  } catch (e) {
-    console.error(e);
-    alert('Failed to update record');
+      resetForm();
+      setActiveTab('records');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to update record');
+    }
   }
-}
 
   function handleEdit(record) {
-    setFormData({ ...record });
+    setFormData({ 
+      ...record,
+      use_signature: Boolean(record.use_signature),
+      signature_id: record.signature_id || null,
+    });
     setEditingId(record.permit_to_travel_id);
     setIsFormOpen(true);
     setActiveTab('form');
+    
+    // Set selected signature if available
+    if (record.signature_id) {
+      const sig = signatures.find((s) => s.signature_id === record.signature_id);
+      setSelectedSignature(sig || null);
+    } else {
+      setSelectedSignature(null);
+    }
+  }
+
+  function handleView(record) {
+    setSelectedRecord(record); // Set selected record for display
+    setFormData({ 
+      ...record,
+      use_signature: Boolean(record.use_signature),
+      signature_id: record.signature_id || null,
+    }); // Also populate form data for QR generation/dialog
+    setEditingId(record.permit_to_travel_id); // To indicate viewing a specific record
+    setIsFormOpen(true); // Keep the form open with the record details
+    setActiveTab('form');
+    
+    // Set selected signature if available
+    if (record.signature_id) {
+      const sig = signatures.find((s) => s.signature_id === record.signature_id);
+      setSelectedSignature(sig || null);
+    } else {
+      setSelectedSignature(null);
+    }
   }
 
   async function handleDelete(id) {
@@ -649,14 +736,6 @@ async function handleUpdate() {
     }
   }
 
-  function handleView(record) {
-    setSelectedRecord(record); // Set selected record for display
-    setFormData({ ...record }); // Also populate form data for QR generation/dialog
-    setEditingId(record.permit_to_travel_id); // To indicate viewing a specific record
-    setIsFormOpen(true); // Keep the form open with the record details
-    setActiveTab('form');
-  }
-
   function resetForm() {
     setFormData({
       resident_id: '',
@@ -672,10 +751,13 @@ async function handleUpdate() {
       request_reason: '',
       date_issued: new Date().toISOString().split('T')[0],
       transaction_number: '',
+      use_signature: false, // Added for e-signature
+      signature_id: null, // Added for e-signature
     });
     setEditingId(null);
     setIsFormOpen(false);
     setSelectedRecord(null); // Clear selected record
+    setSelectedSignature(null); // Clear selected signature
   }
 
   function handleSubmit() {
@@ -693,7 +775,6 @@ async function handleUpdate() {
       ),
     [records, searchTerm]
   );
-
 
   // Generate PDF function
   async function generatePDF() {
@@ -749,7 +830,7 @@ async function handleUpdate() {
     }
   }
 
- function handlePrint() {
+  function handlePrint() {
     // Check if there's a certificate to print
     if (!display.permit_to_travel_id) {
       alert('Please save the record first before printing');
@@ -843,7 +924,6 @@ async function handleUpdate() {
       setQrDialogOpen(true);
     }
   };
-
 
   const handleZoomIn = () => {
     setZoomLevel((prev) => Math.min(prev + 0.1, 2)); // Max zoom: 2x (200%)
@@ -1566,36 +1646,81 @@ async function handleUpdate() {
                   <div
                     style={{
                       position: 'absolute',
-                      top: '900px',
+                      top: '850px',
                       right: '100px',
                       width: '300px',
                       textAlign: 'center',
                     }}
                   >
+                    {/* E-Signature positioned to overlap with the name */}
+                    {display.use_signature && display.signature_path ? (
+                      <div
+                        style={{
+                          position: 'relative',
+                          marginTop: '-10px', // Pull the signature up to overlap
+                          height: '70px',
+                          display: 'flex',
+                          alignItems: 'flex-end',
+                          justifyContent: 'center',
+                          zIndex: 2, // Ensure signature is on top
+                        }}
+                      >
+                        <img
+                          src={getSignatureImageUrl(display.signature_path)}
+                          alt="Signature"
+                          style={{
+                            maxWidth: '200px',
+                            maxHeight: '70px',
+                            objectFit: 'contain',
+                            display: 'block',
+                          }}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    ) : null}
+
+                    {/* WordName image positioned to overlap with signature */}
+                    <div
+                      style={{
+                        position: 'relative',
+                        marginTop: display.use_signature && display.signature_path ? '-35px' : '-5px', // Adjust overlap based on whether signature is present
+                        height: '60px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 1, // Ensure name is below signature but above other elements
+                      }}
+                    >
+                      <img
+                        src={WordName}
+                        alt="Arnold Dondonayos"
+                        style={{
+                          width: '250px',
+                          height: 'auto',
+                          maxHeight: '60px',
+                          objectFit: 'contain',
+                        }}
+                      />
+                    </div>
+
+                    {/* Line positioned at the bottom of the name */}
                     <div
                       style={{
                         borderTop: '2.5px solid #000',
                         width: '90%',
                         margin: 'auto',
+                        marginTop: display.use_signature && display.signature_path ? '5px' : '-2px', // Adjust spacing based on signature presence
                       }}
                     ></div>
-                    <img
-                      src={WordName}
-                      alt="Arnold Dondonayos"
-                      style={{
-                        position: 'absolute',
-                        right: '20px',
-                        width: '250px',
-                        bottom: '33px',
-                      }}
-                    />
 
                     <div
                       style={{
                         fontFamily: '"Brush Script MT", cursive',
                         fontSize: '20pt',
                         color: '#000',
-                        marginTop: '-2px',
+                        marginTop: '5px',
                       }}
                     >
                       Punong Barangay
@@ -1813,6 +1938,61 @@ async function handleUpdate() {
                       required
                     />
 
+                    <Divider sx={{ my: 2 }} />
+
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={formData.use_signature || false}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setFormData({
+                              ...formData,
+                              use_signature: checked,
+                              signature_id:
+                                checked && selectedSignature
+                                  ? selectedSignature.signature_id
+                                  : null,
+                            });
+                            if (!checked) {
+                              setSelectedSignature(null);
+                            }
+                          }}
+                          color="primary"
+                        />
+                      }
+                      label="Add E-Signature"
+                    />
+
+                    {formData.use_signature && (
+                      <Autocomplete
+                        options={signatures}
+                        getOptionLabel={(opt) =>
+                          `${opt.official_name} - ${opt.designation}`
+                        }
+                        value={selectedSignature}
+                        onChange={(e, newValue) => {
+                          setSelectedSignature(newValue);
+                          setFormData({
+                            ...formData,
+                            signature_id: newValue
+                              ? newValue.signature_id
+                              : null,
+                          });
+                        }}
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            label="Select Signature"
+                            variant="outlined"
+                            fullWidth
+                            size="small"
+                            required
+                          />
+                        )}
+                      />
+                    )}
+
                     <Box sx={{ display: "flex", gap: 2, pt: 2 }}>
                       <Button 
                         onClick={handleSubmit} 
@@ -1910,6 +2090,15 @@ async function handleUpdate() {
                                     Issued: {formatDateDisplay(record.date_issued)}
                                   </Typography>
                                 </Box>
+                                {record.use_signature && (
+                                  <Chip
+                                    label="E-Signed"
+                                    size="small"
+                                    color="success"
+                                    variant="outlined"
+                                    icon={<CheckCircleIcon />}
+                                  />
+                                )}
                               </Box>
                               <Box sx={{ display: "flex", gap: 0.5 }}>
                                 <Tooltip title="View">
@@ -2081,6 +2270,24 @@ async function handleUpdate() {
                   : 'N/A'}
               </Typography>
             </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                E-Signature:
+              </Typography>
+              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                {display.use_signature ? 'Yes' : 'No'}
+              </Typography>
+            </Grid>
+            {display.use_signature && (
+              <Grid item xs={12} md={6}>
+                <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                  Signed By:
+                </Typography>
+                <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                  {display.official_name} - {display.designation}
+                </Typography>
+              </Grid>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions>

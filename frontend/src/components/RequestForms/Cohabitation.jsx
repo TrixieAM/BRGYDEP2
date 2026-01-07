@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { useAuth } from '../../contexts/AuthContext';
+import { getSignatures, getSignatureImageUrl } from '../../services/signatureService';
 
 import CaloocanLogo from "../../assets/CaloocanLogo.png";
 import Logo145 from "../../assets/Logo145.png";
@@ -35,7 +36,10 @@ import {
   Fab,
   AppBar,
   Toolbar,
-  Chip, // Added this import
+  Chip,
+  FormControlLabel,
+  Checkbox,
+  Divider,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -223,6 +227,9 @@ export default function Cohabitation() {
   const [zoomLevel, setZoomLevel] = useState(0.75);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
+  const [signatures, setSignatures] = useState([]);
+  const [selectedSecretarySignature, setSelectedSecretarySignature] = useState(null);
+  const [selectedCaptainSignature, setSelectedCaptainSignature] = useState(null);
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -249,6 +256,9 @@ const {
     transaction_number: "",
     is_active: 1,
     date_created: "",
+    use_signature: false, // Add e-signature field
+    secretary_signature_id: null, // Add secretary signature ID field
+    captain_signature_id: null, // Add captain signature ID field
   });
 
   // Helpers
@@ -327,6 +337,7 @@ const {
   useEffect(() => {
     loadResidents();
     loadRecords();
+    loadSignatures();
   }, []);
 
   async function loadResidents() {
@@ -338,6 +349,16 @@ const {
       setResidents(Array.isArray(data) ? data : []);
     } catch (err) {
       console.warn("Failed to load residents", err);
+    }
+  }
+
+  // ---------- LOAD SIGNATURES ----------
+  async function loadSignatures() {
+    try {
+      const data = await getSignatures();
+      setSignatures(data);
+    } catch (err) {
+      console.warn('Could not load signatures:', err);
     }
   }
 
@@ -365,6 +386,15 @@ const {
               transaction_number: r.transaction_number || generateTransactionNumber(),
               is_active: r.is_active ?? 1,
               date_created: r.date_created,
+              use_signature: Boolean(r.use_signature),
+              secretary_signature_id: r.secretary_signature_id || null,
+              captain_signature_id: r.captain_signature_id || null,
+              sec_official_name: r.sec_official_name || null,
+              sec_designation: r.sec_designation || null,
+              sec_signature_path: r.sec_signature_path || null,
+              cap_official_name: r.cap_official_name || null,
+              cap_designation: r.cap_designation || null,
+              cap_signature_path: r.cap_signature_path || null,
             }))
           : []
       );
@@ -375,10 +405,52 @@ const {
 
   // display chooses between editing/form mode and view mode
   const display = useMemo(() => {
-    if (editingId || isFormOpen) return formData;
-    if (selectedRecord) return selectedRecord;
-    return formData;
-  }, [editingId, isFormOpen, selectedRecord, formData]);
+    let data = null;
+    if (editingId || isFormOpen) {
+      data = formData;
+    } else if (selectedRecord) {
+      data = selectedRecord;
+    } else {
+      data = formData;
+    }
+
+    // If signature is enabled, ensure signature data is available
+    if (
+      data &&
+      data.use_signature &&
+      data.secretary_signature_id &&
+      !data.sec_signature_path
+    ) {
+      const secSig = signatures.find((s) => s.signature_id === data.secretary_signature_id);
+      if (secSig) {
+        data = {
+          ...data,
+          sec_official_name: secSig.official_name,
+          sec_designation: secSig.designation,
+          sec_signature_path: secSig.signature_path,
+        };
+      }
+    }
+
+    if (
+      data &&
+      data.use_signature &&
+      data.captain_signature_id &&
+      !data.cap_signature_path
+    ) {
+      const capSig = signatures.find((s) => s.signature_id === data.captain_signature_id);
+      if (capSig) {
+        data = {
+          ...data,
+          cap_official_name: capSig.official_name,
+          cap_designation: capSig.designation,
+          cap_signature_path: capSig.signature_path,
+        };
+      }
+    }
+
+    return data;
+  }, [editingId, isFormOpen, selectedRecord, formData, signatures]);
 
   // QR generation: visible for drafts too when at least full_name1 exists
   useEffect(() => {
@@ -438,6 +510,9 @@ const {
       witness2_name: data.witness2_name,
       transaction_number: data.transaction_number,
       is_active: data.is_active ?? 1,
+      use_signature: data.use_signature ? 1 : 0,
+      secretary_signature_id: data.use_signature && data.secretary_signature_id ? data.secretary_signature_id : null,
+      captain_signature_id: data.use_signature && data.captain_signature_id ? data.captain_signature_id : null,
     };
   }
 
@@ -459,7 +534,16 @@ async function handleCreate() {
     });
     if (!res.ok) throw new Error("Create failed");
     const created = await res.json();
-    const newRec = { ...updated, certificate_of_cohabitation_id: created.certificate_of_cohabitation_id };
+    const newRec = { 
+      ...updated, 
+      certificate_of_cohabitation_id: created.certificate_of_cohabitation_id,
+      sec_official_name: created.sec_official_name,
+      sec_designation: created.sec_designation,
+      sec_signature_path: created.sec_signature_path,
+      cap_official_name: created.cap_official_name,
+      cap_designation: created.cap_designation,
+      cap_signature_path: created.cap_signature_path,
+    };
     setRecords([newRec, ...records]);
     setSelectedRecord(newRec);
 
@@ -515,7 +599,16 @@ async function handleUpdate() {
       witness2_name: updatedData.witness2_name,
       date_created: updatedData.date_created,
       transaction_number: updatedData.transaction_number,
-      validity_period: validityPeriod
+      validity_period: validityPeriod,
+      use_signature: Boolean(updatedData.use_signature),
+      secretary_signature_id: updatedData.secretary_signature_id,
+      captain_signature_id: updatedData.captain_signature_id,
+      sec_official_name: updatedData.sec_official_name,
+      sec_designation: updatedData.sec_designation,
+      sec_signature_path: updatedData.sec_signature_path,
+      cap_official_name: updatedData.cap_official_name,
+      cap_designation: updatedData.cap_designation,
+      cap_signature_path: updatedData.cap_signature_path,
     };
     // Remove old record and add new one
     setRecords([updatedRec, ...records.filter((r) => r.certificate_of_cohabitation_id !== editingId)]);
@@ -550,10 +643,28 @@ async function handleUpdate() {
       dob1: record.dob1 || "",
       dob2: record.dob2 || "",
       date_started: record.date_started || record.dateStarted || new Date().getFullYear(),
+      use_signature: Boolean(record.use_signature),
+      secretary_signature_id: record.secretary_signature_id || null,
+      captain_signature_id: record.captain_signature_id || null,
     });
     setEditingId(record.certificate_of_cohabitation_id);
     setIsFormOpen(true);
     setActiveTab("form");
+    
+    // Set selected signatures if they exist
+    if (record.secretary_signature_id) {
+      const secSig = signatures.find((s) => s.signature_id === record.secretary_signature_id);
+      setSelectedSecretarySignature(secSig || null);
+    } else {
+      setSelectedSecretarySignature(null);
+    }
+    
+    if (record.captain_signature_id) {
+      const capSig = signatures.find((s) => s.signature_id === record.captain_signature_id);
+      setSelectedCaptainSignature(capSig || null);
+    } else {
+      setSelectedCaptainSignature(null);
+    }
   }
 
   async function handleDelete(id) {
@@ -581,6 +692,21 @@ async function handleUpdate() {
     setEditingId(record.certificate_of_cohabitation_id);
     setIsFormOpen(true);
     setActiveTab("form");
+    
+    // Set selected signatures if they exist
+    if (record.secretary_signature_id) {
+      const secSig = signatures.find((s) => s.signature_id === record.secretary_signature_id);
+      setSelectedSecretarySignature(secSig || null);
+    } else {
+      setSelectedSecretarySignature(null);
+    }
+    
+    if (record.captain_signature_id) {
+      const capSig = signatures.find((s) => s.signature_id === record.captain_signature_id);
+      setSelectedCaptainSignature(capSig || null);
+    } else {
+      setSelectedCaptainSignature(null);
+    }
   }
 
   function resetForm() {
@@ -600,10 +726,15 @@ async function handleUpdate() {
       transaction_number: "",
       is_active: 1,
       date_created: "",
+      use_signature: false,
+      secretary_signature_id: null,
+      captain_signature_id: null,
     });
     setEditingId(null);
     setIsFormOpen(false);
     setSelectedRecord(null);
+    setSelectedSecretarySignature(null);
+    setSelectedCaptainSignature(null);
   }
 
   function handleSubmit() {
@@ -660,7 +791,7 @@ async function handleUpdate() {
         `Date Issued: ${formatDateDisplay(display.date_issued)}`,
         `Date Created (E-Signature Applied): ${createdDate}`,
         ``,
-        `Issued by: Punong Barangay Arnold Dondonayos`,
+        `Issued by: ${display.use_signature && display.cap_official_name ? display.cap_official_name : 'Punong Barangay Arnold Dondonayos'}`,
         `Barangay: Barangay 145 Zone 13 Dist. 1, Caloocan City`,
         ``,
         `QR Code URL: ${window.location.origin}/verify-cohabitation?id=${display.certificate_of_cohabitation_id}`,
@@ -1175,16 +1306,55 @@ async function handleUpdate() {
                     style={{
                       position: 'absolute',
                       top: '800px',
-                      left: '220px',
+                      left: '250px',
                       width: '300px',
                       textAlign: 'left',
                       fontFamily: '"Times New Roman", serif',
                       fontWeight: 'bold',
                     }}
                   >
-                    <div style={{ color: 'black', fontFamily: 'inherit' }}>Certified Correct:</div> <br /><br />
-                    <div style={{ color: 'black', fontFamily: 'inherit', fontSize: '16pt'}}>Roselyn Anore</div>
-                    <div style={{ color: 'black', fontFamily: 'inherit', fontStyle: 'italic'}}>Barangay Secretary</div>
+                    <div style={{ color: 'black', fontFamily: 'inherit' }}>Certified Correct:</div> <br />
+                    
+                    {/* Secretary Signature */}
+                    {display.use_signature && display.sec_signature_path ? (
+                      <>
+                        <div
+                          style={{
+                            marginBottom: '-10px',
+                            marginRight: '100px',
+                            height: '60px',
+                            display: 'flex',
+                            alignItems: 'flex-end',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <img
+                            src={getSignatureImageUrl(display.sec_signature_path)}
+                            alt="Secretary Signature"
+                            style={{
+                              maxWidth: '180px',
+                              maxHeight: '60px',
+                              objectFit: 'contain',
+                              display: 'block',
+                            }}
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                        <div style={{ color: 'black', fontFamily: 'inherit', fontSize: '16pt', fontStyle: 'italic' }}>
+                          Roselyn Anore
+                        </div>
+                        <div style={{ color: 'black', fontFamily: 'inherit', fontStyle: 'italic' }}>
+                          Barangay Secretary
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ color: 'black', fontFamily: 'inherit', fontSize: '16pt', fontStyle: 'italic'  }}>Roselyn Anore</div>
+                        <div style={{ color: 'black', fontFamily: 'inherit', fontStyle: 'italic' }}>Barangay Secretary</div>
+                      </>
+                    )}
                   </div>
 
                   <div
@@ -1198,9 +1368,48 @@ async function handleUpdate() {
                       fontWeight: 'bold',
                     }}
                   >
-                    <div style={{ color: 'black', fontFamily: 'inherit', fontSize: '12pt' }}>Attested: </div> <br /><br />
-                    <div style={{ color: 'black', fontFamily: 'inherit', fontSize: '16pt', fontStyle: 'italic' }}>ARNOLD DONDONAYOS</div>
-                    <div style={{ color: 'black', fontFamily: 'inherit', fontSize: '12pt', fontStyle: 'italic' }}>Barangay Chairman</div>
+                    <div style={{ color: 'black', fontFamily: 'inherit', fontSize: '12pt' }}>Attested: </div> <br />
+                    
+                    {/* Captain Signature */}
+                    {display.use_signature && display.cap_signature_path ? (
+                      <>
+                        <div
+                          style={{
+                            marginBottom: '-10px',
+                            marginRight: '100px',
+                            height: '60px',
+                            display: 'flex',
+                            alignItems: 'flex-end',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <img
+                            src={getSignatureImageUrl(display.cap_signature_path)}
+                            alt="Captain Signature"
+                            style={{
+                              maxWidth: '180px',
+                              maxHeight: '60px',
+                              objectFit: 'contain',
+                              display: 'block',
+                            }}
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                        <div style={{ color: 'black', fontFamily: 'inherit', fontSize: '16pt', fontStyle: 'italic' }}>
+                          ARNOLD DONDONAYOS
+                        </div>
+                        <div style={{ color: 'black', fontFamily: 'inherit', fontSize: '12pt', fontStyle: 'italic' }}>
+                          Barangay Chairman
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ color: 'black', fontFamily: 'inherit', fontSize: '16pt', fontStyle: 'italic' }}>ARNOLD DONDONAYOS</div>
+                        <div style={{ color: 'black', fontFamily: 'inherit', fontSize: '12pt', fontStyle: 'italic' }}>Barangay Chairman</div>
+                      </>
+                    )}
                   </div>
 
                   {/* QR and signature area */}
@@ -1477,6 +1686,95 @@ async function handleUpdate() {
                       </Grid>
                     </Grid>
 
+                    <Divider sx={{ my: 2 }} />
+
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={formData.use_signature || false}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setFormData({
+                              ...formData,
+                              use_signature: checked,
+                              secretary_signature_id:
+                                checked && selectedSecretarySignature
+                                  ? selectedSecretarySignature.signature_id
+                                  : null,
+                              captain_signature_id:
+                                checked && selectedCaptainSignature
+                                  ? selectedCaptainSignature.signature_id
+                                  : null,
+                            });
+                            if (!checked) {
+                              setSelectedSecretarySignature(null);
+                              setSelectedCaptainSignature(null);
+                            }
+                          }}
+                          color="primary"
+                        />
+                      }
+                      label="Add E-Signatures"
+                    />
+
+                    {formData.use_signature && (
+                      <>
+                        <Autocomplete
+                          options={signatures}
+                          getOptionLabel={(opt) =>
+                            `${opt.official_name} - ${opt.designation}`
+                          }
+                          value={selectedSecretarySignature}
+                          onChange={(e, newValue) => {
+                            setSelectedSecretarySignature(newValue);
+                            setFormData({
+                              ...formData,
+                              secretary_signature_id: newValue
+                                ? newValue.signature_id
+                                : null,
+                            });
+                          }}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="Select Secretary Signature"
+                              variant="outlined"
+                              fullWidth
+                              size="small"
+                              required
+                            />
+                          )}
+                        />
+
+                        <Autocomplete
+                          options={signatures}
+                          getOptionLabel={(opt) =>
+                            `${opt.official_name} - ${opt.designation}`
+                          }
+                          value={selectedCaptainSignature}
+                          onChange={(e, newValue) => {
+                            setSelectedCaptainSignature(newValue);
+                            setFormData({
+                              ...formData,
+                              captain_signature_id: newValue
+                                ? newValue.signature_id
+                                : null,
+                            });
+                          }}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="Select Captain Signature"
+                              variant="outlined"
+                              fullWidth
+                              size="small"
+                              required
+                            />
+                          )}
+                        />
+                      </>
+                    )}
+
                     <Box sx={{ display: 'flex', gap: 1, pt: 1 }}>
                       <Button
                         onClick={handleSubmit}
@@ -1568,6 +1866,15 @@ async function handleUpdate() {
                                   <Typography variant="caption" color="text.secondary">
                                     Issued: {formatDateDisplay(record.date_issued)}
                                   </Typography>
+                                  {record.use_signature && (
+                                    <Chip 
+                                      icon={<ArticleIcon />}
+                                      label="E-Signed" 
+                                      size="small" 
+                                      color="success" 
+                                      variant="outlined" 
+                                    />
+                                  )}
                                 </Box>
                                 <Typography variant="caption" color="text.secondary">
                                   {record.witness1_name && record.witness2_name ? `Witnesses: ${record.witness1_name}, ${record.witness2_name}` : ''}

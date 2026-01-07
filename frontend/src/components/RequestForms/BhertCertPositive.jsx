@@ -4,6 +4,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { getSignatures, getSignatureImageUrl } from '../../services/signatureService';
 import CaloocanLogo from '../../assets/CaloocanLogo.png';
 import Logo145 from '../../assets/Logo145.png';
 import BagongPilipinas from '../../assets/BagongPilipinas.png';
@@ -45,6 +46,9 @@ import {
   Fab,
   AppBar,
   Toolbar,
+  FormControlLabel,
+  Checkbox,
+  Divider,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -232,6 +236,9 @@ export default function BhertCertificatePositive() {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(0.75); // Default zoom level
+  const [signatures, setSignatures] = useState([]);
+  const [selectedSecretarySignature, setSelectedSecretarySignature] = useState(null);
+  const [selectedCaptainSignature, setSelectedCaptainSignature] = useState(null);
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -251,6 +258,9 @@ export default function BhertCertificatePositive() {
     transaction_number: '', // New field for transaction number
     is_active: 1,
     date_created: '',
+    use_signature: false, // Add e-signature field
+    secretary_signature_id: null, // Add secretary signature ID field
+    captain_signature_id: null, // Add captain signature ID field
   });
 
   // Helper function to format date consistently without timezone issues
@@ -368,9 +378,20 @@ export default function BhertCertificatePositive() {
     }
   }
 
+  // ---------- LOAD SIGNATURES ----------
+  async function loadSignatures() {
+    try {
+      const data = await getSignatures();
+      setSignatures(data);
+    } catch (err) {
+      console.warn('Could not load signatures:', err);
+    }
+  }
+
   useEffect(() => {
     loadResidents();
     loadRecords();
+    loadSignatures();
   }, []);
 
   async function loadRecords() {
@@ -392,6 +413,15 @@ export default function BhertCertificatePositive() {
               transaction_number:
                 r.transaction_number || generateTransactionNumber(), // Generate if missing
               is_active: r.is_active ?? 1,
+              use_signature: Boolean(r.use_signature),
+              secretary_signature_id: r.secretary_signature_id || null,
+              captain_signature_id: r.captain_signature_id || null,
+              sec_official_name: r.sec_official_name || null,
+              sec_designation: r.sec_designation || null,
+              sec_signature_path: r.sec_signature_path || null,
+              cap_official_name: r.cap_official_name || null,
+              cap_designation: r.cap_designation || null,
+              cap_signature_path: r.cap_signature_path || null,
             }))
           : []
       );
@@ -401,10 +431,52 @@ export default function BhertCertificatePositive() {
   }
 
   const display = useMemo(() => {
-    if (editingId || isFormOpen) return formData;
-    if (selectedRecord) return selectedRecord;
-    return formData;
-  }, [editingId, isFormOpen, selectedRecord, formData]);
+    let data = null;
+    if (editingId || isFormOpen) {
+      data = formData;
+    } else if (selectedRecord) {
+      data = selectedRecord;
+    } else {
+      data = formData;
+    }
+
+    // If signature is enabled, ensure signature data is available
+    if (
+      data &&
+      data.use_signature &&
+      data.secretary_signature_id &&
+      !data.sec_signature_path
+    ) {
+      const secSig = signatures.find((s) => s.signature_id === data.secretary_signature_id);
+      if (secSig) {
+        data = {
+          ...data,
+          sec_official_name: secSig.official_name,
+          sec_designation: secSig.designation,
+          sec_signature_path: secSig.signature_path,
+        };
+      }
+    }
+
+    if (
+      data &&
+      data.use_signature &&
+      data.captain_signature_id &&
+      !data.cap_signature_path
+    ) {
+      const capSig = signatures.find((s) => s.signature_id === data.captain_signature_id);
+      if (capSig) {
+        data = {
+          ...data,
+          cap_official_name: capSig.official_name,
+          cap_designation: capSig.designation,
+          cap_signature_path: capSig.signature_path,
+        };
+      }
+    }
+
+    return data;
+  }, [editingId, isFormOpen, selectedRecord, formData, signatures]);
 
   // Generate QR code with URL for PDF download
   useEffect(() => {
@@ -465,6 +537,9 @@ export default function BhertCertificatePositive() {
       date_issued: data.date_issued,
       transaction_number: data.transaction_number, // Include transaction number
       is_active: data.is_active ?? 1,
+      use_signature: data.use_signature ? 1 : 0,
+      secretary_signature_id: data.use_signature && data.secretary_signature_id ? data.secretary_signature_id : null,
+      captain_signature_id: data.use_signature && data.captain_signature_id ? data.captain_signature_id : null,
     };
   }
 
@@ -489,7 +564,13 @@ export default function BhertCertificatePositive() {
       const created = await res.json();
       const newRec = { 
         ...updatedFormData, 
-        bhert_certificate_positive_id: created.bhert_certificate_positive_id
+        bhert_certificate_positive_id: created.bhert_certificate_positive_id,
+        sec_official_name: created.sec_official_name,
+        sec_designation: created.sec_designation,
+        sec_signature_path: created.sec_signature_path,
+        cap_official_name: created.cap_official_name,
+        cap_designation: created.cap_designation,
+        cap_signature_path: created.cap_signature_path,
       };
 
       setRecords([newRec, ...records]);
@@ -535,7 +616,16 @@ export default function BhertCertificatePositive() {
         transaction_number: updatedData.transaction_number,
         is_active: updatedData.is_active ?? 1,
         date_created: updatedData.date_created,
-        validity_period: validityPeriod
+        validity_period: validityPeriod,
+        use_signature: Boolean(updatedData.use_signature),
+        secretary_signature_id: updatedData.secretary_signature_id,
+        captain_signature_id: updatedData.captain_signature_id,
+        sec_official_name: updatedData.sec_official_name,
+        sec_designation: updatedData.sec_designation,
+        sec_signature_path: updatedData.sec_signature_path,
+        cap_official_name: updatedData.cap_official_name,
+        cap_designation: updatedData.cap_designation,
+        cap_signature_path: updatedData.cap_signature_path,
       };
       setRecords([updated, ...records.filter((r) => r.bhert_certificate_positive_id !== editingId)]);
       setSelectedRecord(updated);
@@ -554,13 +644,31 @@ export default function BhertCertificatePositive() {
     }
   }
 
- 
-
   function handleEdit(record) {
-    setFormData({ ...record });
+    setFormData({
+      ...record,
+      use_signature: Boolean(record.use_signature),
+      secretary_signature_id: record.secretary_signature_id || null,
+      captain_signature_id: record.captain_signature_id || null,
+    });
     setEditingId(record.bhert_certificate_positive_id);
     setIsFormOpen(true);
     setActiveTab('form');
+    
+    // Set selected signatures if they exist
+    if (record.secretary_signature_id) {
+      const secSig = signatures.find((s) => s.signature_id === record.secretary_signature_id);
+      setSelectedSecretarySignature(secSig || null);
+    } else {
+      setSelectedSecretarySignature(null);
+    }
+    
+    if (record.captain_signature_id) {
+      const capSig = signatures.find((s) => s.signature_id === record.captain_signature_id);
+      setSelectedCaptainSignature(capSig || null);
+    } else {
+      setSelectedCaptainSignature(null);
+    }
   }
 
   async function handleDelete(id) {
@@ -595,6 +703,21 @@ export default function BhertCertificatePositive() {
     setEditingId(record.bhert_certificate_positive_id); // To indicate viewing a specific record
     setIsFormOpen(true); // Keep the form open with the record details
     setActiveTab('form');
+    
+    // Set selected signatures if they exist
+    if (record.secretary_signature_id) {
+      const secSig = signatures.find((s) => s.signature_id === record.secretary_signature_id);
+      setSelectedSecretarySignature(secSig || null);
+    } else {
+      setSelectedSecretarySignature(null);
+    }
+    
+    if (record.captain_signature_id) {
+      const capSig = signatures.find((s) => s.signature_id === record.captain_signature_id);
+      setSelectedCaptainSignature(capSig || null);
+    } else {
+      setSelectedCaptainSignature(null);
+    }
   }
 
   function resetForm() {
@@ -607,10 +730,15 @@ export default function BhertCertificatePositive() {
       transaction_number: '',
       is_active: 1,
       date_created: '',
+      use_signature: false,
+      secretary_signature_id: null,
+      captain_signature_id: null,
     });
     setEditingId(null);
     setIsFormOpen(false);
     setSelectedRecord(null); // Clear selected record
+    setSelectedSecretarySignature(null);
+    setSelectedCaptainSignature(null);
   }
 
   function handleSubmit() {
@@ -1139,20 +1267,97 @@ export default function BhertCertificatePositive() {
                   </div>
 
                   {/* Signature Section */}
-                  <div style={{ position: 'absolute', left: '80px', top: '750px', fontWeight: 'bold' }}>
+                  <div style={{ position: 'absolute', left: '80px', top: '700px', fontWeight: 'bold' }}>
                     Certified by: <br />
                     <br />
-                    ROSALINA P. ANORE
-                    <br />
-                    <span style={{ fontSize: '14pt' }}>Brgy. Secretary</span>
+                    
+                    {/* Secretary Signature */}
+                    {display.use_signature && display.sec_signature_path ? (
+                      <>
+                        <div
+                          style={{
+                            marginBottom: '-20px',
+                            margiinTop: '10px',
+                            height: '60px',
+                            display: 'flex',
+                            alignItems: 'flex-end',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <img
+                            src={getSignatureImageUrl(display.sec_signature_path)}
+                            alt="Secretary Signature"
+                            style={{
+                              maxWidth: '180px',
+                              maxHeight: '60px',
+                              objectFit: 'contain',
+                              display: 'block',
+                            }}
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                        <div style={{ marginTop: '5px' }}>
+                          ROSALINA P. ANORE
+                        </div>
+                        <div style={{ marginTop: '5px', fontSize: '14pt' }}>
+                         Brgy. Secretary
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        ROSALINA P. ANORE
+                        <br />
+                        <span style={{ fontSize: '14pt' }}>Brgy. Secretary</span>
+                      </>
+                    )}
                   </div>
 
-                  <div style={{ position: 'absolute', left: '80px', top: '900px', fontWeight: 'bold'}}>
+                  <div style={{ position: 'absolute', left: '80px', top: '850px', fontWeight: 'bold' }}>
                     Noted by: <br />
                     <br />
-                    <span style={{ fontSize: '16pt' }}>ARNOLD DONDONAYOS</span>
-                    <br />
-                    <span style={{ fontSize: '14pt' }}>Punong Barangay</span>
+                    
+                    {/* Captain Signature - positioned to overlap with the name */}
+                    {display.use_signature && display.cap_signature_path ? (
+                      <>
+                        <div
+                          style={{
+                            marginBottom: '-20px',
+                            height: '60px',
+                            display: 'flex',
+                            alignItems: 'flex-end',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <img
+                            src={getSignatureImageUrl(display.cap_signature_path)}
+                            alt="Captain Signature"
+                            style={{
+                              maxWidth: '180px',
+                              maxHeight: '60px',
+                              objectFit: 'contain',
+                              display: 'block',
+                            }}
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                        <div style={{ marginTop: '5px', fontSize: '16pt' }}>
+                          ARNOLD DONDONAYOS
+                        </div>
+                        <div style={{ marginTop: '5px', fontSize: '14pt' }}>
+                        Punong Barangay
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: '16pt' }}>ARNOLD DONDONAYOS</span>
+                        <br />
+                        <span style={{ fontSize: '14pt' }}>Punong Barangay</span>
+                      </>
+                    )}
                   </div>
 
                   {/* QR Code */}
@@ -1367,6 +1572,95 @@ export default function BhertCertificatePositive() {
                       required
                     />
 
+                    <Divider sx={{ my: 2 }} />
+
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={formData.use_signature || false}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setFormData({
+                              ...formData,
+                              use_signature: checked,
+                              secretary_signature_id:
+                                checked && selectedSecretarySignature
+                                  ? selectedSecretarySignature.signature_id
+                                  : null,
+                              captain_signature_id:
+                                checked && selectedCaptainSignature
+                                  ? selectedCaptainSignature.signature_id
+                                  : null,
+                            });
+                            if (!checked) {
+                              setSelectedSecretarySignature(null);
+                              setSelectedCaptainSignature(null);
+                            }
+                          }}
+                          color="primary"
+                        />
+                      }
+                      label="Add E-Signatures"
+                    />
+
+                    {formData.use_signature && (
+                      <>
+                        <Autocomplete
+                          options={signatures}
+                          getOptionLabel={(opt) =>
+                            `${opt.official_name} - ${opt.designation}`
+                          }
+                          value={selectedSecretarySignature}
+                          onChange={(e, newValue) => {
+                            setSelectedSecretarySignature(newValue);
+                            setFormData({
+                              ...formData,
+                              secretary_signature_id: newValue
+                                ? newValue.signature_id
+                                : null,
+                            });
+                          }}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="Select Secretary Signature"
+                              variant="outlined"
+                              fullWidth
+                              size="small"
+                              required
+                            />
+                          )}
+                        />
+
+                        <Autocomplete
+                          options={signatures}
+                          getOptionLabel={(opt) =>
+                            `${opt.official_name} - ${opt.designation}`
+                          }
+                          value={selectedCaptainSignature}
+                          onChange={(e, newValue) => {
+                            setSelectedCaptainSignature(newValue);
+                            setFormData({
+                              ...formData,
+                              captain_signature_id: newValue
+                                ? newValue.signature_id
+                                : null,
+                            });
+                          }}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="Select Captain Signature"
+                              variant="outlined"
+                              fullWidth
+                              size="small"
+                              required
+                            />
+                          )}
+                        />
+                      </>
+                    )}
+
                     <Box sx={{ display: "flex", gap: 2, pt: 2 }}>
                       <Button 
                         onClick={handleSubmit} 
@@ -1460,6 +1754,15 @@ export default function BhertCertificatePositive() {
                                   <Typography variant="caption" color="text.secondary">
                                     Issued: {formatDateDisplay(record.date_issued)}
                                   </Typography>
+                                  {record.use_signature && (
+                                    <Chip 
+                                      icon={<ArticleIcon />}
+                                      label="E-Signed" 
+                                      size="small" 
+                                      color="success" 
+                                      variant="outlined" 
+                                    />
+                                  )}
                                 </Box>
                               </Box>
                               <Box sx={{ display: "flex", gap: 0.5 }}>
@@ -1600,6 +1903,34 @@ export default function BhertCertificatePositive() {
                   : 'N/A'}
               </Typography>
             </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                E-Signature:
+              </Typography>
+              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                {display.use_signature ? 'Enabled' : 'Disabled'}
+              </Typography>
+            </Grid>
+            {display.use_signature && (
+              <>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                    Secretary:
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                    {display.sec_official_name || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                    Captain:
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                    {display.cap_official_name || 'N/A'}
+                  </Typography>
+                </Grid>
+              </>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions>

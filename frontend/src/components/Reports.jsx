@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import {
   Box,
   Card,
@@ -16,6 +16,8 @@ import {
   Chip,
   Avatar,
   Button,
+  Alert,
+  CircularProgress,
 } from '@mui/material';
 import {
   PieChart,
@@ -34,6 +36,7 @@ import {
 } from 'recharts';
 import SearchIcon from '@mui/icons-material/Search';
 import { Report, ReportSharp } from '@mui/icons-material';
+import axios from 'axios';
 
 const COLORS = [
   '#E9762B',
@@ -43,6 +46,9 @@ const COLORS = [
   '#FF6B6B',
   '#4ECDC4',
 ];
+
+// Create a context for authentication
+const AuthContext = React.createContext();
 
 const Reports = ({ getToken }) => {
   const now = new Date();
@@ -54,81 +60,119 @@ const Reports = ({ getToken }) => {
   const [selectedResident, setSelectedResident] = useState(null);
   const [monthFilter, setMonthFilter] = useState(currentMonth);
   const [yearFilter, setYearFilter] = useState(currentYear);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Function to get token from localStorage or sessionStorage
+  const getAuthToken = () => {
+    // Try multiple methods to get the token
+    try {
+      // First try the provided getToken function if it exists
+      if (typeof getToken === 'function') {
+        return getToken();
+      }
+      
+      // Try to get token from localStorage
+      const token = localStorage.getItem('token');
+      if (token) return token;
+      
+      // Try to get token from sessionStorage
+      const sessionToken = sessionStorage.getItem('token');
+      if (sessionToken) return sessionToken;
+      
+      // Try to get from a cookie
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, 6) === 'token=') {
+          return cookie.substring(6);
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error getting authentication token:', error);
+      return null;
+    }
+  };
 
   useEffect(() => {
-    fetchCertificates();
-    fetchResidents();
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        await Promise.all([fetchCertificates(), fetchResidents()]);
+      } catch (err) {
+        setError('Failed to load data. Please try again.');
+        console.error('Error fetching data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, []);
 
   const fetchCertificates = async () => {
     try {
-      // Uncomment for real API call
-      // const token = getToken();
-      // const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-      // const res = await axios.get('http://localhost:5000/certificates', config);
-      // setCertificates(res.data);
-
-      // Mock data for demonstration
-      const mockData = [
-        {
-          id: 1,
-          certificate_type: 'Barangay Indigency',
-          reason: 'Medical',
-          date_issued: '2026-01-05',
-          resident_id: 1,
-        },
-        {
-          id: 2,
-          certificate_type: 'Barangay Indigency',
-          reason: 'Educational',
-          date_issued: '2026-01-04',
-          resident_id: 2,
-        },
-        {
-          id: 3,
-          certificate_type: 'Barangay Clearance',
-          reason: 'Employment',
-          date_issued: '2026-01-03',
-          resident_id: 1,
-        },
-        {
-          id: 4,
-          certificate_type: 'Business Clearance',
-          reason: 'New Business',
-          date_issued: '2026-01-02',
-          resident_id: 3,
-        },
-        {
-          id: 5,
-          certificate_type: 'Certificate of Residency',
-          reason: 'Bank Requirement',
-          date_issued: '2026-01-01',
-          resident_id: 2,
-        },
-      ];
-      setCertificates(mockData);
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+      
+      const config = { 
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        } 
+      };
+      
+      // Updated endpoint to match your backend route
+      const response = await axios.get('http://localhost:5000/certificates', config);
+      
+      console.log('Certificates data:', response.data);
+      
+      // Transform the data to match the expected format
+      const transformedData = response.data.map(cert => ({
+        id: cert.certificate_id,
+        certificate_type: cert.certificate_type,
+        reason: cert.reason || 'Not specified',
+        date_issued: cert.date_issued,
+        resident_id: cert.resident_id,
+        full_name: cert.full_name,
+        validity_period: cert.validity_period,
+      }));
+      
+      setCertificates(transformedData);
     } catch (error) {
-      console.error('Error fetching certificate data:', error);
+      console.error('Error fetching certificate data:', error.response?.data || error.message);
+      throw error;
     }
   };
 
   const fetchResidents = async () => {
     try {
-      // Uncomment for real API call
-      // const token = getToken();
-      // const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {};
-      // const res = await axios.get('http://localhost:5000/residents', config);
-      // setResidents(res.data);
-
-      // Mock data
-      const mockResidents = [
-        { resident_id: 1, full_name: 'Juan Dela Cruz' },
-        { resident_id: 2, full_name: 'Maria Santos' },
-        { resident_id: 3, full_name: 'Pedro Reyes' },
-      ];
-      setResidents(mockResidents);
+      const token = getAuthToken();
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+      
+      const config = { 
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        } 
+      };
+      
+      // Updated endpoint to match your backend route
+      const response = await axios.get('http://localhost:5000/residents', config);
+      
+      console.log('Residents data:', response.data);
+      
+      setResidents(response.data);
     } catch (error) {
-      console.error('Error fetching residents:', error);
+      console.error('Error fetching residents:', error.response?.data || error.message);
+      throw error;
     }
   };
 
@@ -368,6 +412,47 @@ const Reports = ({ getToken }) => {
   const hasAnyCertificates =
     selectedResident && filterDataByDateAndResident(certificates).length > 0;
 
+  if (loading) {
+    return (
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height: '100vh',
+          flexDirection: 'column',
+          gap: 2
+        }}
+      >
+        <CircularProgress />
+        <Typography variant="body1" color="text.secondary">
+          Loading reports data...
+        </Typography>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert 
+          severity="error" 
+          action={
+            <Button 
+              color="inherit" 
+              size="small" 
+              onClick={() => window.location.reload()}
+            >
+              Retry
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
+      </Box>
+    );
+  }
+
   return (
     <Box
       sx={{
@@ -379,16 +464,15 @@ const Reports = ({ getToken }) => {
         sx={{
           p: { xs: 2, md: 3 },
           minHeight: '120px',
-          background: 'linear-gradient(135deg, #41644A 0%, #0D4715 100%)', // green gradient
+          background: 'linear-gradient(135deg, #41644A 0%, #0D4715 100%)',
           color: 'white',
           borderRadius: 3,
           display: 'flex',
           alignItems: 'center',
           gap: 2,
-          mb: 4, // spacing below header
+          mb: 4,
         }}
       >
-        {/* Logo / Icon */}
         <Avatar
           sx={{
             bgcolor: '#F1F0E9',
@@ -397,11 +481,9 @@ const Reports = ({ getToken }) => {
             height: 56,
           }}
         >
-          <ReportSharp sx={{ fontSize: 32 }} />{' '}
-          {/* replace with your logo if available */}
+          <ReportSharp sx={{ fontSize: 32 }} />
         </Avatar>
 
-        {/* Text */}
         <Box>
           <Typography
             variant="h4"
@@ -434,7 +516,6 @@ const Reports = ({ getToken }) => {
         }}
       >
         <Grid container spacing={2} alignItems="center">
-          {/* Month - AUTO WIDTH (Only takes what it needs) */}
           <Grid item xs="auto" sx={{ minWidth: 130 }}>
             <FormControl fullWidth sx={{ minHeight: 60 }}>
               <InputLabel>Month</InputLabel>
@@ -446,7 +527,7 @@ const Reports = ({ getToken }) => {
                   borderRadius: 2,
                   height: 56,
                   transition: 'all 0.3s ease',
-                  width: '100%', // Ensure it fills the small grid item
+                  width: '100%',
                   '& .MuiSelect-select': {
                     display: 'flex',
                     alignItems: 'center',
@@ -473,7 +554,6 @@ const Reports = ({ getToken }) => {
             </FormControl>
           </Grid>
 
-          {/* Year - AUTO WIDTH (Only takes what it needs) */}
           <Grid item xs="auto" sx={{ minWidth: 110 }}>
             <FormControl fullWidth sx={{ minHeight: 60 }}>
               <InputLabel>Year</InputLabel>
@@ -514,7 +594,6 @@ const Reports = ({ getToken }) => {
             </FormControl>
           </Grid>
 
-          {/* Residents - TAKES ALL REMAINING SPACE */}
           <Grid item xs>
             <Autocomplete
               fullWidth
@@ -522,7 +601,7 @@ const Reports = ({ getToken }) => {
               getOptionLabel={(option) => option.full_name}
               value={selectedResident}
               onChange={(event, newValue) => setSelectedResident(newValue)}
-              sx={{ minHeight: 60, width: '100%' }} // Force width 100%
+              sx={{ minHeight: 60, width: '100%' }}
               renderInput={(params) => (
                 <TextField
                   {...params}
@@ -573,7 +652,6 @@ const Reports = ({ getToken }) => {
             />
           </Grid>
 
-          {/* Reset Filters Button - AUTO WIDTH (Shrinks to fit text) */}
           <Grid
             item
             xs="auto"
@@ -648,11 +726,10 @@ const Reports = ({ getToken }) => {
                 },
               }}
             >
-              {/* Header - FIXED TO DARK GREEN */}
               <Box
                 sx={{
                   p: 2,
-                  backgroundColor: '#41644A', // Replaced cert.color with fixed Dark Green
+                  backgroundColor: '#41644A',
                   color: 'white',
                   display: 'flex',
                   flexDirection: 'column',
@@ -680,7 +757,6 @@ const Reports = ({ getToken }) => {
                 </Typography>
               </Box>
 
-              {/* Total Count */}
               <Box
                 sx={{
                   py: 2,
@@ -697,7 +773,7 @@ const Reports = ({ getToken }) => {
                 <Typography
                   variant="h4"
                   sx={{
-                    color: '#41644A', // Also matched to Dark Green
+                    color: '#41644A',
                     fontWeight: 'bold',
                   }}
                 >
@@ -705,9 +781,7 @@ const Reports = ({ getToken }) => {
                 </Typography>
               </Box>
 
-              {/* Chart */}
               <Box sx={{ p: 2.5, flexGrow: 1 }}>
-                {/* Passing the fixed color to the chart as well if needed, or keep logic as is */}
                 {renderChart(cert.chartType, data, '#41644A')}
               </Box>
             </Paper>
@@ -715,7 +789,6 @@ const Reports = ({ getToken }) => {
         })}
       </Box>
 
-      {/* No Data Message */}
       {selectedResident && !hasAnyCertificates && (
         <Paper
           sx={{

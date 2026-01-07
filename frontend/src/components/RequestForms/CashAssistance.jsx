@@ -4,12 +4,14 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-
 import CaloocanLogo from '../../assets/CaloocanLogo.png';
 import Logo145 from '../../assets/Logo145.png';
+import BagongPilipinas from '../../assets/BagongPilipinas.png';
+import WordName from '../../assets/WordName.png';
 import { useCertificateManager } from '../../hooks/useCertificateManager';
+import { getSignatures, getSignatureImageUrl } from '../../services/signatureService';
 
-// MUI
+// Import Material UI components
 import {
   Container,
   Paper,
@@ -44,6 +46,9 @@ import {
   Fab,
   AppBar,
   Toolbar,
+  Checkbox,
+  FormControlLabel,
+  Divider,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -63,10 +68,11 @@ import {
   Folder as FolderIcon,
   Dashboard as DashboardIcon,
   Article as ArticleIcon,
+  CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
 import { useMediaQuery } from '@mui/material';
 
-// Define the custom theme matching Permit to Travel
+// Define the custom theme matching other certificates
 const theme = createTheme({
   palette: {
     primary: {
@@ -231,14 +237,17 @@ export default function CashAssistance() {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(0.75);
+  const [signatures, setSignatures] = useState([]);
+  const [selectedSecretarySignature, setSelectedSecretarySignature] = useState(null);
+  const [selectedCaptainSignature, setSelectedCaptainSignature] = useState(null);
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   const { 
-  saveCertificate, 
-  getValidityPeriod,
-  calculateExpirationDate 
-} = useCertificateManager('Cash Assistance');
+    saveCertificate, 
+    getValidityPeriod,
+    calculateExpirationDate 
+  } = useCertificateManager('Cash Assistance');
 
   const [formData, setFormData] = useState({
     cash_assistance_id: '',
@@ -251,6 +260,9 @@ export default function CashAssistance() {
     transaction_number: '',
     is_active: 1,
     date_created: '',
+    use_signature: false, // Added for e-signature
+    secretary_signature_id: null, // Added for secretary e-signature
+    captain_signature_id: null, // Added for captain e-signature
   });
 
   // helper: format date without timezone issues
@@ -293,7 +305,7 @@ export default function CashAssistance() {
     return `CA-${yy}${mm}${dd}-${rand}`;
   }
 
-  // store certificate in localStorage for verification (same approach as PermitToTravel)
+  // store certificate in localStorage for verification (same approach as other certificates)
   function storeCertificateData(certificateData) {
     if (!certificateData?.cash_assistance_id) return;
     const existing = JSON.parse(localStorage.getItem('certificates') || '{}');
@@ -317,6 +329,16 @@ export default function CashAssistance() {
     }
   }
 
+  // load signatures
+  async function loadSignatures() {
+    try {
+      const data = await getSignatures();
+      setSignatures(data);
+    } catch (err) {
+      console.warn('Could not load signatures:', err);
+    }
+  }
+
   // load cash assistance records
   async function loadRecords() {
     try {
@@ -337,6 +359,15 @@ export default function CashAssistance() {
               transaction_number: r.transaction_number || generateTransactionNumber(),
               is_active: r.is_active ?? 1,
               date_created: r.date_created,
+              use_signature: Boolean(r.use_signature), // Added for e-signature
+              secretary_signature_id: r.secretary_signature_id || null, // Added for secretary e-signature
+              captain_signature_id: r.captain_signature_id || null, // Added for captain e-signature
+              sec_official_name: r.sec_official_name || null, // Added for secretary e-signature
+              sec_designation: r.sec_designation || null, // Added for secretary e-signature
+              sec_signature_path: r.sec_signature_path || null, // Added for secretary e-signature
+              cap_official_name: r.cap_official_name || null, // Added for captain e-signature
+              cap_designation: r.cap_designation || null, // Added for captain e-signature
+              cap_signature_path: r.cap_signature_path || null, // Added for captain e-signature
             }))
           : []
       );
@@ -348,14 +379,57 @@ export default function CashAssistance() {
   useEffect(() => {
     loadResidents();
     loadRecords();
+    loadSignatures();
   }, []);
 
   // when display changes or form changes, generate QR (and store certificate)
   const display = useMemo(() => {
-    if (editingId || isFormOpen) return formData;
-    if (selectedRecord) return selectedRecord;
-    return formData;
-  }, [editingId, isFormOpen, selectedRecord, formData]);
+    let data = null;
+    if (editingId || isFormOpen) {
+      data = formData;
+    } else if (selectedRecord) {
+      data = selectedRecord;
+    } else {
+      data = formData;
+    }
+
+    // If signature is enabled, ensure signature data is available
+    if (
+      data &&
+      data.use_signature &&
+      data.secretary_signature_id &&
+      !data.sec_signature_path
+    ) {
+      const secSig = signatures.find((s) => s.signature_id === data.secretary_signature_id);
+      if (secSig) {
+        data = {
+          ...data,
+          sec_official_name: secSig.official_name,
+          sec_designation: secSig.designation,
+          sec_signature_path: secSig.signature_path,
+        };
+      }
+    }
+
+    if (
+      data &&
+      data.use_signature &&
+      data.captain_signature_id &&
+      !data.cap_signature_path
+    ) {
+      const capSig = signatures.find((s) => s.signature_id === data.captain_signature_id);
+      if (capSig) {
+        data = {
+          ...data,
+          cap_official_name: capSig.official_name,
+          cap_designation: capSig.designation,
+          cap_signature_path: capSig.signature_path,
+        };
+      }
+    }
+
+    return data;
+  }, [editingId, isFormOpen, selectedRecord, formData, signatures]);
 
   useEffect(() => {
     const generateQRCode = async () => {
@@ -406,6 +480,9 @@ export default function CashAssistance() {
       date_issued: data.date_issued || data.dateIssued || null,
       transaction_number: data.transaction_number,
       is_active: data.is_active ?? 1,
+      use_signature: data.use_signature ? 1 : 0, // Added for e-signature
+      secretary_signature_id: data.use_signature && data.secretary_signature_id ? data.secretary_signature_id : null, // Added for secretary e-signature
+      captain_signature_id: data.use_signature && data.captain_signature_id ? data.captain_signature_id : null, // Added for captain e-signature
     };
   }
 
@@ -428,7 +505,16 @@ export default function CashAssistance() {
       });
       if (!res.ok) throw new Error('Create failed');
       const created = await res.json();
-      const newRec = { ...updatedFormData, cash_assistance_id: created.cash_assistance_id };
+      const newRec = { 
+        ...updatedFormData, 
+        cash_assistance_id: created.cash_assistance_id,
+        sec_official_name: created.sec_official_name,
+        sec_designation: created.sec_designation,
+        sec_signature_path: created.sec_signature_path,
+        cap_official_name: created.cap_official_name,
+        cap_designation: created.cap_designation,
+        cap_signature_path: created.cap_signature_path,
+      };
 
       setRecords([newRec, ...records]);
       setSelectedRecord(newRec);
@@ -446,7 +532,6 @@ export default function CashAssistance() {
       alert('Failed to create record');
     }
   }
-
 
   async function handleUpdate() {
     try {
@@ -474,7 +559,16 @@ export default function CashAssistance() {
         date_issued: updatedData.date_issued?.split('T')[0] || '',
         date_created: updatedData.date_created,
         transaction_number: updatedData.transaction_number,
-        validity_period: validityPeriod
+        validity_period: validityPeriod,
+        use_signature: Boolean(updatedData.use_signature),
+        secretary_signature_id: updatedData.secretary_signature_id || null,
+        captain_signature_id: updatedData.captain_signature_id || null,
+        sec_official_name: updatedData.sec_official_name || null,
+        sec_designation: updatedData.sec_designation || null,
+        sec_signature_path: updatedData.sec_signature_path || null,
+        cap_official_name: updatedData.cap_official_name || null,
+        cap_designation: updatedData.cap_designation || null,
+        cap_signature_path: updatedData.cap_signature_path || null,
       };
       // Remove old record and add new one
       setRecords([updated, ...records.filter((r) => r.cash_assistance_id !== editingId)]);
@@ -495,10 +589,60 @@ export default function CashAssistance() {
   }
 
   function handleEdit(record) {
-    setFormData({ ...record, date_issued: record.date_issued || record.dateIssued || '' });
+    setFormData({ 
+      ...record, 
+      date_issued: record.date_issued || record.dateIssued || '',
+      use_signature: Boolean(record.use_signature),
+      secretary_signature_id: record.secretary_signature_id || null,
+      captain_signature_id: record.captain_signature_id || null,
+    });
     setEditingId(record.cash_assistance_id);
     setIsFormOpen(true);
     setActiveTab('form');
+    
+    // Set selected signatures if available
+    if (record.secretary_signature_id) {
+      const secSig = signatures.find((s) => s.signature_id === record.secretary_signature_id);
+      setSelectedSecretarySignature(secSig || null);
+    } else {
+      setSelectedSecretarySignature(null);
+    }
+    
+    if (record.captain_signature_id) {
+      const capSig = signatures.find((s) => s.signature_id === record.captain_signature_id);
+      setSelectedCaptainSignature(capSig || null);
+    } else {
+      setSelectedCaptainSignature(null);
+    }
+  }
+
+  function handleView(record) {
+    setSelectedRecord(record); // Set selected record for display
+    setFormData({ 
+      ...record, 
+      date_issued: record.date_issued || record.dateIssued || '',
+      use_signature: Boolean(record.use_signature),
+      secretary_signature_id: record.secretary_signature_id || null,
+      captain_signature_id: record.captain_signature_id || null,
+    }); // Also populate form data for QR generation/dialog
+    setEditingId(record.cash_assistance_id); // To indicate viewing a specific record
+    setIsFormOpen(true); // Keep the form open with the record details
+    setActiveTab('form');
+    
+    // Set selected signatures if available
+    if (record.secretary_signature_id) {
+      const secSig = signatures.find((s) => s.signature_id === record.secretary_signature_id);
+      setSelectedSecretarySignature(secSig || null);
+    } else {
+      setSelectedSecretarySignature(null);
+    }
+    
+    if (record.captain_signature_id) {
+      const capSig = signatures.find((s) => s.signature_id === record.captain_signature_id);
+      setSelectedCaptainSignature(capSig || null);
+    } else {
+      setSelectedCaptainSignature(null);
+    }
   }
 
   async function handleDelete(id) {
@@ -521,14 +665,6 @@ export default function CashAssistance() {
     }
   }
 
-  function handleView(record) {
-    setSelectedRecord(record);
-    setFormData({ ...record });
-    setEditingId(record.cash_assistance_id);
-    setIsFormOpen(true);
-    setActiveTab('form');
-  }
-
   function resetForm() {
     setFormData({
       cash_assistance_id: '',
@@ -541,10 +677,15 @@ export default function CashAssistance() {
       transaction_number: '',
       is_active: 1,
       date_created: '',
+      use_signature: false, // Added for e-signature
+      secretary_signature_id: null, // Added for secretary e-signature
+      captain_signature_id: null, // Added for captain e-signature
     });
     setEditingId(null);
     setIsFormOpen(false);
     setSelectedRecord(null);
+    setSelectedSecretarySignature(null);
+    setSelectedCaptainSignature(null);
   }
 
   function handleSubmit() {
@@ -563,7 +704,6 @@ export default function CashAssistance() {
     [records, searchTerm]
   );
 
-
   async function generatePDF() {
     if (!display.cash_assistance_id) {
       alert('Please save record first before downloading PDF');
@@ -577,7 +717,7 @@ export default function CashAssistance() {
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'in', format: [8.5, 11] });
       pdf.addImage(imgData, 'PNG', 0, 0, 8.5, 11);
 
-      // add metadata page similar to PermitToTravel
+      // add metadata page similar to other certificates
       pdf.addPage();
       pdf.setFontSize(18);
       pdf.setFont(undefined, 'bold');
@@ -602,6 +742,10 @@ export default function CashAssistance() {
         ``,
         `Date Issued: ${formatDateDisplay(display.date_issued)}`,
         `Date Created (E-Signature Applied): ${createdDate}`,
+        ``,
+        `E-Signature: ${display.use_signature ? 'Yes' : 'No'}`,
+        display.use_signature && display.sec_official_name ? `Secretary: ${display.sec_official_name} - ${display.sec_designation}` : '',
+        display.use_signature && display.cap_official_name ? `Captain: ${display.cap_official_name} - ${display.cap_designation}` : '',
         ``,
         `Issued by: Punong Barangay Arnold Dondonayos`,
         `Barangay: Barangay 145 Zone 13 Dist. 1, Caloocan City`,
@@ -927,10 +1071,10 @@ export default function CashAssistance() {
                   <img
                     style={{
                       position: 'absolute',
-                      width: '100px',
-                      height: '100px',
+                      width: '80px',
+                      height: '80px',
                       top: '60px',
-                      left: '60px',
+                      left: '40px',
                     }}
                     src={CaloocanLogo}
                     alt="Logo 1"
@@ -938,9 +1082,20 @@ export default function CashAssistance() {
                   <img
                     style={{
                       position: 'absolute',
-                      width: '110px',
-                      height: '110px',
+                      width: '80px',
+                      height: '80px',
                       top: '60px',
+                      left: '130px',
+                    }}
+                    src={BagongPilipinas}
+                    alt="Logo 2"
+                  />
+                  <img
+                    style={{
+                      position: 'absolute',
+                      width: '100px',
+                      height: '100px',
+                      top: '50px',
                       right: '40px',
                     }}
                     src={Logo145}
@@ -949,7 +1104,7 @@ export default function CashAssistance() {
                   <img
                     style={{
                       position: 'absolute',
-                      opacity: 0.2,
+                      opacity: 0.1,
                       width: '550px',
                       left: '50%',
                       top: '270px',
@@ -1068,10 +1223,11 @@ export default function CashAssistance() {
                     </p>
                   </div>
 
+                  {/* Secretary Signature */}
                   <div
                     style={{
                       position: 'absolute',
-                      top: '600px',
+                      top: '580px',
                       left: '80px',
                       width: '250px',
                       textAlign: 'left',
@@ -1081,26 +1237,133 @@ export default function CashAssistance() {
                     }}
                   >
                     <div style={{ color: 'black', fontFamily: 'inherit' }}>Certified Correct:</div>
-                    <br /><br />
-                    <div style={{ color: 'black', fontFamily: 'inherit' }}>Roselyn Anore</div>
-                    <div style={{ color: 'black', fontFamily: 'inherit' }}>Barangay Secretary</div>
+                    <br />
+                    
+                    {/* Secretary Signature */}
+                    {display.use_signature && display.sec_signature_path ? (
+                      <>
+                        <div
+                          style={{
+                            marginBottom: '-15px',
+                            marginRight: '100px',
+                            height: '60px',
+                            display: 'flex',
+                            alignItems: 'flex-end',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <img
+                            src={getSignatureImageUrl(display.sec_signature_path)}
+                            alt="Secretary Signature"
+                            style={{
+                              maxWidth: '180px',
+                              maxHeight: '60px',
+                              objectFit: 'contain',
+                              display: 'block',
+                            }}
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                        <div style={{ color: "black" }}>
+                         Roselyn Anore
+                        </div>
+                        <div style={{ color: "black" }}>
+                         Barangay Secretary
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ color: "black" }}>Roselyn Anore</div>
+                        <div style={{ color: "black" }}>Barangay Secretary</div>
+                      </>
+                    )}
                   </div>
 
+                  {/* Punong Barangay with E-Signature */}
                   <div
                     style={{
                       position: 'absolute',
                       top: '700px',
-                      right: '20px',
+                      right: '100px',
                       width: '300px',
-                      textAlign: 'left',
-                      fontFamily: '"Times New Roman", serif',
-                      fontWeight: 'bold',
+                      textAlign: 'center',
                     }}
                   >
-                    <div style={{ color: 'black', fontFamily: 'inherit', fontSize: '12pt' }}>Attested:</div>
-                    <br /><br />
-                    <div style={{ color: 'black', fontFamily: 'inherit', fontSize: '16pt', fontStyle: 'italic' }}>ARNOLD DONDONAYOS</div>
-                    <div style={{ color: 'black', fontFamily: 'inherit', fontSize: '12pt', fontStyle: 'italic' }}>Barangay Chairman</div>
+                    {/* E-Signature positioned to overlap with the name */}
+                    {display.use_signature && display.cap_signature_path ? (
+                      <div
+                        style={{
+                          position: 'relative',
+                          marginTop: '-10px', // Pull the signature up to overlap
+                          height: '70px',
+                          display: 'flex',
+                          alignItems: 'flex-end',
+                          justifyContent: 'center',
+                          zIndex: 2, // Ensure signature is on top
+                        }}
+                      >
+                        <img
+                          src={getSignatureImageUrl(display.cap_signature_path)}
+                          alt="Captain Signature"
+                          style={{
+                            maxWidth: '200px',
+                            maxHeight: '70px',
+                            objectFit: 'contain',
+                            display: 'block',
+                          }}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    ) : null}
+
+                    {/* WordName image positioned to overlap with signature */}
+                    <div
+                      style={{
+                        position: 'relative',
+                        marginTop: display.use_signature && display.cap_signature_path ? '-35px' : '-5px', // Adjust overlap based on whether signature is present
+                        height: '60px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 1, // Ensure name is below signature but above other elements
+                      }}
+                    >
+                      <img
+                        src={WordName}
+                        alt="Arnold Dondonayos"
+                        style={{
+                          width: '250px',
+                          height: 'auto',
+                          maxHeight: '60px',
+                          objectFit: 'contain',
+                        }}
+                      />
+                    </div>
+
+                    {/* Line positioned at the bottom of the name */}
+                    <div
+                      style={{
+                        borderTop: '2.5px solid #000',
+                        width: '90%',
+                        margin: 'auto',
+                        marginTop: display.use_signature && display.cap_signature_path ? '5px' : '-2px', // Adjust spacing based on signature presence
+                      }}
+                    ></div>
+
+                    <div
+                      style={{
+                        fontFamily: '"Brush Script MT", cursive',
+                        fontSize: '20pt',
+                        color: '#000',
+                        marginTop: '5px',
+                      }}
+                    >
+                      Punong Barangay
+                    </div>
                   </div>
 
                   {/* QR and signature area */}
@@ -1345,7 +1608,96 @@ export default function CashAssistance() {
                       required
                     />
 
-                    <Box sx={{ display: 'flex', gap: 1, pt: 1 }}>
+                    <Divider sx={{ my: 2 }} />
+
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={formData.use_signature || false}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setFormData({
+                              ...formData,
+                              use_signature: checked,
+                              secretary_signature_id:
+                                checked && selectedSecretarySignature
+                                  ? selectedSecretarySignature.signature_id
+                                  : null,
+                              captain_signature_id:
+                                checked && selectedCaptainSignature
+                                  ? selectedCaptainSignature.signature_id
+                                  : null,
+                            });
+                            if (!checked) {
+                              setSelectedSecretarySignature(null);
+                              setSelectedCaptainSignature(null);
+                            }
+                          }}
+                          color="primary"
+                        />
+                      }
+                      label="Add E-Signatures"
+                    />
+
+                    {formData.use_signature && (
+                      <>
+                        <Autocomplete
+                          options={signatures}
+                          getOptionLabel={(opt) =>
+                            `${opt.official_name} - ${opt.designation}`
+                          }
+                          value={selectedSecretarySignature}
+                          onChange={(e, newValue) => {
+                            setSelectedSecretarySignature(newValue);
+                            setFormData({
+                              ...formData,
+                              secretary_signature_id: newValue
+                                ? newValue.signature_id
+                                : null,
+                            });
+                          }}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="Select Secretary Signature"
+                              variant="outlined"
+                              fullWidth
+                              size="small"
+                              required
+                            />
+                          )}
+                        />
+
+                        <Autocomplete
+                          options={signatures}
+                          getOptionLabel={(opt) =>
+                            `${opt.official_name} - ${opt.designation}`
+                          }
+                          value={selectedCaptainSignature}
+                          onChange={(e, newValue) => {
+                            setSelectedCaptainSignature(newValue);
+                            setFormData({
+                              ...formData,
+                              captain_signature_id: newValue
+                                ? newValue.signature_id
+                                : null,
+                            });
+                          }}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="Select Captain Signature"
+                              variant="outlined"
+                              fullWidth
+                              size="small"
+                              required
+                            />
+                          )}
+                        />
+                      </>
+                    )}
+
+                    <Box sx={{ display: "flex", gap: 1, pt: 1 }}>
                       <Button
                         onClick={handleSubmit}
                         variant="contained"
@@ -1440,6 +1792,15 @@ export default function CashAssistance() {
                                 <Typography variant="caption" color="text.secondary">
                                   {record.request_reason}
                                 </Typography>
+                                {record.use_signature && (
+                                  <Chip
+                                    label="E-Signed"
+                                    size="small"
+                                    color="success"
+                                    variant="outlined"
+                                    icon={<CheckCircleIcon />}
+                                  />
+                                )}
                               </Box>
                               <Box sx={{ display: "flex", gap: 0.5 }}>
                                 <Tooltip title="View">
@@ -1587,6 +1948,34 @@ export default function CashAssistance() {
                   : 'N/A'}
               </Typography>
             </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                E-Signature:
+              </Typography>
+              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                {display.use_signature ? 'Yes' : 'No'}
+              </Typography>
+            </Grid>
+            {display.use_signature && (
+              <>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                    Secretary:
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                    {display.sec_official_name || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                    Captain:
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                    {display.cap_official_name || 'N/A'}
+                  </Typography>
+                </Grid>
+              </>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions>

@@ -9,6 +9,7 @@ import Logo145 from '../../assets/Logo145.png';
 import BagongPilipinas from '../../assets/BagongPilipinas.png';
 import WordName from '../../assets/WordName.png';
 import { useCertificateManager } from '../../hooks/useCertificateManager';
+import { getSignatures, getSignatureImageUrl } from '../../services/signatureService';
 
 // Import Material UI components
 import {
@@ -45,6 +46,9 @@ import {
   AppBar,
   Toolbar,
   Autocomplete,
+  Checkbox,
+  FormControlLabel,
+  Divider,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -234,15 +238,18 @@ export default function SoloParentForm() {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(0.75); // Default zoom level
+  const [signatures, setSignatures] = useState([]);
+  const [selectedSecretarySignature, setSelectedSecretarySignature] = useState(null);
+  const [selectedCaptainSignature, setSelectedCaptainSignature] = useState(null);
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   // Add this after the imports and before the component function
-const { 
-  saveCertificate, 
-  getValidityPeriod,
-  calculateExpirationDate 
-} = useCertificateManager('Solo Parent');
+  const { 
+    saveCertificate, 
+    getValidityPeriod,
+    calculateExpirationDate 
+  } = useCertificateManager('Solo Parent');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -254,6 +261,9 @@ const {
     employmentRemarks: '',
     dateIssued: new Date().toISOString().split('T')[0],
     transaction_number: '', // New field for transaction number
+    use_signature: false, // Add e-signature field
+    secretary_signature_id: null, // Add secretary signature ID field
+    captain_signature_id: null, // Add captain signature ID field
   });
 
   const [children, setChildren] = useState([]);
@@ -403,9 +413,20 @@ const {
     }
   }
 
+  // ---------- LOAD SIGNATURES ----------
+  async function loadSignatures() {
+    try {
+      const data = await getSignatures();
+      setSignatures(data);
+    } catch (err) {
+      console.warn('Could not load signatures:', err);
+    }
+  }
+
   useEffect(() => {
     loadResidents();
     loadRecords();
+    loadSignatures();
   }, []);
 
   async function loadRecords() {
@@ -431,6 +452,15 @@ const {
               dateCreated: r.date_created,
               transaction_number:
                 r.transaction_number || generateTransactionNumber(), // Generate if missing
+              use_signature: Boolean(r.use_signature),
+              secretary_signature_id: r.secretary_signature_id || null,
+              captain_signature_id: r.captain_signature_id || null,
+              sec_official_name: r.sec_official_name || null,
+              sec_designation: r.sec_designation || null,
+              sec_signature_path: r.sec_signature_path || null,
+              cap_official_name: r.cap_official_name || null,
+              cap_designation: r.cap_designation || null,
+              cap_signature_path: r.cap_signature_path || null,
             }))
           : []
       );
@@ -466,10 +496,52 @@ const {
   }
 
   const display = useMemo(() => {
-    if (editingId || isFormOpen) return formData;
-    if (selectedRecord) return selectedRecord;
-    return formData;
-  }, [editingId, isFormOpen, selectedRecord, formData]);
+    let data = null;
+    if (editingId || isFormOpen) {
+      data = formData;
+    } else if (selectedRecord) {
+      data = selectedRecord;
+    } else {
+      data = formData;
+    }
+
+    // If signature is enabled, ensure signature data is available
+    if (
+      data &&
+      data.use_signature &&
+      data.secretary_signature_id &&
+      !data.sec_signature_path
+    ) {
+      const secSig = signatures.find((s) => s.signature_id === data.secretary_signature_id);
+      if (secSig) {
+        data = {
+          ...data,
+          sec_official_name: secSig.official_name,
+          sec_designation: secSig.designation,
+          sec_signature_path: secSig.signature_path,
+        };
+      }
+    }
+
+    if (
+      data &&
+      data.use_signature &&
+      data.captain_signature_id &&
+      !data.cap_signature_path
+    ) {
+      const capSig = signatures.find((s) => s.signature_id === data.captain_signature_id);
+      if (capSig) {
+        data = {
+          ...data,
+          cap_official_name: capSig.official_name,
+          cap_designation: capSig.designation,
+          cap_signature_path: capSig.signature_path,
+        };
+      }
+    }
+
+    return data;
+  }, [editingId, isFormOpen, selectedRecord, formData, signatures]);
 
   // Generate QR code with URL for PDF download
   useEffect(() => {
@@ -522,27 +594,30 @@ const {
   }, [display]);
 
   function toServerPayload(data) {
-  const payload = {
-    full_name: data.name,
-    age: data.age ? Number(data.age) : null,
-    address: data.address || null,
-    dob: data.birthday || null,
-    contact_no: data.contactNo || null,
-    residents_since_year: data.residentsSinceYear || null,
-    unwed_since_year: data.unwedSinceYear || null,
-    employment_status: data.employmentStatus || null,
-    employment_remarks: data.employmentRemarks || null,
-    date_issued: data.dateIssued,
-    transaction_number: data.transaction_number,
-  };
-  
-  // Only add resident_id if it's a valid value
-  if (data.resident_id && data.resident_id !== '' && data.resident_id !== null) {
-    payload.resident_id = data.resident_id;
+    const payload = {
+      full_name: data.name,
+      age: data.age ? Number(data.age) : null,
+      address: data.address || null,
+      dob: data.birthday || null,
+      contact_no: data.contactNo || null,
+      residents_since_year: data.residentsSinceYear || null,
+      unwed_since_year: data.unwedSinceYear || null,
+      employment_status: data.employmentStatus || null,
+      employment_remarks: data.employmentRemarks || null,
+      date_issued: data.dateIssued,
+      transaction_number: data.transaction_number,
+      use_signature: data.use_signature ? 1 : 0,
+      secretary_signature_id: data.use_signature && data.secretary_signature_id ? data.secretary_signature_id : null,
+      captain_signature_id: data.use_signature && data.captain_signature_id ? data.captain_signature_id : null,
+    };
+    
+    // Only add resident_id if it's a valid value
+    if (data.resident_id && data.resident_id !== '' && data.resident_id !== null) {
+      payload.resident_id = data.resident_id;
+    }
+    
+    return payload;
   }
-  
-  return payload;
-}
 
   function childrenToServerPayload() {
     return children.map((child) => ({
@@ -557,164 +632,193 @@ const {
     }));
   }
 
- async function handleCreate() {
-  try {
-    // Generate a transaction number for new certificates
-    const transactionNumber = generateTransactionNumber();
-    const validityPeriod = getValidityPeriod('Solo Parent');
-    const updatedFormData = {
-      ...formData,
-      transaction_number: transactionNumber,
-      dateCreated: new Date().toISOString(), // Add current timestamp
-      validity_period: validityPeriod, // Add validity period
-    };
+  async function handleCreate() {
+    try {
+      // Generate a transaction number for new certificates
+      const transactionNumber = generateTransactionNumber();
+      const validityPeriod = getValidityPeriod('Solo Parent');
+      const updatedFormData = {
+        ...formData,
+        transaction_number: transactionNumber,
+        dateCreated: new Date().toISOString(), // Add current timestamp
+        validity_period: validityPeriod, // Add validity period
+      };
 
-    const res = await fetch(`${apiBase}/solo-parent-records`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(toServerPayload(updatedFormData)),
-    });
-    if (!res.ok) throw new Error('Create failed');
-    const created = await res.json();
-    const soloParentId = created.solo_parent_id;
-
-    // Save children
-    if (children.length > 0) {
-      await fetch(`${apiBase}/solo-parent-records/${soloParentId}/children`, {
+      const res = await fetch(`${apiBase}/solo-parent-records`, {
         method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(toServerPayload(updatedFormData)),
+      });
+      if (!res.ok) throw new Error('Create failed');
+      const created = await res.json();
+      const soloParentId = created.solo_parent_id;
+
+      // Save children
+      if (children.length > 0) {
+        await fetch(`${apiBase}/solo-parent-records/${soloParentId}/children`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(childrenToServerPayload()),
+        });
+      }
+
+      const newRec = {
+        ...updatedFormData,
+        id: soloParentId,
+        sec_official_name: created.sec_official_name,
+        sec_designation: created.sec_designation,
+        sec_signature_path: created.sec_signature_path,
+        cap_official_name: created.cap_official_name,
+        cap_designation: created.cap_designation,
+        cap_signature_path: created.cap_signature_path,
+      };
+
+      setRecords([newRec, ...records]);
+      setSelectedRecord(newRec);
+
+      // Save to certificates table using saveCertificate hook
+      await saveCertificate({
+        resident_id: newRec.resident_id,
+        full_name: newRec.name,
+        certificate_type: 'Solo Parent',
+        request_reason: 'Solo Parent', // Use request_reason field
+        reason: 'Solo Parent', // Also set reason field as backup
+        validity_period: newRec.validity_period,
+        date_issued: newRec.dateIssued,
+        reference_id: soloParentId, // Add reference to solo parent record
+      }, true);
+
+      // Store the new certificate data (can still use newRec for local storage/QR)
+      storeCertificateData(newRec);
+
+      resetForm();
+      setActiveTab('records');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to create record');
+    }
+  }
+
+  async function handleUpdate() {
+    try {
+      // Get the current record to preserve resident_id if needed
+      const currentRecord = records.find(r => r.id === editingId);
+      
+      if (currentRecord && currentRecord.name === formData.name && !formData.resident_id) {
+        formData.resident_id = currentRecord.resident_id;
+      }
+      
+      const validityPeriod = getValidityPeriod('Solo Parent');
+      const updatedFormData = {
+        ...formData,
+        validity_period: validityPeriod, // Add validity period
+      };
+      
+      const res = await fetch(`${apiBase}/solo-parent-records/${editingId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(toServerPayload(updatedFormData)),
+      });
+      if (!res.ok) throw new Error('Update failed');
+      const updatedData = await res.json();
+      
+      // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
+      const newSoloParentId = updatedData.solo_parent_id;
+      
+      // Update children for the new record
+      await fetch(`${apiBase}/solo-parent-records/${newSoloParentId}/children`, {
+        method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify(childrenToServerPayload()),
       });
+
+      const updated = { 
+        ...updatedData,
+        id: newSoloParentId,
+        name: updatedData.full_name,
+        address: updatedData.address,
+        birthday: updatedData.dob?.slice(0, 10) || '',
+        age: String(updatedData.age ?? ''),
+        contactNo: updatedData.contact_no || '',
+        residentsSinceYear: updatedData.residents_since_year || '',
+        unwedSinceYear: updatedData.unwed_since_year || '',
+        employmentStatus: updatedData.employment_status || '',
+        employmentRemarks: updatedData.employment_remarks || '',
+        dateIssued: updatedData.date_issued?.slice(0, 10) || '',
+        dateCreated: updatedData.date_created,
+        transaction_number: updatedData.transaction_number,
+        validity_period: validityPeriod,
+        use_signature: Boolean(updatedData.use_signature),
+        secretary_signature_id: updatedData.secretary_signature_id,
+        captain_signature_id: updatedData.captain_signature_id,
+        sec_official_name: updatedData.sec_official_name,
+        sec_designation: updatedData.sec_designation,
+        sec_signature_path: updatedData.sec_signature_path,
+        cap_official_name: updatedData.cap_official_name,
+        cap_designation: updatedData.cap_designation,
+        cap_signature_path: updatedData.cap_signature_path,
+      };
+      
+      // Remove old record and add new one
+      setRecords([updated, ...records.filter((r) => r.id !== editingId)]);
+      setSelectedRecord(updated);
+
+      // Save to certificates table using saveCertificate hook
+      await saveCertificate({
+        resident_id: updated.resident_id,
+        full_name: updated.name,
+        certificate_type: 'Solo Parent',
+        request_reason: 'Solo Parent', // Use request_reason field
+        reason: 'Solo Parent', // Also set reason field as backup
+        validity_period: updated.validity_period,
+        date_issued: updated.dateIssued,
+        reference_id: editingId, // Add reference to solo parent record
+      }, false);
+
+      // Store the updated certificate data (can still use updated for local storage/QR)
+      storeCertificateData(updated);
+
+      await loadChildren(editingId);
+      
+      resetForm();
+      setActiveTab('records');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to update record');
     }
-
-    const newRec = {
-      ...updatedFormData,
-      id: soloParentId,
-    };
-
-    setRecords([newRec, ...records]);
-    setSelectedRecord(newRec);
-
-    // --- START: FIX ---
-    // Save to certificates table using saveCertificate hook
-    await saveCertificate({
-      resident_id: newRec.resident_id,
-      full_name: newRec.name,
-      certificate_type: 'Solo Parent',
-      request_reason: 'Solo Parent', // Use request_reason field
-      reason: 'Solo Parent', // Also set reason field as backup
-      validity_period: newRec.validity_period,
-      date_issued: newRec.dateIssued,
-      reference_id: soloParentId, // Add reference to solo parent record
-    }, true);
-    // --- END: FIX ---
-
-    // Store the new certificate data (can still use newRec for local storage/QR)
-    storeCertificateData(newRec);
-
-    resetForm();
-    setActiveTab('records');
-  } catch (e) {
-    console.error(e);
-    alert('Failed to create record');
   }
-}
-
-async function handleUpdate() {
-  try {
-    // Get the current record to preserve resident_id if needed
-    const currentRecord = records.find(r => r.id === editingId);
-    
-    if (currentRecord && currentRecord.name === formData.name && !formData.resident_id) {
-      formData.resident_id = currentRecord.resident_id;
-    }
-    
-    const validityPeriod = getValidityPeriod('Solo Parent');
-    const updatedFormData = {
-      ...formData,
-      validity_period: validityPeriod, // Add validity period
-    };
-    
-    const res = await fetch(`${apiBase}/solo-parent-records/${editingId}`, {
-      method: 'PUT',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(toServerPayload(updatedFormData)),
-    });
-    if (!res.ok) throw new Error('Update failed');
-    const updatedData = await res.json();
-    
-    // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
-    const newSoloParentId = updatedData.solo_parent_id;
-    
-    // Update children for the new record
-    await fetch(`${apiBase}/solo-parent-records/${newSoloParentId}/children`, {
-      method: 'PUT',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(childrenToServerPayload()),
-    });
-
-    const updated = { 
-      ...updatedData,
-      id: newSoloParentId,
-      name: updatedData.full_name,
-      address: updatedData.address,
-      birthday: updatedData.dob?.slice(0, 10) || '',
-      age: String(updatedData.age ?? ''),
-      contactNo: updatedData.contact_no || '',
-      residentsSinceYear: updatedData.residents_since_year || '',
-      unwedSinceYear: updatedData.unwed_since_year || '',
-      employmentStatus: updatedData.employment_status || '',
-      employmentRemarks: updatedData.employment_remarks || '',
-      dateIssued: updatedData.date_issued?.slice(0, 10) || '',
-      dateCreated: updatedData.date_created,
-      transaction_number: updatedData.transaction_number,
-      validity_period: validityPeriod
-    };
-    
-    // Remove old record and add new one
-    setRecords([updated, ...records.filter((r) => r.id !== editingId)]);
-    setSelectedRecord(updated);
-
-    // --- START: FIX ---
-    // Save to certificates table using saveCertificate hook
-    await saveCertificate({
-      resident_id: updated.resident_id,
-      full_name: updated.name,
-      certificate_type: 'Solo Parent',
-      request_reason: 'Solo Parent', // Use request_reason field
-      reason: 'Solo Parent', // Also set reason field as backup
-      validity_period: updated.validity_period,
-      date_issued: updated.dateIssued,
-      reference_id: editingId, // Add reference to solo parent record
-    }, false);
-    // --- END: FIX ---
-
-    // Store the updated certificate data (can still use updated for local storage/QR)
-    storeCertificateData(updated);
-
-    await loadChildren(editingId);
-    
-    resetForm();
-    setActiveTab('records');
-  } catch (e) {
-    console.error(e);
-    alert('Failed to update record');
-  }
-}
 
   function handleEdit(record) {
-  // Find the resident from the residents list to get the resident_id
-  const resident = residents.find((r) => r.full_name === record.name);
-  
-  setFormData({
-    ...record,
-    resident_id: resident ? resident.resident_id : record.resident_id
-  });
-  setEditingId(record.id);
-  setIsFormOpen(true);
-  setActiveTab('form');
-  loadChildren(record.id);
-}
+    // Find the resident from the residents list to get the resident_id
+    const resident = residents.find((r) => r.full_name === record.name);
+    
+    setFormData({
+      ...record,
+      resident_id: resident ? resident.resident_id : record.resident_id,
+      use_signature: Boolean(record.use_signature),
+      secretary_signature_id: record.secretary_signature_id || null,
+      captain_signature_id: record.captain_signature_id || null,
+    });
+    setEditingId(record.id);
+    setIsFormOpen(true);
+    setActiveTab('form');
+    loadChildren(record.id);
+    
+    // Set selected signatures if they exist
+    if (record.secretary_signature_id) {
+      const secSig = signatures.find((s) => s.signature_id === record.secretary_signature_id);
+      setSelectedSecretarySignature(secSig || null);
+    } else {
+      setSelectedSecretarySignature(null);
+    }
+    
+    if (record.captain_signature_id) {
+      const capSig = signatures.find((s) => s.signature_id === record.captain_signature_id);
+      setSelectedCaptainSignature(capSig || null);
+    } else {
+      setSelectedCaptainSignature(null);
+    }
+  }
 
   async function handleDelete(id) {
     if (!window.confirm('Delete this record?')) return;
@@ -749,6 +853,21 @@ async function handleUpdate() {
     setIsFormOpen(true); // Keep the form open with the record details
     setActiveTab('form');
     loadChildren(record.id);
+    
+    // Set selected signatures if they exist
+    if (record.secretary_signature_id) {
+      const secSig = signatures.find((s) => s.signature_id === record.secretary_signature_id);
+      setSelectedSecretarySignature(secSig || null);
+    } else {
+      setSelectedSecretarySignature(null);
+    }
+    
+    if (record.captain_signature_id) {
+      const capSig = signatures.find((s) => s.signature_id === record.captain_signature_id);
+      setSelectedCaptainSignature(capSig || null);
+    } else {
+      setSelectedCaptainSignature(null);
+    }
   }
 
   function resetForm() {
@@ -762,11 +881,16 @@ async function handleUpdate() {
       employmentRemarks: '',
       dateIssued: new Date().toISOString().split('T')[0],
       transaction_number: '',
+      use_signature: false,
+      secretary_signature_id: null,
+      captain_signature_id: null,
     });
     setChildren([]);
     setEditingId(null);
     setIsFormOpen(false);
     setSelectedRecord(null); // Clear selected record
+    setSelectedSecretarySignature(null);
+    setSelectedCaptainSignature(null);
   }
 
   function handleSubmit() {
@@ -784,7 +908,6 @@ async function handleUpdate() {
       ),
     [records, searchTerm]
   );
-
 
   // Generate PDF function
   async function generatePDF() {
@@ -934,7 +1057,6 @@ async function handleUpdate() {
       setQrDialogOpen(true);
     }
   };
-
 
   const handleZoomIn = () => {
     setZoomLevel((prev) => Math.min(prev + 0.1, 2)); // Max zoom: 2x (200%)
@@ -1611,32 +1733,130 @@ async function handleUpdate() {
                         marginTop: '50px',
                       }}
                     >
+                      {/* Secretary Signature */}
                       <div style={{ textAlign: 'center', width: '300px' }}>
-                        <div style={{ fontWeight: 'bold', marginBottom: '3px' }}>
-                          ROSALINA P. ANORE
-                        </div>
-                        <div
-                          style={{
-                            borderTop: '1px solid #000',
-                            width: '80%',
-                            margin: '0 auto 8px auto',
-                          }}
-                        ></div>
-                        <div style={{ fontWeight: 'bold' }}>Brgy. Secretary</div>
+                        {display.use_signature && display.sec_signature_path ? (
+                          <>
+                            <div
+                              style={{
+                                marginBottom: '5px',
+                                height: '60px',
+                                display: 'flex',
+                                alignItems: 'flex-end',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <img
+                                src={getSignatureImageUrl(display.sec_signature_path)}
+                                alt="Secretary Signature"
+                                style={{
+                                  maxWidth: '180px',
+                                  maxHeight: '60px',
+                                  objectFit: 'contain',
+                                  display: 'block',
+                                }}
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                }}
+                              />
+                            </div>
+                            <div
+                              style={{
+                                fontWeight: 'bold',
+                                marginBottom: '3px',
+                              }}
+                            >
+                              ROSALINA P. ANORE
+                            </div>
+                            <div
+                              style={{
+                                borderTop: '1px solid #000',
+                                width: '80%',
+                                margin: '0 auto 8px auto',
+                              }}
+                            ></div>
+                            <div style={{ fontWeight: 'bold' }}>
+                              Brgy. Secretary
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ fontWeight: 'bold', marginBottom: '3px' }}>
+                              ROSALINA P. ANORE
+                            </div>
+                            <div
+                              style={{
+                                borderTop: '1px solid #000',
+                                width: '80%',
+                                margin: '0 auto 8px auto',
+                              }}
+                            ></div>
+                            <div style={{ fontWeight: 'bold' }}>Brgy. Secretary</div>
+                          </>
+                        )}
                       </div>
 
+                      {/* Captain Signature */}
                       <div style={{ textAlign: 'center', width: '300px' }}>
-                        <div style={{ fontWeight: 'bold', marginBottom: '3px' }}>
-                          ARNOLD DONDONAYOS
-                        </div>
-                        <div
-                          style={{
-                            borderTop: '1px solid #000',
-                            width: '80%',
-                            margin: '0 auto 8px auto',
-                          }}
-                        ></div>
-                        <div style={{ fontWeight: 'bold' }}>Barangay Captain</div>
+                        {display.use_signature && display.cap_signature_path ? (
+                          <>
+                            <div
+                              style={{
+                                marginBottom: '5px',
+                                height: '60px',
+                                display: 'flex',
+                                alignItems: 'flex-end',
+                                justifyContent: 'center',
+                              }}
+                            >
+                              <img
+                                src={getSignatureImageUrl(display.cap_signature_path)}
+                                alt="Captain Signature"
+                                style={{
+                                  maxWidth: '180px',
+                                  maxHeight: '60px',
+                                  objectFit: 'contain',
+                                  display: 'block',
+                                }}
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                }}
+                              />
+                            </div>
+                            <div
+                              style={{
+                                fontWeight: 'bold',
+                                marginBottom: '3px',
+                              }}
+                            >
+                              ARNOLD DONDONAYOS
+                            </div>
+                            <div
+                              style={{
+                                borderTop: '1px solid #000',
+                                width: '80%',
+                                margin: '0 auto 8px auto',
+                              }}
+                            ></div>
+                            <div style={{ fontWeight: 'bold' }}>
+                             Barangay Captain
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ fontWeight: 'bold', marginBottom: '3px' }}>
+                              ARNOLD DONDONAYOS
+                            </div>
+                            <div
+                              style={{
+                                borderTop: '1px solid #000',
+                                width: '80%',
+                                margin: '0 auto 8px auto',
+                              }}
+                            ></div>
+                            <div style={{ fontWeight: 'bold' }}>Barangay Captain</div>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1788,39 +2008,39 @@ async function handleUpdate() {
                 <Box sx={{ flex: 1, overflow: "auto", p: 3 }}>
                   <Stack spacing={3}>
                     <Autocomplete
-  options={residents}
-  getOptionLabel={(option) => option.full_name || ""}
-  value={residents.find((r) => r.full_name === formData.name) || null}
-  onChange={(e, nv) => {
-    if (nv) {
-      setFormData({
-        ...formData,
-        resident_id: nv.resident_id,
-        name: nv.full_name,
-        address: nv.address || '',
-        birthday: nv.dob?.slice(0, 10) || '',
-        age: calculateAge(nv.dob?.slice(0, 10)),
-      });
-    } else {
-      // If no resident is selected, keep the current resident_id if it exists
-      setFormData({ 
-        ...formData, 
-        name: '',
-        // Don't reset resident_id to null if it already exists
-      });
-    }
-  }}
-  renderInput={(params) => (
-    <TextField 
-      {...params} 
-      label="Full Name" 
-      variant="outlined" 
-      fullWidth 
-      size="small"
-      required
-    />
-  )}
-/>
+                      options={residents}
+                      getOptionLabel={(option) => option.full_name || ""}
+                      value={residents.find((r) => r.full_name === formData.name) || null}
+                      onChange={(e, nv) => {
+                        if (nv) {
+                          setFormData({
+                            ...formData,
+                            resident_id: nv.resident_id,
+                            name: nv.full_name,
+                            address: nv.address || '',
+                            birthday: nv.dob?.slice(0, 10) || '',
+                            age: calculateAge(nv.dob?.slice(0, 10)),
+                          });
+                        } else {
+                          // If no resident is selected, keep the current resident_id if it exists
+                          setFormData({ 
+                            ...formData, 
+                            name: '',
+                            // Don't reset resident_id to null if it already exists
+                          });
+                        }
+                      }}
+                      renderInput={(params) => (
+                        <TextField 
+                          {...params} 
+                          label="Full Name" 
+                          variant="outlined" 
+                          fullWidth 
+                          size="small"
+                          required
+                        />
+                      )}
+                    />
 
                     <TextField 
                       label="Address" 
@@ -2075,6 +2295,95 @@ async function handleUpdate() {
                       required
                     />
 
+                    <Divider sx={{ my: 2 }} />
+
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={formData.use_signature || false}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setFormData({
+                              ...formData,
+                              use_signature: checked,
+                              secretary_signature_id:
+                                checked && selectedSecretarySignature
+                                  ? selectedSecretarySignature.signature_id
+                                  : null,
+                              captain_signature_id:
+                                checked && selectedCaptainSignature
+                                  ? selectedCaptainSignature.signature_id
+                                  : null,
+                            });
+                            if (!checked) {
+                              setSelectedSecretarySignature(null);
+                              setSelectedCaptainSignature(null);
+                            }
+                          }}
+                          color="primary"
+                        />
+                      }
+                      label="Add E-Signatures"
+                    />
+
+                    {formData.use_signature && (
+                      <>
+                        <Autocomplete
+                          options={signatures}
+                          getOptionLabel={(opt) =>
+                            `${opt.official_name} - ${opt.designation}`
+                          }
+                          value={selectedSecretarySignature}
+                          onChange={(e, newValue) => {
+                            setSelectedSecretarySignature(newValue);
+                            setFormData({
+                              ...formData,
+                              secretary_signature_id: newValue
+                                ? newValue.signature_id
+                                : null,
+                            });
+                          }}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="Select Secretary Signature"
+                              variant="outlined"
+                              fullWidth
+                              size="small"
+                              required
+                            />
+                          )}
+                        />
+
+                        <Autocomplete
+                          options={signatures}
+                          getOptionLabel={(opt) =>
+                            `${opt.official_name} - ${opt.designation}`
+                          }
+                          value={selectedCaptainSignature}
+                          onChange={(e, newValue) => {
+                            setSelectedCaptainSignature(newValue);
+                            setFormData({
+                              ...formData,
+                              captain_signature_id: newValue
+                                ? newValue.signature_id
+                                : null,
+                            });
+                          }}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="Select Captain Signature"
+                              variant="outlined"
+                              fullWidth
+                              size="small"
+                              required
+                            />
+                          )}
+                        />
+                      </>
+                    )}
+
                     <Box sx={{ display: "flex", gap: 2, pt: 2 }}>
                       <Button 
                         onClick={handleSubmit} 
@@ -2129,7 +2438,7 @@ async function handleUpdate() {
 
                 <Box sx={{ flex: 1, overflow: "auto", p: 2 }}>
                   {filteredRecords.length === 0 ? (
-                                        <Paper sx={{ p: 4, textAlign: "center", color: "text.secondary" }}>
+                    <Paper sx={{ p: 4, textAlign: "center", color: "text.secondary" }}>
                       <FolderIcon sx={{ fontSize: 48, mb: 2, opacity: 0.3 }} />
                       <Typography variant="h6" gutterBottom>
                         {searchTerm ? "No records found" : "No records yet"}
@@ -2165,6 +2474,15 @@ async function handleUpdate() {
                                   <Typography variant="caption" color="text.secondary">
                                     Issued: {formatDateDisplay(record.dateIssued)}
                                   </Typography>
+                                  {record.use_signature && (
+                                    <Chip 
+                                      icon={<ArticleIcon />}
+                                      label="E-Signed" 
+                                      size="small" 
+                                      color="success" 
+                                      variant="outlined" 
+                                    />
+                                  )}
                                 </Box>
                               </Box>
                               <Box sx={{ display: "flex", gap: 0.5 }}>
@@ -2332,6 +2650,34 @@ async function handleUpdate() {
                   : 'N/A'}
               </Typography>
             </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                E-Signature:
+              </Typography>
+              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                {display.use_signature ? 'Enabled' : 'Disabled'}
+              </Typography>
+            </Grid>
+            {display.use_signature && (
+              <>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                    Secretary:
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                    {display.sec_official_name || 'N/A'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                    Captain:
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+                    {display.cap_official_name || 'N/A'}
+                  </Typography>
+                </Grid>
+              </>
+            )}
             {children.length > 0 && (
               <Grid item xs={12}>
                 <Typography variant="body2" sx={{ color: 'grey.600', mb: 1 }}>
@@ -2410,6 +2756,13 @@ function SoloParentVerification() {
             employmentRemarks: data.employment_remarks,
             dateIssued: data.date_issued,
             dateCreated: data.date_created,
+            use_signature: Boolean(data.use_signature),
+            sec_official_name: data.sec_official_name,
+            sec_designation: data.sec_designation,
+            sec_signature_path: data.sec_signature_path,
+            cap_official_name: data.cap_official_name,
+            cap_designation: data.cap_designation,
+            cap_signature_path: data.cap_signature_path,
           });
 
           // Fetch children data
@@ -2903,32 +3256,130 @@ function SoloParentVerification() {
                 marginTop: '50px',
               }}
             >
+              {/* Secretary Signature */}
               <div style={{ textAlign: 'center', width: '300px' }}>
-                <div style={{ fontWeight: 'bold', marginBottom: '3px' }}>
-                  ROSALINA P. ANORE
-                </div>
-                <div
-                  style={{
-                    borderTop: '1px solid #000',
-                    width: '80%',
-                    margin: '0 auto 8px auto',
-                  }}
-                ></div>
-                <div style={{ fontWeight: 'bold' }}>Brgy. Secretary</div>
+                {record.use_signature && record.sec_signature_path ? (
+                  <>
+                    <div
+                      style={{
+                        marginBottom: '5px',
+                        height: '60px',
+                        display: 'flex',
+                        alignItems: 'flex-end',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <img
+                        src={getSignatureImageUrl(record.sec_signature_path)}
+                        alt="Secretary Signature"
+                        style={{
+                          maxWidth: '180px',
+                          maxHeight: '60px',
+                          objectFit: 'contain',
+                          display: 'block',
+                        }}
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                    <div
+                      style={{
+                        fontWeight: 'bold',
+                        marginBottom: '3px',
+                      }}
+                    >
+                     ROSALINA P. ANORE
+                    </div>
+                    <div
+                      style={{
+                        borderTop: '1px solid #000',
+                        width: '80%',
+                        margin: '0 auto 8px auto',
+                      }}
+                    ></div>
+                    <div style={{ fontWeight: 'bold' }}>
+                      Brgy. Secretary
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontWeight: 'bold', marginBottom: '3px' }}>
+                      ROSALINA P. ANORE
+                    </div>
+                    <div
+                      style={{
+                        borderTop: '1px solid #000',
+                        width: '80%',
+                        margin: '0 auto 8px auto',
+                      }}
+                    ></div>
+                    <div style={{ fontWeight: 'bold' }}>Brgy. Secretary</div>
+                  </>
+                )}
               </div>
 
+              {/* Captain Signature */}
               <div style={{ textAlign: 'center', width: '300px' }}>
-                <div style={{ fontWeight: 'bold', marginBottom: '3px' }}>
-                  ARNOLD DONDONAYOS
-                </div>
-                <div
-                  style={{
-                    borderTop: '1px solid #000',
-                    width: '80%',
-                    margin: '0 auto 8px auto',
-                  }}
-                ></div>
-                <div style={{ fontWeight: 'bold' }}>Barangay Captain</div>
+                {record.use_signature && record.cap_signature_path ? (
+                  <>
+                    <div
+                      style={{
+                        marginBottom: '5px',
+                        height: '60px',
+                        display: 'flex',
+                        alignItems: 'flex-end',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <img
+                        src={getSignatureImageUrl(record.cap_signature_path)}
+                        alt="Captain Signature"
+                        style={{
+                          maxWidth: '180px',
+                          maxHeight: '60px',
+                          objectFit: 'contain',
+                          display: 'block',
+                        }}
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                    <div
+                      style={{
+                        fontWeight: 'bold',
+                        marginBottom: '3px',
+                      }}
+                    >
+                     ARNOLD DONDONAYOS
+                    </div>
+                    <div
+                      style={{
+                        borderTop: '1px solid #000',
+                        width: '80%',
+                        margin: '0 auto 8px auto',
+                      }}
+                    ></div>
+                    <div style={{ fontWeight: 'bold' }}>
+                     Barangay Captain
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontWeight: 'bold', marginBottom: '3px' }}>
+                      ARNOLD DONDONAYOS
+                    </div>
+                    <div
+                      style={{
+                        borderTop: '1px solid #000',
+                        width: '80%',
+                        margin: '0 auto 8px auto',
+                      }}
+                    ></div>
+                    <div style={{ fontWeight: 'bold' }}>Barangay Captain</div>
+                  </>
+                )}
               </div>
             </div>
           </div>

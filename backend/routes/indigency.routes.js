@@ -11,14 +11,18 @@ router.use(verifyToken);
 // GET all active indigency records
 router.get('/', async (req, res) => {
   try {
+    // Join with official_signature to get signature data
     const [rows] = await pool.query(
       `SELECT
-         indigency_id, resident_id, full_name, address, provincial_address,
-         dob, age, civil_status, contact_no, request_reason, remarks,
-         date_issued, transaction_number, date_created, date_updated, is_active
+         indigency.indigency_id, indigency.resident_id, indigency.full_name, indigency.address, indigency.provincial_address,
+         indigency.dob, indigency.age, indigency.civil_status, indigency.contact_no, indigency.request_reason, indigency.remarks,
+         indigency.date_issued, indigency.transaction_number, indigency.date_created, indigency.date_updated, indigency.is_active,
+         indigency.use_signature, indigency.signature_id,
+         sig.signature_id, sig.official_name, sig.designation, sig.signature_path
        FROM indigency
-       WHERE is_active = TRUE
-       ORDER BY indigency_id DESC`
+       LEFT JOIN official_signature sig ON indigency.signature_id = sig.signature_id
+       WHERE indigency.is_active = TRUE
+       ORDER BY indigency.indigency_id DESC`
     );
     res.json(rows);
   } catch (err) {
@@ -34,11 +38,14 @@ router.get('/transactions/all', async (req, res) => {
     // This shows all transactions including old ones that were edited
     const [rows] = await pool.query(
       `SELECT
-         indigency_id, resident_id, full_name, address, provincial_address,
-         dob, age, civil_status, contact_no, request_reason, remarks,
-         date_issued, transaction_number, date_created, date_updated, is_active
+         indigency.indigency_id, indigency.resident_id, indigency.full_name, indigency.address, indigency.provincial_address,
+         indigency.dob, indigency.age, indigency.civil_status, indigency.contact_no, indigency.request_reason, indigency.remarks,
+         indigency.date_issued, indigency.transaction_number, indigency.date_created, indigency.date_updated, indigency.is_active,
+         indigency.use_signature, indigency.signature_id,
+         sig.signature_id, sig.official_name, sig.designation, sig.signature_path
        FROM indigency
-       ORDER BY date_created DESC, indigency_id DESC`
+       LEFT JOIN official_signature sig ON indigency.signature_id = sig.signature_id
+       ORDER BY indigency.date_created DESC, indigency.indigency_id DESC`
     );
     res.json(rows);
   } catch (err) {
@@ -53,11 +60,14 @@ router.get('/:id', async (req, res) => {
     const { id } = req.params;
     const [rows] = await pool.query(
       `SELECT
-         indigency_id, resident_id, full_name, address, provincial_address,
-         dob, age, civil_status, contact_no, request_reason, remarks,
-         date_issued, transaction_number, date_created, date_updated, is_active
+         indigency.indigency_id, indigency.resident_id, indigency.full_name, indigency.address, indigency.provincial_address,
+         indigency.dob, indigency.age, indigency.civil_status, indigency.contact_no, indigency.request_reason, indigency.remarks,
+         indigency.date_issued, indigency.transaction_number, indigency.date_created, indigency.date_updated, indigency.is_active,
+         indigency.use_signature, indigency.signature_id,
+         sig.signature_id, sig.official_name, sig.designation, sig.signature_path
        FROM indigency
-       WHERE indigency_id = ?`,
+       LEFT JOIN official_signature sig ON indigency.signature_id = sig.signature_id
+       WHERE indigency.indigency_id = ?`,
       [id]
     );
 
@@ -76,11 +86,14 @@ router.get('/transaction/:transactionNumber', async (req, res) => {
     const { transactionNumber } = req.params;
     const [rows] = await pool.query(
       `SELECT
-         indigency_id, resident_id, full_name, address, provincial_address,
-         dob, age, civil_status, contact_no, request_reason, remarks,
-         date_issued, transaction_number, date_created, date_updated, is_active
+         indigency.indigency_id, indigency.resident_id, indigency.full_name, indigency.address, indigency.provincial_address,
+         indigency.dob, indigency.age, indigency.civil_status, indigency.contact_no, indigency.request_reason, indigency.remarks,
+         indigency.date_issued, indigency.transaction_number, indigency.date_created, indigency.date_updated, indigency.is_active,
+         indigency.use_signature, indigency.signature_id,
+         sig.signature_id, sig.official_name, sig.designation, sig.signature_path
        FROM indigency
-       WHERE transaction_number = ? AND is_active = TRUE`,
+       LEFT JOIN official_signature sig ON indigency.signature_id = sig.signature_id
+       WHERE indigency.transaction_number = ? AND indigency.is_active = TRUE`,
       [transactionNumber]
     );
 
@@ -113,6 +126,8 @@ router.post('/', async (req, res) => {
       remarks,
       date_issued,
       transaction_number,
+      use_signature, // Added for e-signature
+      signature_id, // Added for e-signature
     } = req.body;
 
     if (
@@ -141,8 +156,8 @@ router.post('/', async (req, res) => {
       const [result] = await pool.query(
         `INSERT INTO indigency
           (resident_id, full_name, address, provincial_address, dob, age,
-           civil_status, contact_no, request_reason, remarks, date_issued, transaction_number)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           civil_status, contact_no, request_reason, remarks, date_issued, transaction_number, use_signature, signature_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           resident_id,
           full_name,
@@ -156,11 +171,21 @@ router.post('/', async (req, res) => {
           remarks || null,
           date_issued,
           newTransactionNumber,
+          use_signature ? 1 : 0,
+          use_signature && signature_id ? signature_id : null,
         ]
       );
 
       const [rows] = await pool.query(
-        `SELECT * FROM indigency WHERE indigency_id = ?`,
+        `SELECT
+           indigency.indigency_id, indigency.resident_id, indigency.full_name, indigency.address, indigency.provincial_address,
+           indigency.dob, indigency.age, indigency.civil_status, indigency.contact_no, indigency.request_reason, indigency.remarks,
+           indigency.date_issued, indigency.transaction_number, indigency.date_created, indigency.date_updated, indigency.is_active,
+           indigency.use_signature, indigency.signature_id,
+           sig.signature_id, sig.official_name, sig.designation, sig.signature_path
+         FROM indigency
+         LEFT JOIN official_signature sig ON indigency.signature_id = sig.signature_id
+         WHERE indigency.indigency_id = ?`,
         [result.insertId]
       );
 
@@ -170,8 +195,8 @@ router.post('/', async (req, res) => {
     const [result] = await pool.query(
       `INSERT INTO indigency
         (resident_id, full_name, address, provincial_address, dob, age,
-         civil_status, contact_no, request_reason, remarks, date_issued, transaction_number)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         civil_status, contact_no, request_reason, remarks, date_issued, transaction_number, use_signature, signature_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         resident_id,
         full_name,
@@ -185,11 +210,21 @@ router.post('/', async (req, res) => {
         remarks || null,
         date_issued,
         finalTransactionNumber,
+        use_signature ? 1 : 0,
+        use_signature && signature_id ? signature_id : null,
       ]
     );
 
     const [rows] = await pool.query(
-      `SELECT * FROM indigency WHERE indigency_id = ?`,
+      `SELECT
+         indigency.indigency_id, indigency.resident_id, indigency.full_name, indigency.address, indigency.provincial_address,
+         indigency.dob, indigency.age, indigency.civil_status, indigency.contact_no, indigency.request_reason, indigency.remarks,
+         indigency.date_issued, indigency.transaction_number, indigency.date_created, indigency.date_updated, indigency.is_active,
+         indigency.use_signature, indigency.signature_id,
+         sig.signature_id, sig.official_name, sig.designation, sig.signature_path
+       FROM indigency
+       LEFT JOIN official_signature sig ON indigency.signature_id = sig.signature_id
+       WHERE indigency.indigency_id = ?`,
       [result.insertId]
     );
 
@@ -219,6 +254,8 @@ router.put('/:id', async (req, res) => {
       remarks,
       date_issued,
       transaction_number,
+      use_signature, // Added for e-signature
+      signature_id, // Added for e-signature
     } = req.body;
 
     if (
@@ -258,8 +295,8 @@ router.put('/:id', async (req, res) => {
     const [result] = await pool.query(
       `INSERT INTO indigency 
         (resident_id, full_name, address, provincial_address, dob, age,
-         civil_status, contact_no, request_reason, remarks, date_issued, transaction_number)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         civil_status, contact_no, request_reason, remarks, date_issued, transaction_number, use_signature, signature_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         resident_id,
         full_name,
@@ -273,12 +310,22 @@ router.put('/:id', async (req, res) => {
         remarks || null,
         date_issued,
         newTransactionNumber, // New transaction number for the new entry
+        use_signature ? 1 : 0,
+        use_signature && signature_id ? signature_id : null,
       ]
     );
 
     // Get the newly created record
     const [newRecord] = await pool.query(
-      `SELECT * FROM indigency WHERE indigency_id = ?`,
+      `SELECT
+         indigency.indigency_id, indigency.resident_id, indigency.full_name, indigency.address, indigency.provincial_address,
+         indigency.dob, indigency.age, indigency.civil_status, indigency.contact_no, indigency.request_reason, indigency.remarks,
+         indigency.date_issued, indigency.transaction_number, indigency.date_created, indigency.date_updated, indigency.is_active,
+         indigency.use_signature, indigency.signature_id,
+         sig.signature_id, sig.official_name, sig.designation, sig.signature_path
+       FROM indigency
+       LEFT JOIN official_signature sig ON indigency.signature_id = sig.signature_id
+       WHERE indigency.indigency_id = ?`,
       [result.insertId]
     );
 
@@ -313,4 +360,3 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
-

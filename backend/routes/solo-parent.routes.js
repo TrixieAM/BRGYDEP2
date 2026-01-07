@@ -11,28 +11,54 @@ router.use(verifyToken);
 // Get all active solo parent records
 router.get('/', async (req, res) => {
   try {
+    // Check if the table has the required columns
+    const [columns] = await pool.query("SHOW COLUMNS FROM solo_parent_records");
+    const hasUseSignature = columns.some(col => col.Field === 'use_signature');
+    const hasSecretarySignatureId = columns.some(col => col.Field === 'secretary_signature_id');
+    const hasCaptainSignatureId = columns.some(col => col.Field === 'captain_signature_id');
+    
+    // If the table doesn't have the required columns, add them
+    if (!hasUseSignature) {
+      await pool.query("ALTER TABLE solo_parent_records ADD COLUMN use_signature TINYINT(1) DEFAULT 0");
+    }
+    if (!hasSecretarySignatureId) {
+      await pool.query("ALTER TABLE solo_parent_records ADD COLUMN secretary_signature_id INT NULL");
+      // Add foreign key if official_signature table exists
+      try {
+        await pool.query("ALTER TABLE solo_parent_records ADD FOREIGN KEY (secretary_signature_id) REFERENCES official_signature(signature_id)");
+      } catch (err) {
+        // Foreign key might already exist or official_signature table might not exist
+        console.log('Could not add foreign key for secretary_signature_id:', err.message);
+      }
+    }
+    if (!hasCaptainSignatureId) {
+      await pool.query("ALTER TABLE solo_parent_records ADD COLUMN captain_signature_id INT NULL");
+      // Add foreign key if official_signature table exists
+      try {
+        await pool.query("ALTER TABLE solo_parent_records ADD FOREIGN KEY (captain_signature_id) REFERENCES official_signature(signature_id)");
+      } catch (err) {
+        // Foreign key might already exist or official_signature table might not exist
+        console.log('Could not add foreign key for captain_signature_id:', err.message);
+      }
+    }
+    
+    // Now query with the appropriate columns
     const [rows] = await pool.query(`
       SELECT 
-        solo_parent_id,
-        resident_id,
-        transactionNum,
-        full_name,
-        address,
-        dob,
-        age,
-        contact_no,
-        residents_since_year,
-        unwed_since_year,
-        employment_status,
-        employment_remarks,
-        date_issued,
-        transaction_number,
-        is_active,
-        date_created,
-        date_updated
-      FROM solo_parent_records
-      WHERE is_active = 1
-      ORDER BY date_created DESC
+        spr.*,
+        sec_sig.signature_id as sec_signature_id, 
+        sec_sig.official_name as sec_official_name, 
+        sec_sig.designation as sec_designation, 
+        sec_sig.signature_path as sec_signature_path,
+        cap_sig.signature_id as cap_signature_id, 
+        cap_sig.official_name as cap_official_name, 
+        cap_sig.designation as cap_designation, 
+        cap_sig.signature_path as cap_signature_path
+      FROM solo_parent_records spr
+      LEFT JOIN official_signature sec_sig ON spr.secretary_signature_id = sec_sig.signature_id
+      LEFT JOIN official_signature cap_sig ON spr.captain_signature_id = cap_sig.signature_id
+      WHERE spr.is_active = 1
+      ORDER BY spr.date_created DESC
     `);
     res.json(rows);
   } catch (error) {
@@ -46,25 +72,19 @@ router.get('/transactions/all', async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT 
-        solo_parent_id,
-        resident_id,
-        transactionNum,
-        full_name,
-        address,
-        dob,
-        age,
-        contact_no,
-        residents_since_year,
-        unwed_since_year,
-        employment_status,
-        employment_remarks,
-        date_issued,
-        transaction_number,
-        is_active,
-        date_created,
-        date_updated
-      FROM solo_parent_records
-      ORDER BY date_created DESC, solo_parent_id DESC
+        spr.*,
+        sec_sig.signature_id as sec_signature_id, 
+        sec_sig.official_name as sec_official_name, 
+        sec_sig.designation as sec_designation, 
+        sec_sig.signature_path as sec_signature_path,
+        cap_sig.signature_id as cap_signature_id, 
+        cap_sig.official_name as cap_official_name, 
+        cap_sig.designation as cap_designation, 
+        cap_sig.signature_path as cap_signature_path
+      FROM solo_parent_records spr
+      LEFT JOIN official_signature sec_sig ON spr.secretary_signature_id = sec_sig.signature_id
+      LEFT JOIN official_signature cap_sig ON spr.captain_signature_id = cap_sig.signature_id
+      ORDER BY spr.date_created DESC, spr.solo_parent_id DESC
     `);
     res.json(rows);
   } catch (error) {
@@ -76,10 +96,22 @@ router.get('/transactions/all', async (req, res) => {
 // Get single solo parent record by ID
 router.get('/:id', async (req, res) => {
   try {
-    const [rows] = await pool.query(
-      'SELECT * FROM solo_parent_records WHERE solo_parent_id = ?',
-      [req.params.id]
-    );
+    const [rows] = await pool.query(`
+      SELECT 
+        spr.*,
+        sec_sig.signature_id as sec_signature_id, 
+        sec_sig.official_name as sec_official_name, 
+        sec_sig.designation as sec_designation, 
+        sec_sig.signature_path as sec_signature_path,
+        cap_sig.signature_id as cap_signature_id, 
+        cap_sig.official_name as cap_official_name, 
+        cap_sig.designation as cap_designation, 
+        cap_sig.signature_path as cap_signature_path
+      FROM solo_parent_records spr
+      LEFT JOIN official_signature sec_sig ON spr.secretary_signature_id = sec_sig.signature_id
+      LEFT JOIN official_signature cap_sig ON spr.captain_signature_id = cap_sig.signature_id
+      WHERE spr.solo_parent_id = ?
+    `, [req.params.id]);
     
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Record not found' });
@@ -110,12 +142,22 @@ router.post('/', async (req, res) => {
       unwed_since_year,
       employment_status,
       employment_remarks,
-      date_issued
+      date_issued,
+      use_signature,
+      secretary_signature_id,
+      captain_signature_id
     } = req.body;
 
     const transactionNum = `SP-${Date.now()}`;
 
-    const [result] = await connection.query(`
+    // Check if the table has the required columns
+    const [columns] = await connection.query("SHOW COLUMNS FROM solo_parent_records");
+    const hasUseSignature = columns.some(col => col.Field === 'use_signature');
+    const hasSecretarySignatureId = columns.some(col => col.Field === 'secretary_signature_id');
+    const hasCaptainSignatureId = columns.some(col => col.Field === 'captain_signature_id');
+    
+    // Build the query dynamically based on available columns
+    let query = `
       INSERT INTO solo_parent_records (
         resident_id,
         transactionNum,
@@ -129,9 +171,9 @@ router.post('/', async (req, res) => {
         employment_status,
         employment_remarks,
         date_issued,
-        transaction_number
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
+        transaction_number`;
+    
+    let values = [
       resident_id,
       transactionNum,
       full_name,
@@ -145,15 +187,62 @@ router.post('/', async (req, res) => {
       employment_remarks,
       date_issued,
       transactionNum
-    ]);
+    ];
+    
+    if (hasUseSignature) {
+      query += ', use_signature';
+      values.push(use_signature || 0);
+    }
+    
+    if (hasSecretarySignatureId) {
+      query += ', secretary_signature_id';
+      values.push(secretary_signature_id || null);
+    }
+    
+    if (hasCaptainSignatureId) {
+      query += ', captain_signature_id';
+      values.push(captain_signature_id || null);
+    }
+    
+    query += ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
+    
+    if (hasUseSignature) {
+      query += ', ?';
+    }
+    
+    if (hasSecretarySignatureId) {
+      query += ', ?';
+    }
+    
+    if (hasCaptainSignatureId) {
+      query += ', ?';
+    }
+    
+    query += ')';
+
+    const [result] = await connection.query(query, values);
+
+    // Get the newly created record with signature info
+    const [newRecord] = await connection.query(`
+      SELECT 
+        spr.*,
+        sec_sig.signature_id as sec_signature_id, 
+        sec_sig.official_name as sec_official_name, 
+        sec_sig.designation as sec_designation, 
+        sec_sig.signature_path as sec_signature_path,
+        cap_sig.signature_id as cap_signature_id, 
+        cap_sig.official_name as cap_official_name, 
+        cap_sig.designation as cap_designation, 
+        cap_sig.signature_path as cap_signature_path
+      FROM solo_parent_records spr
+      LEFT JOIN official_signature sec_sig ON spr.secretary_signature_id = sec_sig.signature_id
+      LEFT JOIN official_signature cap_sig ON spr.captain_signature_id = cap_sig.signature_id
+      WHERE spr.solo_parent_id = ?
+    `, [result.insertId]);
 
     await connection.commit();
     
-    res.status(201).json({
-      solo_parent_id: result.insertId,
-      transactionNum,
-      message: 'Solo parent record created successfully'
-    });
+    res.status(201).json(newRecord[0]);
   } catch (error) {
     await connection.rollback();
     console.error('Error creating solo parent record:', error);
@@ -184,7 +273,10 @@ router.put('/:id', async (req, res) => {
       unwed_since_year,
       employment_status,
       employment_remarks,
-      date_issued
+      date_issued,
+      use_signature,
+      secretary_signature_id,
+      captain_signature_id
     } = req.body;
 
     // Get the existing record
@@ -207,8 +299,14 @@ router.put('/:id', async (req, res) => {
       [id]
     );
 
-    // Create a NEW record entry with the updated data and new transaction number
-    const [result] = await connection.query(`
+    // Check if the table has the required columns
+    const [columns] = await connection.query("SHOW COLUMNS FROM solo_parent_records");
+    const hasUseSignature = columns.some(col => col.Field === 'use_signature');
+    const hasSecretarySignatureId = columns.some(col => col.Field === 'secretary_signature_id');
+    const hasCaptainSignatureId = columns.some(col => col.Field === 'captain_signature_id');
+    
+    // Build the query dynamically based on available columns
+    let query = `
       INSERT INTO solo_parent_records (
         resident_id,
         transactionNum,
@@ -222,9 +320,9 @@ router.put('/:id', async (req, res) => {
         employment_status,
         employment_remarks,
         date_issued,
-        transaction_number
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
+        transaction_number`;
+    
+    let values = [
       resident_id,
       newTransactionNumber,
       full_name,
@@ -238,13 +336,58 @@ router.put('/:id', async (req, res) => {
       employment_remarks,
       date_issued,
       newTransactionNumber
-    ]);
+    ];
+    
+    if (hasUseSignature) {
+      query += ', use_signature';
+      values.push(use_signature || 0);
+    }
+    
+    if (hasSecretarySignatureId) {
+      query += ', secretary_signature_id';
+      values.push(secretary_signature_id || null);
+    }
+    
+    if (hasCaptainSignatureId) {
+      query += ', captain_signature_id';
+      values.push(captain_signature_id || null);
+    }
+    
+    query += ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
+    
+    if (hasUseSignature) {
+      query += ', ?';
+    }
+    
+    if (hasSecretarySignatureId) {
+      query += ', ?';
+    }
+    
+    if (hasCaptainSignatureId) {
+      query += ', ?';
+    }
+    
+    query += ')';
 
-    // Get the newly created record
-    const [newRecord] = await connection.query(
-      'SELECT * FROM solo_parent_records WHERE solo_parent_id = ?',
-      [result.insertId]
-    );
+    const [result] = await connection.query(query, values);
+
+    // Get the newly created record with signature info
+    const [newRecord] = await connection.query(`
+      SELECT 
+        spr.*,
+        sec_sig.signature_id as sec_signature_id, 
+        sec_sig.official_name as sec_official_name, 
+        sec_sig.designation as sec_designation, 
+        sec_sig.signature_path as sec_signature_path,
+        cap_sig.signature_id as cap_signature_id, 
+        cap_sig.official_name as cap_official_name, 
+        cap_sig.designation as cap_designation, 
+        cap_sig.signature_path as cap_signature_path
+      FROM solo_parent_records spr
+      LEFT JOIN official_signature sec_sig ON spr.secretary_signature_id = sec_sig.signature_id
+      LEFT JOIN official_signature cap_sig ON spr.captain_signature_id = cap_sig.signature_id
+      WHERE spr.solo_parent_id = ?
+    `, [result.insertId]);
 
     await connection.commit();
     res.json(newRecord[0]);
@@ -481,4 +624,3 @@ router.get('/statistics/all', async (req, res) => {
 });
 
 module.exports = router;
-
