@@ -29,99 +29,71 @@ const ProtectedRoute = ({
     return <Navigate to={fallbackPath} replace />;
   }
 
-  if (requiredRoles && !hasRole(requiredRoles)) {
-    return (
+  const unauthorizedScreen = (message, detail) => (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      height: '100vh',
+      padding: '2rem',
+      textAlign: 'center',
+      background: '#f7f7f7'
+    }}>
       <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
+        backgroundColor: '#fff',
+        color: '#0D4715',
         padding: '2rem',
-        textAlign: 'center'
+        borderRadius: '16px',
+        maxWidth: '540px',
+        border: '1px solid #e0e0e0',
+        boxShadow: '0 10px 30px rgba(0,0,0,0.08)'
       }}>
-        <div style={{
-          backgroundColor: '#fee',
-          color: '#c33',
-          padding: '2rem',
-          borderRadius: '12px',
-          maxWidth: '500px',
-          border: '1px solid #fcc'
-        }}>
-          <h2 style={{ margin: '0 0 1rem 0', color: '#c33' }}>
-            Access Denied
-          </h2>
-          <p style={{ margin: '0 0 1rem 0' }}>
-            You don't have permission to access this page.
-          </p>
-          <p style={{ margin: '0', fontSize: '0.9rem', color: '#666' }}>
-            Required role: {Array.isArray(requiredRoles) ? requiredRoles.join(' or ') : requiredRoles}
-          </p>
-          <button
-            onClick={() => window.history.back()}
-            style={{
-              marginTop: '1rem',
-              backgroundColor: '#0D4715',
-              color: 'white',
-              border: 'none',
-              padding: '0.75rem 1.5rem',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '1rem'
-            }}
-          >
-            Go Back
-          </button>
-        </div>
+        <h1 style={{ margin: '0 0 0.5rem 0', color: '#c33', fontSize: '2.5rem' }}>
+          404
+        </h1>
+        <h2 style={{ margin: '0 0 1rem 0', color: '#c33' }}>
+          Unauthorized
+        </h2>
+        <p style={{ margin: '0 0 0.75rem 0' }}>
+          {message}
+        </p>
+        <p style={{ margin: '0 0 1rem 0', fontSize: '0.95rem', color: '#555' }}>
+          Unauthorized, please ask for assistance if you need something.
+        </p>
+        {detail ? (
+          <p style={{ margin: '0', fontSize: '0.85rem', color: '#777' }}>{detail}</p>
+        ) : null}
+        <button
+          onClick={() => window.history.back()}
+          style={{
+            marginTop: '1.25rem',
+            backgroundColor: '#0D4715',
+            color: 'white',
+            border: 'none',
+            padding: '0.75rem 1.5rem',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '1rem'
+          }}
+        >
+          Go Back
+        </button>
       </div>
-    );
+    </div>
+  );
+
+  if (requiredRoles && !hasRole(requiredRoles)) {
+    const detail = Array.isArray(requiredRoles)
+      ? `Required role: ${requiredRoles.join(' or ')}`
+      : `Required role: ${requiredRoles}`;
+    return unauthorizedScreen("You don't have permission to access this page.", detail);
   }
 
   if (requiredPermission && !hasPermission(requiredPermission)) {
-    return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        padding: '2rem',
-        textAlign: 'center'
-      }}>
-        <div style={{
-          backgroundColor: '#fee',
-          color: '#c33',
-          padding: '2rem',
-          borderRadius: '12px',
-          maxWidth: '500px',
-          border: '1px solid #fcc'
-        }}>
-          <h2 style={{ margin: '0 0 1rem 0', color: '#c33' }}>
-            Permission Denied
-          </h2>
-          <p style={{ margin: '0 0 1rem 0' }}>
-            You don't have the required permission to access this page.
-          </p>
-          <p style={{ margin: '0', fontSize: '0.9rem', color: '#666' }}>
-            Required permission: {requiredPermission}
-          </p>
-          <button
-            onClick={() => window.history.back()}
-            style={{
-              marginTop: '1rem',
-              backgroundColor: '#0D4715',
-              color: 'white',
-              border: 'none',
-              padding: '0.75rem 1.5rem',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '1rem'
-            }}
-          >
-            Go Back
-          </button>
-        </div>
-      </div>
+    return unauthorizedScreen(
+      "You don't have the required permission to access this page.",
+      `Required permission: ${requiredPermission}`
     );
   }
 

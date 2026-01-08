@@ -145,24 +145,28 @@ const Login = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          username: formData.username.trim(),
+          password: formData.password,
+        }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
+        // Handle specific error messages
+        const errorMessage = data.error || 'Login failed';
+        throw new Error(errorMessage);
+      }
+
+      if (!data.user || !data.token) {
+        throw new Error('Invalid response from server');
       }
 
       setSuccess(`Welcome back, ${data.user.name}! (${data.user.role})`);
 
-      // Persist token for authenticated API calls
-      if (data.token) {
-        localStorage.setItem('token', data.token);
-      }
-
-      // Use the auth context to handle login
-      login(data.user);
+      // Use the auth context to handle login (also stores token)
+      login(data.user, data.token);
 
       // Redirect to dashboard after successful login
       setTimeout(() => {
@@ -170,7 +174,13 @@ const Login = () => {
       }, 1500);
     } catch (err) {
       console.error('Login error:', err);
-      setError(err.message || 'Login failed. Please try again.');
+      const errorMessage = err.message || 'Login failed. Please check your credentials and try again.';
+      setError(errorMessage);
+      
+      // If it's a network error, provide more specific message
+      if (err.name === 'TypeError' && err.message.includes('fetch')) {
+        setError('Cannot connect to server. Please check if the backend is running.');
+      }
     } finally {
       setLoading(false);
     }

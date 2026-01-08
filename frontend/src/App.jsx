@@ -159,13 +159,13 @@ function Navigation() {
       path: '/residents',
       label: 'Residents',
       icon: <PeopleIcon />,
-      permission: 'manage_residents',
+      permission: 'access_residents',
     },
     {
       path: '/certificates',
       label: 'Certificates',
       icon: <AssignmentIcon />,
-      permission: 'manage_certificates',
+      permission: 'access_certification_action',
       hasDropdown: true,
       dropdownItems: [
         {
@@ -182,7 +182,7 @@ function Navigation() {
     },
     {
       path: '/users',
-      label: 'Users',
+      label: 'Settings',
       icon: <SettingsIcon />,
       permission: 'manage_users',
     },
@@ -454,7 +454,7 @@ function AppContent() {
             <Route
               path="/home"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                <ProtectedRoute requiredPermission="view_dashboard">
                   <Home />
                 </ProtectedRoute>
               }
@@ -463,7 +463,7 @@ function AppContent() {
             <Route
               path="/residents"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                <ProtectedRoute requiredPermission="access_residents">
                   <Resident />
                 </ProtectedRoute>
               }
@@ -472,7 +472,7 @@ function AppContent() {
             <Route
               path="/reports"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                <ProtectedRoute requiredPermission="access_reports">
                   <Reports />
                 </ProtectedRoute>
               }
@@ -481,15 +481,13 @@ function AppContent() {
             <Route
               path="/certificates"
               element={
-                <ProtectedRoute
-                  allowedRoles={['admin', 'staff', 'chairman']}
-                ></ProtectedRoute>
+                <ProtectedRoute requiredPermission="access_certification_action"></ProtectedRoute>
               }
             />
             <Route
               path="/certification-action"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                <ProtectedRoute requiredPermission="access_certification_action">
                   <CertificationAction />
                 </ProtectedRoute>
               }
@@ -497,7 +495,7 @@ function AppContent() {
             <Route
               path="/certification-action-transactions"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                <ProtectedRoute requiredPermission="access_transaction">
                   <Transaction />
                 </ProtectedRoute>
               }
@@ -505,7 +503,7 @@ function AppContent() {
             <Route
               path="/indigency-transactions"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                <ProtectedRoute requiredPermission="access_transaction">
                   <Transaction />
                 </ProtectedRoute>
               }
@@ -513,7 +511,7 @@ function AppContent() {
             <Route
               path="/indigency"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                <ProtectedRoute requiredPermission="access_indigency">
                   <Indigency />
                 </ProtectedRoute>
               }
@@ -527,7 +525,7 @@ function AppContent() {
             <Route
               path="/barangay-clearance"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                <ProtectedRoute requiredPermission="access_barangay_clearance">
                   <BarangayClearance />
                 </ProtectedRoute>
               }
@@ -536,7 +534,7 @@ function AppContent() {
             <Route
               path="/oath-job-seeker"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                <ProtectedRoute requiredPermission="access_oath_job_seeker">
                   <OathJobSeeker />
                 </ProtectedRoute>
               }
@@ -545,7 +543,7 @@ function AppContent() {
             <Route
               path="/solo-parent-form"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                <ProtectedRoute requiredPermission="access_solo_parent">
                   <SoloParentForm />
                 </ProtectedRoute>
               }
@@ -554,7 +552,7 @@ function AppContent() {
             <Route
               path="/business-clearance"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                <ProtectedRoute requiredPermission="access_business_clearance">
                   <BusinessClearance />
                 </ProtectedRoute>
               }
@@ -563,7 +561,7 @@ function AppContent() {
             <Route
               path="/clearance"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                <ProtectedRoute requiredPermission="access_barangay_clearance_crud">
                   <BarangayClearanceCRUD />
                 </ProtectedRoute>
               }
@@ -572,7 +570,7 @@ function AppContent() {
             <Route
               path="/certificate-residency"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                <ProtectedRoute requiredPermission="access_certificate_residency">
                   <CertificateOfResidency />
                 </ProtectedRoute>
               }
@@ -581,7 +579,7 @@ function AppContent() {
             <Route
               path="/permit-to-travel"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                <ProtectedRoute requiredPermission="access_permit_travel">
                   <PermitToTravel />
                 </ProtectedRoute>
               }
@@ -590,7 +588,7 @@ function AppContent() {
             <Route
               path="/cash-assistance"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                <ProtectedRoute requiredPermission="access_cash_assistance">
                   <CashAssistance />
                 </ProtectedRoute>
               }
@@ -599,7 +597,7 @@ function AppContent() {
             <Route
               path="/cohabitation"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                <ProtectedRoute requiredPermission="access_cohabitation">
                   <Cohabitation />
                 </ProtectedRoute>
               }
@@ -607,13 +605,17 @@ function AppContent() {
 
             <Route
               path="/verify-cohabitation"
-              element={<VerifyCohabitation />}
+              element={
+                <ProtectedRoute requiredPermission="access_verify_cohabitation">
+                  <VerifyCohabitation />
+                </ProtectedRoute>
+              }
             />
 
             <Route
               path="/financial-assistance"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                <ProtectedRoute requiredPermission="access_financial_assistance">
                   <FinancialAssistance />
                 </ProtectedRoute>
               }
@@ -622,7 +624,7 @@ function AppContent() {
             <Route
               path="/bhert-cert-positive"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                <ProtectedRoute requiredPermission="access_bhert_positive">
                   <BhertCertPositive />
                 </ProtectedRoute>
               }
@@ -631,7 +633,7 @@ function AppContent() {
             <Route
               path="/bhert-cert-normal"
               element={
-                <ProtectedRoute allowedRoles={['admin', 'staff', 'chairman']}>
+                <ProtectedRoute requiredPermission="access_bhert_normal">
                   <BhertCertNormal />
                 </ProtectedRoute>
               }
@@ -649,6 +651,35 @@ function AppContent() {
             <Route
               path="/verify-oath-job-seeker"
               element={<OathJobVerification />}
+            />
+
+            {/* Fallback 404 */}
+            <Route
+              path="*"
+              element={
+                <ProtectedRoute>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '60vh',
+                      gap: 1,
+                    }}
+                  >
+                    <Typography variant="h3" color="error" fontWeight="bold">
+                      404
+                    </Typography>
+                    <Typography variant="h5" fontWeight="bold">
+                      Unauthorized
+                    </Typography>
+                    <Typography>
+                      Unauthorized, please ask for assistance if you need something.
+                    </Typography>
+                  </Box>
+                </ProtectedRoute>
+              }
             />
           </Routes>
         </Box>

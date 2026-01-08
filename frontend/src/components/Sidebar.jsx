@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -41,6 +41,9 @@ export default function Sidebar() {
   const [certOpen, setCertOpen] = useState(
     location.pathname.startsWith('/certificates')
   );
+  const [shadowPosition, setShadowPosition] = useState({ x: 0, y: 0 });
+  const [isMouseDown, setIsMouseDown] = useState(false);
+  const sidebarRef = useRef(null);
 
   const toggleMobile = () => setMobileOpen(!mobileOpen);
 
@@ -48,6 +51,46 @@ export default function Sidebar() {
     logout();
     navigate('/login');
   };
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (isMouseDown && sidebarRef.current) {
+        const rect = sidebarRef.current.getBoundingClientRect();
+        setShadowPosition({
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+        });
+      }
+    };
+
+    const handleMouseDown = (e) => {
+      if (sidebarRef.current && sidebarRef.current.contains(e.target)) {
+        setIsMouseDown(true);
+        const rect = sidebarRef.current.getBoundingClientRect();
+        setShadowPosition({
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+        });
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsMouseDown(false);
+    };
+
+    if (isMouseDown) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+
+    window.addEventListener('mousedown', handleMouseDown);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousedown', handleMouseDown);
+    };
+  }, [isMouseDown]);
 
   const navItems = [
     {
@@ -60,99 +103,128 @@ export default function Sidebar() {
       path: '/residents',
       label: 'Residents',
       icon: <PeopleIcon />,
-      permission: 'manage_residents',
+      permission: 'access_residents',
     },
     {
       path: '/reports',
       label: 'Reports',
       icon: <ChartBarIcon />,
-      permission: 'manage_residents',
+      permission: 'access_reports',
     },
     {
       path: '/certification-action-transactions',
       label: 'Transactions',
       icon: <ReceiptIcon />,
-      permission: 'manage_certificates',
+      permission: 'access_transaction',
     },
     {
       path: '/certificates',
       label: 'Certificates',
       icon: <AssignmentIcon />,
-      permission: 'manage_certificates',
+      permission: 'access_certification_action',
       children: [
         {
           path: '/certification-action',
           label: 'Certificate of Action',
           icon: <AssignmentIcon />,
+          permission: 'access_certification_action',
         },
-        { path: '/indigency', label: 'Indigency', icon: <AssignmentIcon /> },
+        { 
+          path: '/indigency', 
+          label: 'Indigency', 
+          icon: <AssignmentIcon />,
+          permission: 'access_indigency',
+        },
         {
           path: '/barangay-clearance',
           label: 'Barangay Clearance',
           icon: <AssignmentIcon />,
+          permission: 'access_barangay_clearance',
         },
         {
           path: '/oath-job-seeker',
           label: 'Oath Job Seeker',
           icon: <AssignmentIcon />,
+          permission: 'access_oath_job_seeker',
         },
         {
           path: '/solo-parent-form',
           label: 'Solo Parent',
           icon: <AssignmentIcon />,
+          permission: 'access_solo_parent',
         },
         {
           path: '/business-clearance',
           label: 'Business Clearance',
           icon: <AssignmentIcon />,
+          permission: 'access_business_clearance',
         },
         {
           path: '/certificate-residency',
           label: 'Certificate of Residency',
           icon: <AssignmentIcon />,
+          permission: 'access_certificate_residency',
         },
         {
           path: '/permit-to-travel',
           label: 'Permit To Travel',
           icon: <AssignmentIcon />,
+          permission: 'access_permit_travel',
         },
         {
           path: '/cash-assistance',
           label: 'Cash Assistance',
           icon: <AssignmentIcon />,
+          permission: 'access_cash_assistance',
         },
         {
           path: '/cohabitation',
           label: 'Cohabitation',
           icon: <AssignmentIcon />,
+          permission: 'access_cohabitation',
         },
         {
           path: '/financial-assistance',
           label: 'Financial Assistance',
           icon: <AssignmentIcon />,
+          permission: 'access_financial_assistance',
         },
         {
           path: '/bhert-cert-positive',
           label: 'Bhert Certificate Positive',
           icon: <AssignmentIcon />,
+          permission: 'access_bhert_positive',
         },
         {
           path: '/bhert-cert-normal',
           label: 'Bhert Certificate Normal',
           icon: <AssignmentIcon />,
+          permission: 'access_bhert_normal',
         },
       ],
     },
     {
       path: '/users',
-      label: 'Users',
+      label: 'Settings',
       icon: <SettingsIcon />,
       permission: 'manage_users',
     },
-  ].filter((item) => hasPermission(item.permission));
+  ].filter((item) => {
+    if (!hasPermission(item.permission)) return false;
+    // Filter children if they exist and have permissions
+    if (item.children) {
+      item.children = item.children.filter((child) => 
+        !child.permission || hasPermission(child.permission)
+      );
+      // Only show parent if it has at least one visible child
+      return item.children.length > 0;
+    }
+    return true;
+  });
 
   const drawerContent = (
     <Box
+      ref={sidebarRef}
       sx={{
         height: '100%',
         display: 'flex',
@@ -161,12 +233,12 @@ export default function Sidebar() {
         background: '#0D4715',
         color: '#F1F0E9',
         pt: 3,
-        borderTopRightRadius: 32,
-        borderBottomRightRadius: 32,
+        borderRadius: '16px',
         boxShadow:
           '0 20px 60px rgba(13, 71, 21, 0.4), 0 0 0 1px rgba(241, 240, 233, 0.1)',
         overflow: 'hidden',
         position: 'relative',
+        cursor: isMouseDown ? 'grabbing' : 'grab',
         '&::before': {
           content: '""',
           position: 'absolute',
@@ -180,6 +252,25 @@ export default function Sidebar() {
         },
       }}
     >
+      {/* Moving shadow box */}
+      {isMouseDown && (
+        <Box
+          sx={{
+            position: 'absolute',
+            left: `${shadowPosition.x}px`,
+            top: `${shadowPosition.y}px`,
+            width: '100px',
+            height: '100px',
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(233, 118, 43, 0.4) 0%, rgba(233, 118, 43, 0.1) 50%, transparent 100%)',
+            boxShadow: '0 0 40px rgba(233, 118, 43, 0.6), 0 0 80px rgba(233, 118, 43, 0.4)',
+            pointerEvents: 'none',
+            transform: 'translate(-50%, -50%)',
+            transition: 'none',
+            zIndex: 1000,
+          }}
+        />
+      )}
       <Box sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
         {/* Profile Section */}
         <Box
@@ -210,7 +301,6 @@ export default function Sidebar() {
               height: 120,
               background:
                 'linear-gradient(135deg, rgba(233, 118, 43, 0.25), rgba(13, 71, 21, 0.65))',
-              borderRadius: '38px 72px 18px 72px',
               boxShadow: '0 18px 48px rgba(233, 118, 43, 0.25)',
               opacity: 0.85,
               transform: 'rotate(-10deg)',
@@ -278,7 +368,6 @@ export default function Sidebar() {
                     }}
                     sx={{
                       color: '#F1F0E9',
-                      borderRadius: 3,
                       mx: 2,
                       my: 0.5,
                       fontWeight: 500,
@@ -311,7 +400,6 @@ export default function Sidebar() {
                         width: 4,
                         height: isActive ? '70%' : 0,
                         bgcolor: '#E9762B',
-                        borderRadius: '0 4px 4px 0',
                         transition: 'all 0.3s ease',
                         boxShadow: isActive
                           ? '0 0 10px rgba(233, 118, 43, 0.5)'
@@ -338,7 +426,6 @@ export default function Sidebar() {
                           color: isActive ? '#F1F0E9' : '#F1F0E9',
                           width: 38,
                           height: 38,
-                          borderRadius: '12px',
                           transition: 'all 0.3s ease',
                           boxShadow: isActive
                             ? '0 4px 12px rgba(233, 118, 43, 0.4)'
@@ -396,7 +483,6 @@ export default function Sidebar() {
                               sx={{
                                 pl: 7,
                                 color: '#F1F0E9',
-                                borderRadius: 2,
                                 mx: 2.5,
                                 my: 0.25,
                                 fontWeight: 400,
@@ -428,7 +514,6 @@ export default function Sidebar() {
                                   width: 3,
                                   height: childActive ? '60%' : 0,
                                   bgcolor: '#E9762B',
-                                  borderRadius: '0 3px 3px 0',
                                   transition: 'all 0.3s ease',
                                 },
                               }}
@@ -454,7 +539,6 @@ export default function Sidebar() {
                                       : 'rgba(241, 240, 233, 0.8)',
                                     width: 32,
                                     height: 32,
-                                    borderRadius: '10px',
                                     transition: 'all 0.3s ease',
                                     boxShadow: childActive
                                       ? '0 3px 10px rgba(233, 118, 43, 0.3)'
@@ -503,7 +587,6 @@ export default function Sidebar() {
           backdropFilter: 'blur(6px)',
           borderTop: '1px solid rgba(241, 240, 233, 0.08)',
           boxShadow: '0 -6px 18px rgba(0, 0, 0, 0.35)',
-          borderBottomRightRadius: 32,
           zIndex: 2,
         }}
       >
@@ -537,13 +620,12 @@ export default function Sidebar() {
             opacity: 0.7,
           }}
         >
-          <Box
-            sx={{
-              width: '70%',
-              height: 3,
-              borderRadius: 2,
-              background:
-                'linear-gradient(90deg, transparent, rgba(233, 118, 43, 0.5), transparent)',
+            <Box
+              sx={{
+                width: '70%',
+                height: 3,
+                background:
+                  'linear-gradient(90deg, transparent, rgba(233, 118, 43, 0.5), transparent)',
               boxShadow: '0 0 10px rgba(233, 118, 43, 0.3)',
             }}
           />
@@ -602,11 +684,10 @@ export default function Sidebar() {
             width: drawerWidth,
             boxSizing: 'border-box',
             background: '#0D4715',
-            borderTopRightRadius: 32,
-            borderBottomRightRadius: 32,
             boxShadow: '0 20px 60px rgba(13, 71, 21, 0.6)',
             mt: '64px',
             height: 'calc(100% - 64px)',
+            borderRadius: '0 16px 16px 0',
           },
         }}
       >
@@ -623,11 +704,10 @@ export default function Sidebar() {
             width: drawerWidth,
             boxSizing: 'border-box',
             background: '#0D4715',
-            borderTopRightRadius: 32,
-            borderBottomRightRadius: 32,
             boxShadow: '0 20px 60px rgba(13, 71, 21, 0.4)',
             mt: '64px',
             height: 'calc(100% - 64px)',
+            borderRadius: '0 16px 16px 0',
           },
         }}
       >

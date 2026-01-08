@@ -12,6 +12,8 @@ app.use(express.json());
 
 // Serve static files for signatures
 app.use('/uploads/signatures', express.static('uploads/signatures'));
+// Serve static files for officials
+app.use('/uploads/officials', express.static('uploads/officials'));
 
 // Import routes
 const authRoutes = require('./routes/auth.routes');
@@ -34,6 +36,9 @@ const oathJobRoutes = require('./routes/oath-job.routes');
 const soloParentRoutes = require('./routes/solo-parent.routes');
 const verificationRoutes = require('./routes/verification.routes');
 const signatureRoutes = require('./routes/signature.routes');
+const dashboardRoutes = require('./routes/dashboard.routes');
+const rolePermissionsRoutes = require('./routes/role-permissions.routes');
+const auditRoutes = require('./routes/audit.routes');
 
 
 /**
@@ -71,6 +76,9 @@ app.use('/request-records', requestRecordsRoutes);
 app.use('/oath-job', oathJobRoutes);
 app.use('/solo-parent-records', soloParentRoutes);
 app.use('/api/signature', signatureRoutes);
+app.use('/dashboard', dashboardRoutes);
+app.use('/role-permissions', rolePermissionsRoutes);
+app.use('/audit-logs', auditRoutes);
 
 
 

@@ -133,6 +133,27 @@ async function setupDatabase() {
 
     console.log("Official signature table created/verified");
 
+    // Create barangay_officials table if it doesn't exist
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS barangay_officials (
+        official_id INT(11) NOT NULL AUTO_INCREMENT,
+        name VARCHAR(255) NOT NULL,
+        position VARCHAR(255) NOT NULL,
+        contact_number VARCHAR(50) DEFAULT NULL,
+        email VARCHAR(255) DEFAULT NULL,
+        position_order INT(11) NOT NULL DEFAULT 0,
+        image_path TEXT DEFAULT NULL,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (official_id),
+        KEY idx_is_active (is_active),
+        KEY idx_position_order (position_order)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+    `);
+
+    console.log("Barangay officials table created/verified");
+
     // Add signature fields to certificate_of_action table if they don't exist
     try {
       // Check if columns exist
@@ -174,22 +195,27 @@ async function setupDatabase() {
       "SELECT user_id FROM users WHERE username = 'admin'"
     );
 
+    // Always ensure admin has password "admin123"
+    const hashedAdminPassword = await bcrypt.hash("admin123", 10);
+
     if (existingAdmin.length === 0) {
       // Create default admin user
-      const hashedPassword = await bcrypt.hash("admin123", 10);
-      
       await pool.query(
         "INSERT INTO users (username, name, password, role) VALUES (?, ?, ?, ?)",
-        ["admin", "System Administrator", hashedPassword, "admin"]
+        ["admin", "System Administrator", hashedAdminPassword, "admin"]
       );
-      
       console.log("✅ Admin user created:");
-      console.log("   Username: admin");
-      console.log("   Password: admin123");
-      console.log("   Role: admin");
     } else {
-      console.log("Admin user already exists");
+      // Reset existing admin password
+      await pool.query(
+        "UPDATE users SET password = ? WHERE username = 'admin'",
+        [hashedAdminPassword]
+      );
+      console.log("🔁 Admin user password reset:");
     }
+    console.log("   Username: admin");
+    console.log("   Password: admin123");
+    console.log("   Role: admin");
 
     // Check if chairman user exists
     const [existingChairman] = await pool.query(

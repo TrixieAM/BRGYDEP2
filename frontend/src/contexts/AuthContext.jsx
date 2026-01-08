@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
 
 const AuthContext = createContext();
+const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -13,13 +15,40 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [permissionsLoading, setPermissionsLoading] = useState(false);
+
+  const fetchRolePermissions = useCallback(async (token) => {
+    try {
+      setPermissionsLoading(true);
+      const res = await axios.get(`${apiBase}/role-permissions/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const permissions = res.data?.permissions || [];
+      setUser((prev) => (prev ? { ...prev, permissions } : prev));
+      // Persist latest permissions with the user object
+      const stored = localStorage.getItem('user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        localStorage.setItem('user', JSON.stringify({ ...parsed, permissions }));
+      }
+    } catch (error) {
+      console.error('Error fetching role permissions:', error);
+    } finally {
+      setPermissionsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     // Check if user is logged in on app start
     const storedUser = localStorage.getItem('user');
+    const token = localStorage.getItem('token');
     if (storedUser) {
       try {
-        setUser(JSON.parse(storedUser));
+        const parsed = JSON.parse(storedUser);
+        setUser(parsed);
+        if (token) {
+          fetchRolePermissions(token);
+        }
       } catch (error) {
         console.error('Error parsing stored user:', error);
         localStorage.removeItem('user');
@@ -28,9 +57,13 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  const login = (userData) => {
+  const login = (userData, token) => {
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
+    if (token) {
+      localStorage.setItem('token', token);
+      fetchRolePermissions(token);
+    }
   };
 
   const logout = () => {
@@ -49,33 +82,20 @@ export const AuthProvider = ({ children }) => {
 
   const hasPermission = (permission) => {
     if (!user) return false;
-    
+    // Prefer dynamic permissions coming from the backend
+    if (user.permissions && Array.isArray(user.permissions)) {
+      if (user.permissions.includes(permission)) return true;
+      // Ensure critical admin capabilities remain available even if not stored
+      if (permission === 'manage_users' && user.role === 'admin') return true;
+      if (permission === 'view_dashboard' && user.role === 'admin') return true;
+      return false;
+    }
+    // Fallback legacy static map
     const rolePermissions = {
-      admin: [
-        'view_dashboard',
-        'manage_users',
-        'manage_residents',
-        'manage_certificates',
-        'view_reports',
-        'manage_settings',
-        'approve_certificates',
-        'delete_data'
-      ],
-      chairman: [
-        'view_dashboard',
-        'manage_residents',
-        'manage_certificates',
-        'view_reports',
-        'approve_certificates'
-      ],
-      staff: [
-        'view_dashboard',
-        'manage_residents',
-        'manage_certificates',
-        'view_reports'
-      ]
+      admin: ['view_dashboard', 'manage_users', 'manage_residents', 'manage_certificates', 'view_reports'],
+      chairman: ['view_dashboard', 'manage_residents', 'manage_certificates', 'view_reports'],
+      staff: ['view_dashboard', 'manage_residents', 'manage_certificates', 'view_reports'],
     };
-
     return rolePermissions[user.role]?.includes(permission) || false;
   };
 
@@ -83,14 +103,22 @@ export const AuthProvider = ({ children }) => {
     return localStorage.getItem('token');
   };
 
+  const refreshPermissions = useCallback(async () => {
+    const token = getToken();
+    if (token) {
+      await fetchRolePermissions(token);
+    }
+  }, [fetchRolePermissions]);
+
   const value = {
     user,
     login,
     logout,
     hasRole,
     hasPermission,
-    loading,
-    getToken
+    loading: loading || permissionsLoading,
+    getToken,
+    refreshPermissions
   };
 
   return (

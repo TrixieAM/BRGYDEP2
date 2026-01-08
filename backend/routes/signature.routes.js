@@ -5,6 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { pool } = require('../config/db.config');
+const { logAudit } = require('../utils/audit.utils');
 const { verifyToken, requireRole } = require('../middleware/auth.middleware');
 
 // Apply authentication middleware to all routes
@@ -101,6 +102,7 @@ router.post('/upload', requireRole(['admin', 'chairman']), upload.single('signat
        VALUES (?, ?, ?)`,
       [official_name, designation, signaturePath]
     );
+    await logAudit(req.user, 'SIGNATURE_UPLOAD', 'official_signature', result.insertId, { official_name, designation });
 
     const [rows] = await pool.query(
       `SELECT * FROM official_signature WHERE signature_id = ?`,

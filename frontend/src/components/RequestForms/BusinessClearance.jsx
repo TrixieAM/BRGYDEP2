@@ -1146,18 +1146,6 @@ export default function BusinessClearance() {
                 </Box>
 
                 <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Tooltip title="Verify Certificate">
-                    <Button
-                      variant="outlined"
-                      color="primary"
-                      onClick={handleQrCodeClick}
-                      startIcon={<QrCodeIcon />}
-                      disabled={!display.business_clearance_id}
-                      size="small"
-                    >
-                      Verify
-                    </Button>
-                  </Tooltip>
                   <Tooltip title="Download PDF">
                     <Button
                       variant="contained"
@@ -1625,13 +1613,9 @@ export default function BusinessClearance() {
                     {qrCodeUrl && (
                       <div style={{ marginTop: '15px' }}>
                         <div
-                          onClick={handleQrCodeClick}
                           style={{
-                            cursor: 'pointer',
-                            position: 'relative',
                             display: 'inline-block',
                           }}
-                          title="Click to view certificate details"
                         >
                           <img
                             src={qrCodeUrl}
@@ -1644,39 +1628,6 @@ export default function BusinessClearance() {
                               background: '#fff',
                             }}
                           />
-                          <div
-                            style={{
-                              position: 'absolute',
-                              top: 0,
-                              left: 0,
-                              right: 0,
-                              bottom: 0,
-                              backgroundColor: 'rgba(255,255,255,0)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              opacity: 0,
-                              transition: 'opacity 0.3s',
-                              borderRadius: '4px',
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.opacity = '0.7';
-                              e.currentTarget.style.backgroundColor =
-                                'rgba(255,255,255,0.8)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.opacity = '0';
-                              e.currentTarget.style.backgroundColor =
-                                'rgba(255,255,255,0)';
-                            }}
-                          >
-                            <QrCodeIcon
-                              sx={{
-                                fontSize: 40,
-                                color: theme.palette.success.main,
-                              }}
-                            />
-                          </div>
                         </div>
                         <div
                           style={{

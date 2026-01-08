@@ -4,6 +4,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { pool } = require('../config/db.config');
 const { verifyToken, requireRole } = require('../middleware/auth.middleware');
+const { logAudit } = require('../utils/audit.utils');
 
 // Apply authentication middleware to all routes
 router.use(verifyToken);
@@ -47,6 +48,7 @@ router.post('/', requireRole('admin'), async (req, res) => {
       `INSERT INTO users (username, name, password, role) VALUES (?,?,?,?)`,
       [username, name, hashedPassword, role || 'staff']
     );
+    await logAudit(req.user, 'USER_CREATE', 'user', result.insertId, { username, role });
     res.json({ message: 'User created', user_id: result.insertId });
   } catch (err) {
     console.error(err);
@@ -86,6 +88,7 @@ router.put('/:id', requireRole('admin'), async (req, res) => {
     queryParams.push(id);
 
     await pool.query(updateQuery, queryParams);
+    await logAudit(req.user, 'USER_UPDATE', 'user', id, { username, role });
     res.json({ message: 'User updated successfully' });
   } catch (err) {
     console.error(err);
@@ -106,6 +109,7 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    await logAudit(req.user, 'USER_DELETE', 'user', id, {});
     res.json({ message: 'User deleted successfully' });
   } catch (err) {
     console.error(err);

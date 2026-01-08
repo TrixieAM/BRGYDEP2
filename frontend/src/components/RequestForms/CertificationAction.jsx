@@ -1452,9 +1452,7 @@ export default function CertificateOfAction() {
                       }}
                     >
                       <div
-                        onClick={openVerifyPage}
-                        style={{ cursor: 'pointer', display: 'inline-block' }}
-                        title="Click to verify this certificate"
+                        style={{ display: 'inline-block' }}
                       >
                         <img
                           src={qrCodeUrl}
