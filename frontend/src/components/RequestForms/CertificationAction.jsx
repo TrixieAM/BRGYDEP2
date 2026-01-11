@@ -199,6 +199,22 @@ const theme = createTheme({
   },
 });
 
+
+// Add this function to check if a resident has a valid certificate
+function hasValidCertificate(residentId, records) {
+  if (!residentId || !records || records.length === 0) return false;
+  
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  
+  return records.some(record => {
+    if (record.resident_id !== residentId) return false;
+    
+    const issueDate = new Date(record.date_issued);
+    return issueDate >= sixMonthsAgo;
+  });
+}
+
 export default function CertificateOfAction() {
   const apiBase = 'http://localhost:5000'; // change to include /api if needed
   const { getToken } = useAuth();
@@ -223,6 +239,9 @@ export default function CertificateOfAction() {
 
   const { saveCertificate, getValidityPeriod, calculateExpirationDate } =
     useCertificateManager('Certificate of Action');
+
+  const [showValidCertDialog, setShowValidCertDialog] = useState(false);
+  const [validCertInfo, setValidCertInfo] = useState(null);
 
   // Helper function to get auth headers
   const getAuthHeaders = () => {
@@ -667,7 +686,7 @@ export default function CertificateOfAction() {
     setSelectedSignature(null);
   }
 
-  function handleSubmit() {
+   function handleSubmit() {
     // Validate required fields
     if (!formData.complainant_name || !formData.respondent_name || 
         !formData.barangay_case_no || !formData.request_reason) {
@@ -685,6 +704,25 @@ export default function CertificateOfAction() {
       return;
     }
     
+    // Check if resident has a valid certificate (only for new records)
+    if (!editingId && formData.resident_id) {
+      const validCert = records.find(record => {
+        if (record.resident_id !== formData.resident_id) return false;
+        
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        const issueDate = new Date(record.date_issued);
+        
+        return issueDate >= sixMonthsAgo;
+      });
+      
+      if (validCert) {
+        setValidCertInfo(validCert);
+        setShowValidCertDialog(true);
+        return;
+      }
+    }
+    
     setPendingAction(() => (editingId ? handleUpdate : handleCreate));
     setShowConfirmDialog(true);
   }
@@ -695,6 +733,12 @@ export default function CertificateOfAction() {
       pendingAction();
       setPendingAction(null);
     }
+  }
+
+  function confirmSaveWithValidCert() {
+    setShowValidCertDialog(false);
+    setPendingAction(() => handleCreate);
+    setShowConfirmDialog(true);
   }
 
   const filteredRecords = useMemo(
@@ -2166,6 +2210,47 @@ export default function CertificateOfAction() {
             </Button>
           </DialogActions>
         </Dialog>
+
+
+         // Add the new dialog for valid certificate confirmation
+  <Dialog
+    open={showValidCertDialog}
+    onClose={() => setShowValidCertDialog(false)}
+    PaperProps={{ sx: { borderRadius: 2 } }}
+  >
+    <DialogTitle sx={{ bgcolor: '#41644A', color: 'white', py: 2 }}>
+      <Typography variant="h6" sx={{ fontWeight: 700 }}>
+        Resident Has Valid Certificate
+      </Typography>
+    </DialogTitle>
+    <DialogContent sx={{ p: 3 }}>
+      <Typography>
+        This resident already has a valid Certificate of Action issued on{' '}
+        {validCertInfo && formatDateDisplay(validCertInfo.date_issued)}.
+        Certificates are valid for 6 months.
+      </Typography>
+      <Typography sx={{ mt: 2 }}>
+        Are you sure you want to create a new certificate for this resident?
+      </Typography>
+    </DialogContent>
+    <DialogActions sx={{ p: 2, borderTop: '1px solid #F1F0E9' }}>
+      <Button
+        onClick={() => setShowValidCertDialog(false)}
+        variant="outlined"
+        sx={{ borderColor: '#41644A', color: '#41644A' }}
+      >
+        Cancel
+      </Button>
+      <Button
+        onClick={confirmSaveWithValidCert}
+        variant="contained"
+        sx={{ bgcolor: '#E9762B', '&:hover': { bgcolor: '#d8651f' } }}
+      >
+        Create Anyway
+      </Button>
+    </DialogActions>
+  </Dialog>
+
 
         {isMobile && (
           <Fab

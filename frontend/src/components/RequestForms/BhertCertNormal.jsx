@@ -239,6 +239,11 @@ export default function BhertCertificateNormal() {
   const [signatures, setSignatures] = useState([]);
   const [selectedSecretarySignature, setSelectedSecretarySignature] = useState(null);
   const [selectedCaptainSignature, setSelectedCaptainSignature] = useState(null);
+  
+  // New state for valid certificate dialog
+  const [showValidCertDialog, setShowValidCertDialog] = useState(false);
+  const [validCertInfo, setValidCertInfo] = useState(null);
+  const [pendingSave, setPendingSave] = useState(null);
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -429,6 +434,22 @@ export default function BhertCertificateNormal() {
     }
   }
 
+  // Check if resident has valid certificate (1 year)
+  function checkValidCertificate(residentId) {
+    if (!residentId) return null;
+    
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    
+    const validCert = records.find(record => {
+      if (!record.date_issued) return false;
+      const issueDate = new Date(record.date_issued);
+      return record.resident_id === residentId && issueDate >= oneYearAgo;
+    });
+    
+    return validCert;
+  }
+
   const display = useMemo(() => {
     let data = null;
     if (editingId || isFormOpen) {
@@ -543,7 +564,22 @@ export default function BhertCertificateNormal() {
     };
   }
 
-  async function handleCreate() {
+  // Function to handle confirmation when creating with valid certificate
+  const confirmSaveWithValidCert = () => {
+    setShowValidCertDialog(false);
+    if (pendingSave) {
+      // Execute the pending save operation
+      if (editingId) {
+        handleUpdate();
+      } else {
+        handleCreateDirect();
+      }
+      setPendingSave(null);
+    }
+  };
+
+  // Direct create function that bypasses the check
+  async function handleCreateDirect() {
     try {
       // Generate a transaction number for new certificates
       const transactionNumber = generateTransactionNumber();
@@ -588,6 +624,23 @@ export default function BhertCertificateNormal() {
       console.error(e);
       alert('Failed to create record');
     }
+  }
+
+  // Update the handleCreate function
+  async function handleCreate() {
+    // Check if resident has a valid certificate
+    const validCert = checkValidCertificate(formData.resident_id);
+    
+    if (validCert) {
+      // Show confirmation dialog
+      setValidCertInfo(validCert);
+      setPendingSave('create');
+      setShowValidCertDialog(true);
+      return;
+    }
+    
+    // No valid certificate, proceed with normal creation
+    handleCreateDirect();
   }
 
   async function handleUpdate() {
@@ -1413,8 +1466,8 @@ export default function BhertCertificateNormal() {
                   <div
                     style={{
                       position: 'absolute',
-                      bottom: '60px',
-                      left: '60px',
+                      bottom: '100px',
+                      left: '70px',
                       textAlign: 'center',
                       fontFamily: '"Times New Roman", serif',
                       fontSize: '10pt',
@@ -1432,8 +1485,8 @@ export default function BhertCertificateNormal() {
                             src={qrCodeUrl}
                             alt="Verification QR Code"
                             style={{
-                              width: '150px',
-                              height: '150px',
+                              width: '130px',
+                              height: '130px',
                               border: '2px solid #000',
                               padding: '5px',
                               background: '#fff',
@@ -1971,6 +2024,45 @@ export default function BhertCertificateNormal() {
               Go to Verification Page
             </Button>
           )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Add the dialog at the end of the component, before the closing tags */}
+      <Dialog
+        open={showValidCertDialog}
+        onClose={() => setShowValidCertDialog(false)}
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ bgcolor: '#41644A', color: 'white', py: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            Resident Has Valid Certificate
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ p: 3 }}>
+          <Typography>
+            This resident already has a valid BHERT Certificate issued on{' '}
+            {validCertInfo && formatDateDisplay(validCertInfo.date_issued)}.
+            Certificates are valid for 1 year.
+          </Typography>
+          <Typography sx={{ mt: 2 }}>
+            Are you sure you want to create a new certificate for this resident?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, borderTop: '1px solid #F1F0E9' }}>
+          <Button
+            onClick={() => setShowValidCertDialog(false)}
+            variant="outlined"
+            sx={{ borderColor: '#41644A', color: '#41644A' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={confirmSaveWithValidCert}
+            variant="contained"
+            sx={{ bgcolor: '#E9762B', '&:hover': { bgcolor: '#d8651f' } }}
+          >
+            Create Anyway
+          </Button>
         </DialogActions>
       </Dialog>
     </ThemeProvider>

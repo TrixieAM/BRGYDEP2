@@ -210,6 +210,21 @@ const theme = createTheme({
   },
 });
 
+// Update the hasValidCertificate function to check for 1 year instead of 6 months
+function hasValidCertificate(residentId, records) {
+  if (!residentId || !records || records.length === 0) return false;
+  
+  const oneYearAgo = new Date();
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1); // Changed from setMonth to setFullYear
+  
+  return records.some(record => {
+    if (record.resident_id !== residentId) return false;
+    
+    const issueDate = new Date(record.dateIssued);
+    return issueDate >= oneYearAgo;
+  });
+}
+
 export default function OathJobSeeker() {
   const apiBase = 'http://localhost:5000';
   const { getToken } = useAuth();
@@ -239,6 +254,12 @@ export default function OathJobSeeker() {
   const [selectedSignature, setSelectedSignature] = useState(null);
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+
+  // In the OathJobSeeker component, add these state variables
+const [showValidCertDialog, setShowValidCertDialog] = useState(false);
+const [validCertInfo, setValidCertInfo] = useState(null);
+
 
   // Add this after the imports and before the component function
   const { 
@@ -693,11 +714,52 @@ export default function OathJobSeeker() {
     setSelectedSignature(null);
   }
 
-  function handleSubmit() {
-    if (editingId) handleUpdate();
-    else handleCreate();
+  // Update the handleSubmit function to check for 1 year instead of 6 months
+function handleSubmit() {
+  // Validate required fields
+  if (!formData.name || !formData.address || !formData.dob) {
+    alert('Please fill in all required fields');
+    return;
   }
+  
+  if (!formData.dateIssued) {
+    alert('Please select the issued date');
+    return;
+  }
+  
+  if (formData.use_signature && !formData.signature_id) {
+    alert('Please select a signature when e-signature is enabled');
+    return;
+  }
+  
+  // Check if resident has a valid certificate (only for new records)
+  if (!editingId && formData.resident_id) {
+    const validCert = records.find(record => {
+      if (record.resident_id !== formData.resident_id) return false;
+      
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1); // Changed from setMonth to setFullYear
+      const issueDate = new Date(record.dateIssued);
+      
+      return issueDate >= oneYearAgo;
+    });
+    
+    if (validCert) {
+      setValidCertInfo(validCert);
+      setShowValidCertDialog(true);
+      return;
+    }
+  }
+  
+  if (editingId) handleUpdate();
+  else handleCreate();
+}
 
+// Add a new function to handle confirmation with valid certificate
+function confirmSaveWithValidCert() {
+  setShowValidCertDialog(false);
+  handleCreate();
+}
   // ---------- QR STORAGE & GENERATION ----------
   const display = useMemo(() => {
     let data = null;
@@ -2061,6 +2123,50 @@ export default function OathJobSeeker() {
           )}
         </DialogActions>
       </Dialog>
+
+
+
+      
+// Update the dialog message to reflect 1 year validity
+<Dialog
+  open={showValidCertDialog}
+  onClose={() => setShowValidCertDialog(false)}
+  PaperProps={{ sx: { borderRadius: 2 } }}
+>
+  <DialogTitle sx={{ bgcolor: '#41644A', color: 'white', py: 2 }}>
+    <Typography variant="h6" sx={{ fontWeight: 700 }}>
+      Resident Has Valid Certificate
+    </Typography>
+  </DialogTitle>
+  <DialogContent sx={{ p: 3 }}>
+    <Typography>
+      This resident already has a valid Oath of Undertaking Job Seeker certificate issued on{' '}
+      {validCertInfo && formatDateDisplay(validCertInfo.dateIssued)}.
+      Certificates are valid for 1 year.
+    </Typography>
+    <Typography sx={{ mt: 2 }}>
+      Are you sure you want to create a new certificate for this resident?
+    </Typography>
+  </DialogContent>
+  <DialogActions sx={{ p: 2, borderTop: '1px solid #F1F0E9' }}>
+    <Button
+      onClick={() => setShowValidCertDialog(false)}
+      variant="outlined"
+      sx={{ borderColor: '#41644A', color: '#41644A' }}
+    >
+      Cancel
+    </Button>
+    <Button
+      onClick={confirmSaveWithValidCert}
+      variant="contained"
+      sx={{ bgcolor: '#E9762B', '&:hover': { bgcolor: '#d8651f' } }}
+    >
+      Create Anyway
+    </Button>
+  </DialogActions>
+</Dialog>
+
+
     </ThemeProvider>
   );
 }

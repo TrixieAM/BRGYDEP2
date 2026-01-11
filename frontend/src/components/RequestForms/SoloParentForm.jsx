@@ -216,6 +216,32 @@ const theme = createTheme({
   },
 });
 
+// Check if resident has a valid certificate using API
+async function checkForValidCertificate(residentId, apiBase, getAuthHeaders) {
+  if (!residentId) return null;
+  
+  try {
+    // Calculate date 6 months ago from today (Solo Parent certificates are valid for 6 months)
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const sixMonthsAgoStr = sixMonthsAgo.toISOString().split('T')[0];
+    
+    // Check if resident has a certificate issued within the last 6 months
+    const res = await fetch(`${apiBase}/solo-parent-records/resident/${residentId}/valid?date=${sixMonthsAgoStr}`, {
+      headers: getAuthHeaders()
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      return data.length > 0 ? data[0] : null;
+    }
+    return null;
+  } catch (e) {
+    console.error('Error checking for valid certificate:', e);
+    return null;
+  }
+}
+
 export default function SoloParentForm() {
   const apiBase = 'http://localhost:5000';
   const navigate = useNavigate();
@@ -248,6 +274,10 @@ export default function SoloParentForm() {
     useState(null);
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  // In the SoloParentForm component, add these state variables
+  const [showValidCertDialog, setShowValidCertDialog] = useState(false);
+  const [validCertInfo, setValidCertInfo] = useState(null);
 
   // Add this after the imports and before the component function
   const { saveCertificate, getValidityPeriod, calculateExpirationDate } =
@@ -963,9 +993,43 @@ export default function SoloParentForm() {
     setSelectedCaptainSignature(null);
   }
 
-  function handleSubmit() {
+  // Update the handleSubmit function
+  async function handleSubmit() {
+    // Validate required fields
+    if (!formData.name || !formData.address || !formData.birthday) {
+      alert('Please fill in all required fields');
+      return;
+    }
+    
+    if (!formData.dateIssued) {
+      alert('Please select the issued date');
+      return;
+    }
+    
+    if (formData.use_signature && (!formData.secretary_signature_id || !formData.captain_signature_id)) {
+      alert('Please select both secretary and captain signatures when e-signature is enabled');
+      return;
+    }
+    
+    // Check if resident has a valid certificate (only for new records)
+    if (!editingId && formData.resident_id) {
+      // Use the API to check for valid certificate
+      const validCert = await checkForValidCertificate(formData.resident_id, apiBase, getAuthHeaders);
+      if (validCert) {
+        setValidCertInfo(validCert);
+        setShowValidCertDialog(true);
+        return;
+      }
+    }
+    
     if (editingId) handleUpdate();
     else handleCreate();
+  }
+
+  // Add this function to handle confirmation with valid certificate
+  function confirmSaveWithValidCert() {
+    setShowValidCertDialog(false);
+    handleCreate();
   }
 
   const filteredRecords = useMemo(
@@ -2004,7 +2068,7 @@ export default function SoloParentForm() {
                   <div
                     style={{
                       position: 'absolute',
-                      bottom: '150px',
+                      bottom: '180px',
                       right: '60px',
                       textAlign: 'center',
                       fontFamily: '"Times New Roman", serif',
@@ -2023,8 +2087,8 @@ export default function SoloParentForm() {
                             src={qrCodeUrl}
                             alt="Verification QR Code"
                             style={{
-                              width: '130px',
-                              height: '130px',
+                              width: '100px',
+                              height: '100px',
                               border: '2px solid #000',
                               padding: '5px',
                               background: '#fff',
@@ -3034,6 +3098,45 @@ export default function SoloParentForm() {
           )}
         </DialogActions>
       </Dialog>
+
+      {/* VALID CERTIFICATE DIALOG */}
+      <Dialog
+        open={showValidCertDialog}
+        onClose={() => setShowValidCertDialog(false)}
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ bgcolor: '#41644A', color: 'white', py: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            Resident Has Valid Certificate
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ p: 3 }}>
+          <Typography>
+            This resident already has a valid Solo Parent certificate issued on{' '}
+            {validCertInfo && formatDateDisplay(validCertInfo.dateIssued)}.
+            Certificates are valid for 6 months.
+          </Typography>
+          <Typography sx={{ mt: 2 }}>
+            Are you sure you want to create a new certificate for this resident?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, borderTop: '1px solid #F1F0E9' }}>
+          <Button
+            onClick={() => setShowValidCertDialog(false)}
+            variant="outlined"
+            sx={{ borderColor: '#41644A', color: '#41644A' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={confirmSaveWithValidCert}
+            variant="contained"
+            sx={{ bgcolor: '#E9762B', '&:hover': { bgcolor: '#d8651f' } }}
+          >
+            Create Anyway
+          </Button>
+        </DialogActions>
+      </Dialog>
     </ThemeProvider>
   );
 }
@@ -3703,3 +3806,4 @@ function SoloParentVerification() {
 }
 
 export { SoloParentVerification };
+

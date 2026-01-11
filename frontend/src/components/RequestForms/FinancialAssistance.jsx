@@ -236,6 +236,11 @@ export default function FinancialAssistance() {
   const [signatures, setSignatures] = useState([]);
   const [selectedSecretarySignature, setSelectedSecretarySignature] = useState(null);
   const [selectedCaptainSignature, setSelectedCaptainSignature] = useState(null);
+  
+  // New state for valid certificate dialog
+  const [showValidCertDialog, setShowValidCertDialog] = useState(false);
+  const [validCertInfo, setValidCertInfo] = useState(null);
+  const [pendingSave, setPendingSave] = useState(null);
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -460,6 +465,22 @@ const {
     }
   }
 
+  // Check if resident has valid certificate (6 months)
+  function checkValidCertificate(residentId) {
+    if (!residentId) return null;
+    
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    
+    const validCert = records.find(record => {
+      if (!record.date_issued) return false;
+      const issueDate = new Date(record.date_issued);
+      return record.resident_id === residentId && issueDate >= sixMonthsAgo;
+    });
+    
+    return validCert;
+  }
+
   function handleBirthdayChange(dob) {
     if (dob) {
       const age = calculateAge(dob);
@@ -586,112 +607,143 @@ const {
     };
   }
 
+  // Function to handle confirmation when creating with valid certificate
+  const confirmSaveWithValidCert = () => {
+    setShowValidCertDialog(false);
+    if (pendingSave) {
+      // Execute the pending save operation
+      if (editingId) {
+        handleUpdate();
+      } else {
+        handleCreateDirect();
+      }
+      setPendingSave(null);
+    }
+  };
+
+  // Direct create function that bypasses the check
+  async function handleCreateDirect() {
+    try {
+      // Generate a transaction number for new certificates
+      const transactionNumber = generateTransactionNumber();
+      const validityPeriod = getValidityPeriod('Financial Assistance');
+      const updatedFormData = {
+        ...formData,
+        transaction_number: transactionNumber,
+        date_created: new Date().toISOString(), // Add current timestamp
+        validity_period: validityPeriod, // Add validity period
+      };
+
+      const res = await fetch(`${apiBase}/financial-assistance`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(toServerPayload(updatedFormData)),
+      });
+      if (!res.ok) throw new Error('Create failed');
+      const created = await res.json();
+      const newRec = { 
+        ...updatedFormData, 
+        financial_assistance_id: created.financial_assistance_id,
+        sec_official_name: created.sec_official_name,
+        sec_designation: created.sec_designation,
+        sec_signature_path: created.sec_signature_path,
+        cap_official_name: created.cap_official_name,
+        cap_designation: created.cap_designation,
+        cap_signature_path: created.cap_signature_path,
+      };
+
+      setRecords([newRec, ...records]);
+      setSelectedRecord(newRec);
+
+      // Save to certificates table
+      await saveCertificate(newRec, true);
+
+      // Store the new certificate data
+      storeCertificateData(newRec);
+
+      resetForm();
+      setActiveTab('records');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to create record');
+    }
+  }
+
   // Update the handleCreate function
-async function handleCreate() {
-  try {
-    // Generate a transaction number for new certificates
-    const transactionNumber = generateTransactionNumber();
-    const validityPeriod = getValidityPeriod('Financial Assistance');
-    const updatedFormData = {
-      ...formData,
-      transaction_number: transactionNumber,
-      date_created: new Date().toISOString(), // Add current timestamp
-      validity_period: validityPeriod, // Add validity period
-    };
-
-    const res = await fetch(`${apiBase}/financial-assistance`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(toServerPayload(updatedFormData)),
-    });
-    if (!res.ok) throw new Error('Create failed');
-    const created = await res.json();
-    const newRec = { 
-      ...updatedFormData, 
-      financial_assistance_id: created.financial_assistance_id,
-      sec_official_name: created.sec_official_name,
-      sec_designation: created.sec_designation,
-      sec_signature_path: created.sec_signature_path,
-      cap_official_name: created.cap_official_name,
-      cap_designation: created.cap_designation,
-      cap_signature_path: created.cap_signature_path,
-    };
-
-    setRecords([newRec, ...records]);
-    setSelectedRecord(newRec);
-
-    // Save to certificates table
-    await saveCertificate(newRec, true);
-
-    // Store the new certificate data
-    storeCertificateData(newRec);
-
-    resetForm();
-    setActiveTab('records');
-  } catch (e) {
-    console.error(e);
-    alert('Failed to create record');
+  async function handleCreate() {
+    // Check if resident has a valid certificate
+    const validCert = checkValidCertificate(formData.resident_id);
+    
+    if (validCert) {
+      // Show confirmation dialog
+      setValidCertInfo(validCert);
+      setPendingSave('create');
+      setShowValidCertDialog(true);
+      return;
+    }
+    
+    // No valid certificate, proceed with normal creation
+    handleCreateDirect();
   }
-}
 
-// Update the handleUpdate function
-async function handleUpdate() {
-  try {
-    const validityPeriod = getValidityPeriod('Financial Assistance');
-    const updatedFormData = {
-      ...formData,
-      validity_period: validityPeriod, // Add validity period
-    };
+  // Update the handleUpdate function
+  async function handleUpdate() {
+    try {
+      const validityPeriod = getValidityPeriod('Financial Assistance');
+      const updatedFormData = {
+        ...formData,
+        validity_period: validityPeriod, // Add validity period
+      };
 
-    const res = await fetch(`${apiBase}/financial-assistance/${editingId}`, {
-      method: 'PUT',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(toServerPayload(updatedFormData)),
-    });
-    if (!res.ok) throw new Error('Update failed');
-    const updatedData = await res.json();
-    // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
-    const updated = { 
-      ...updatedData,
-      financial_assistance_id: updatedData.financial_assistance_id,
-      full_name: updatedData.full_name,
-      address: updatedData.address || '',
-      dob: updatedData.dob ? updatedData.dob.split('T')[0] : '',
-      age: String(updatedData.age ?? ''),
-      occupation: updatedData.occupation || '',
-      purpose: updatedData.purpose || '',
-      monthly_income: updatedData.monthly_income || '',
-      date_issued: updatedData.date_issued ? updatedData.date_issued.split('T')[0] : '',
-      date_created: updatedData.date_created,
-      transaction_number: updatedData.transaction_number,
-      validity_period: validityPeriod,
-      use_signature: Boolean(updatedData.use_signature),
-      secretary_signature_id: updatedData.secretary_signature_id,
-      captain_signature_id: updatedData.captain_signature_id,
-      sec_official_name: updatedData.sec_official_name,
-      sec_designation: updatedData.sec_designation,
-      sec_signature_path: updatedData.sec_signature_path,
-      cap_official_name: updatedData.cap_official_name,
-      cap_designation: updatedData.cap_designation,
-      cap_signature_path: updatedData.cap_signature_path,
-    };
-    // Remove old record and add new one
-    setRecords([updated, ...records.filter((r) => r.financial_assistance_id !== editingId)]);
-    setSelectedRecord(updated);
+      const res = await fetch(`${apiBase}/financial-assistance/${editingId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(toServerPayload(updatedFormData)),
+      });
+      if (!res.ok) throw new Error('Update failed');
+      const updatedData = await res.json();
+      // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
+      const updated = { 
+        ...updatedData,
+        financial_assistance_id: updatedData.financial_assistance_id,
+        full_name: updatedData.full_name,
+        address: updatedData.address || '',
+        dob: updatedData.dob ? updatedData.dob.split('T')[0] : '',
+        age: String(updatedData.age ?? ''),
+        occupation: updatedData.occupation || '',
+        purpose: updatedData.purpose || '',
+        monthly_income: updatedData.monthly_income || '',
+        date_issued: updatedData.date_issued ? updatedData.date_issued.split('T')[0] : '',
+        date_created: updatedData.date_created,
+        transaction_number: updatedData.transaction_number,
+        validity_period: validityPeriod,
+        use_signature: Boolean(updatedData.use_signature),
+        secretary_signature_id: updatedData.secretary_signature_id,
+        captain_signature_id: updatedData.captain_signature_id,
+        sec_official_name: updatedData.sec_official_name,
+        sec_designation: updatedData.sec_designation,
+        sec_signature_path: updatedData.sec_signature_path,
+        cap_official_name: updatedData.cap_official_name,
+        cap_designation: updatedData.cap_designation,
+        cap_signature_path: updatedData.cap_signature_path,
+      };
+      // Remove old record and add new one
+      setRecords([updated, ...records.filter((r) => r.financial_assistance_id !== editingId)]);
+      setSelectedRecord(updated);
 
-    // Save to certificates table
-    await saveCertificate(updated, false);
+      // Save to certificates table
+      await saveCertificate(updated, false);
 
-    // Store the updated certificate data
-    storeCertificateData(updated);
+      // Store the updated certificate data
+      storeCertificateData(updated);
 
-    resetForm();
-    setActiveTab('records');
-  } catch (e) {
-    console.error(e);
-    alert('Failed to update record');
+      resetForm();
+      setActiveTab('records');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to update record');
+    }
   }
-}
 
   function handleEdit(record) {
     setFormData({
@@ -958,7 +1010,6 @@ async function handleUpdate() {
       setQrDialogOpen(true);
     }
   };
-
 
   const handleZoomIn = () => {
     setZoomLevel((prev) => Math.min(prev + 0.1, 2)); // Max zoom: 2x (200%)
@@ -1420,7 +1471,7 @@ async function handleUpdate() {
                 </div>
 
                 {/* QR & Signature area (QR not embedded in the "paper" content visually; it's shown below) */}
-                <div style={{ position: "absolute", top: "750px", left: "50px", width: "250px", textAlign: "center", fontFamily: '"Times New Roman", serif', fontSize: "12pt", fontWeight: "bold" }}>
+                <div style={{ position: "absolute", top: "780px", left: "50px", width: "250px", textAlign: "center", fontFamily: '"Times New Roman", serif', fontSize: "12pt", fontWeight: "bold" }}>
                   <div style={{ borderTop: "2px solid #000", width: "65%", margin: "auto" }} />
                   <div>Applicant's Signature</div>
 
@@ -1436,8 +1487,8 @@ async function handleUpdate() {
                             src={qrCodeUrl}
                             alt="Verification QR Code"
                             style={{
-                              width: '150px',
-                              height: '150px',
+                              width: '130px',
+                              height: '130px',
                               border: '2px solid #000',
                               padding: '5px',
                               background: '#fff',
@@ -2048,6 +2099,45 @@ async function handleUpdate() {
               Go to Verification Page
             </Button>
           )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Add the dialog at the end of the component, before the closing tags */}
+      <Dialog
+        open={showValidCertDialog}
+        onClose={() => setShowValidCertDialog(false)}
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ bgcolor: '#41644A', color: 'white', py: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            Resident Has Valid Certificate
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ p: 3 }}>
+          <Typography>
+            This resident already has a valid Financial Assistance certificate issued on{' '}
+            {validCertInfo && formatDateDisplay(validCertInfo.date_issued)}.
+            Certificates are valid for 6 months.
+          </Typography>
+          <Typography sx={{ mt: 2 }}>
+            Are you sure you want to create a new certificate for this resident?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, borderTop: '1px solid #F1F0E9' }}>
+          <Button
+            onClick={() => setShowValidCertDialog(false)}
+            variant="outlined"
+            sx={{ borderColor: '#41644A', color: '#41644A' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={confirmSaveWithValidCert}
+            variant="contained"
+            sx={{ bgcolor: '#E9762B', '&:hover': { bgcolor: '#d8651f' } }}
+          >
+            Create Anyway
+          </Button>
         </DialogActions>
       </Dialog>
     </ThemeProvider>

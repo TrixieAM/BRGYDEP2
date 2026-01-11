@@ -226,6 +226,21 @@ export default function PermitToTravel() {
     };
   };
 
+  // Add this function to check if a resident has a valid certificate
+function hasValidCertificate(residentId, records) {
+  if (!residentId || !records || records.length === 0) return false;
+  
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  
+  return records.some(record => {
+    if (record.resident_id !== residentId) return false;
+    
+    const issueDate = new Date(record.date_issued);
+    return issueDate >= sixMonthsAgo;
+  });
+}
+
   const [records, setRecords] = useState([]);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [editingId, setEditingId] = useState(null);
@@ -241,6 +256,11 @@ export default function PermitToTravel() {
   const [selectedSignature, setSelectedSignature] = useState(null);
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  // In the PermitToTravel component, add these state variables
+const [showValidCertDialog, setShowValidCertDialog] = useState(false);
+const [validCertInfo, setValidCertInfo] = useState(null);
+
 
   // Add this after the imports and before the component function
   const { 
@@ -760,11 +780,52 @@ export default function PermitToTravel() {
     setSelectedSignature(null); // Clear selected signature
   }
 
-  function handleSubmit() {
-    if (editingId) handleUpdate();
-    else handleCreate();
+ // Modify the handleSubmit function
+function handleSubmit() {
+  // Validate required fields
+  if (!formData.full_name || !formData.address || !formData.request_reason) {
+    alert('Please fill in all required fields');
+    return;
   }
+  
+  if (!formData.date_issued) {
+    alert('Please select the issued date');
+    return;
+  }
+  
+  if (formData.use_signature && !formData.signature_id) {
+    alert('Please select a signature when e-signature is enabled');
+    return;
+  }
+  
+  // Check if resident has a valid certificate (only for new records)
+  if (!editingId && formData.resident_id) {
+    const validCert = records.find(record => {
+      if (record.resident_id !== formData.resident_id) return false;
+      
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      const issueDate = new Date(record.date_issued);
+      
+      return issueDate >= sixMonthsAgo;
+    });
+    
+    if (validCert) {
+      setValidCertInfo(validCert);
+      setShowValidCertDialog(true);
+      return;
+    }
+  }
+  
+  if (editingId) handleUpdate();
+  else handleCreate();
+}
 
+// Add a new function to handle confirmation with valid certificate
+function confirmSaveWithValidCert() {
+  setShowValidCertDialog(false);
+  handleCreate();
+}
   const filteredRecords = useMemo(
     () =>
       records.filter(
@@ -1559,7 +1620,7 @@ export default function PermitToTravel() {
 
                     {/* QR Code */}
                     {qrCodeUrl && (
-                      <div style={{ marginTop: '15px' }}>
+                      <div style={{ marginTop: '5px' }}>
                         <div
                           style={{
                             display: 'inline-block',
@@ -1569,8 +1630,8 @@ export default function PermitToTravel() {
                             src={qrCodeUrl}
                             alt="Verification QR Code"
                             style={{
-                              width: '150px',
-                              height: '150px',
+                              width: '130px',
+                              height: '130px',
                               border: '2px solid #000',
                               padding: '5px',
                               background: '#fff',
@@ -2260,6 +2321,47 @@ export default function PermitToTravel() {
           )}
         </DialogActions>
       </Dialog>
+
+
+      // Add the dialog at the end of the component, before the closing tags
+<Dialog
+  open={showValidCertDialog}
+  onClose={() => setShowValidCertDialog(false)}
+  PaperProps={{ sx: { borderRadius: 2 } }}
+>
+  <DialogTitle sx={{ bgcolor: '#41644A', color: 'white', py: 2 }}>
+    <Typography variant="h6" sx={{ fontWeight: 700 }}>
+      Resident Has Valid Certificate
+    </Typography>
+  </DialogTitle>
+  <DialogContent sx={{ p: 3 }}>
+    <Typography>
+      This resident already has a valid Permit to Travel issued on{' '}
+      {validCertInfo && formatDateDisplay(validCertInfo.date_issued)}.
+      Certificates are valid for 6 months.
+    </Typography>
+    <Typography sx={{ mt: 2 }}>
+      Are you sure you want to create a new certificate for this resident?
+    </Typography>
+  </DialogContent>
+  <DialogActions sx={{ p: 2, borderTop: '1px solid #F1F0E9' }}>
+    <Button
+      onClick={() => setShowValidCertDialog(false)}
+      variant="outlined"
+      sx={{ borderColor: '#41644A', color: '#41644A' }}
+    >
+      Cancel
+    </Button>
+    <Button
+      onClick={confirmSaveWithValidCert}
+      variant="contained"
+      sx={{ bgcolor: '#E9762B', '&:hover': { bgcolor: '#d8651f' } }}
+    >
+      Create Anyway
+    </Button>
+  </DialogActions>
+</Dialog>
+
     </ThemeProvider>
   );
 }

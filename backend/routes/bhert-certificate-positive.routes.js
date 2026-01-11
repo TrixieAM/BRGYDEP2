@@ -122,6 +122,37 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// GET valid certificates for a resident
+router.get('/resident/:residentId/valid', async (req, res) => {
+  try {
+    const { residentId } = req.params;
+    const { date } = req.query; // Date to check from (one year ago)
+    
+    const [rows] = await pool.query(`
+      SELECT 
+        bcp.*,
+        sec_sig.signature_id as sec_signature_id, 
+        sec_sig.official_name as sec_official_name, 
+        sec_sig.designation as sec_designation, 
+        sec_sig.signature_path as sec_signature_path,
+        cap_sig.signature_id as cap_signature_id, 
+        cap_sig.official_name as cap_official_name, 
+        cap_sig.designation as cap_designation, 
+        cap_sig.signature_path as cap_signature_path
+      FROM bhert_certificate_positive bcp
+      LEFT JOIN official_signature sec_sig ON bcp.secretary_signature_id = sec_sig.signature_id
+      LEFT JOIN official_signature cap_sig ON bcp.captain_signature_id = cap_sig.signature_id
+      WHERE bcp.resident_id = ? AND bcp.is_active = 1 AND bcp.date_issued >= ?
+      ORDER BY bcp.date_issued DESC
+    `, [residentId, date]);
+    
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch valid certificates' });
+  }
+});
+
 // CREATE new BHERT certificate (positive)
 router.post('/', async (req, res) => {
   const connection = await pool.getConnection();
@@ -189,7 +220,7 @@ router.post('/', async (req, res) => {
       values.push(captain_signature_id || null);
     }
     
-    query += ') VALUES (?, ?, ?, ?, ?, ?, ?';
+    query += ') VALUES (?, ?, ?, ?, ?, ?';
     
     if (hasUseSignature) {
       query += ', ?';
@@ -313,7 +344,7 @@ router.put('/:id', async (req, res) => {
       values.push(captain_signature_id || null);
     }
     
-    query += ') VALUES (?, ?, ?, ?, ?, ?, ?';
+    query += ') VALUES (?, ?, ?, ?, ?, ?';
     
     if (hasUseSignature) {
       query += ', ?';

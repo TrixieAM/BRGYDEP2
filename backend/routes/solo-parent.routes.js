@@ -1,4 +1,5 @@
 // routes/solo-parent.routes.js
+// Backend route for Solo Parent records
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../config/db.config');
@@ -8,7 +9,7 @@ const { generateTransactionNumberForType } = require('../utils/transaction.utils
 // Apply authentication middleware to all routes
 router.use(verifyToken);
 
-// Get all active solo parent records
+// GET all active Solo Parent records
 router.get('/', async (req, res) => {
   try {
     // Check if the table has the required columns
@@ -61,15 +62,18 @@ router.get('/', async (req, res) => {
       ORDER BY spr.date_created DESC
     `);
     res.json(rows);
-  } catch (error) {
-    console.error('Error fetching solo parent records:', error);
-    res.status(500).json({ error: 'Failed to fetch records' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch Solo Parent records' });
   }
 });
 
-// GET all records including historical (for transaction log)
-router.get('/transactions/all', async (req, res) => {
+// GET valid certificates for a resident
+router.get('/resident/:residentId/valid', async (req, res) => {
   try {
+    const { residentId } = req.params;
+    const { date } = req.query; // Date to check from (six months ago)
+    
     const [rows] = await pool.query(`
       SELECT 
         spr.*,
@@ -84,18 +88,21 @@ router.get('/transactions/all', async (req, res) => {
       FROM solo_parent_records spr
       LEFT JOIN official_signature sec_sig ON spr.secretary_signature_id = sec_sig.signature_id
       LEFT JOIN official_signature cap_sig ON spr.captain_signature_id = cap_sig.signature_id
-      ORDER BY spr.date_created DESC, spr.solo_parent_id DESC
-    `);
+      WHERE spr.resident_id = ? AND spr.is_active = 1 AND spr.date_issued >= ?
+      ORDER BY spr.date_issued DESC
+    `, [residentId, date]);
+    
     res.json(rows);
-  } catch (error) {
-    console.error('Error fetching transaction history:', error);
-    res.status(500).json({ error: 'Failed to fetch transaction history' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch valid certificates' });
   }
 });
 
-// Get single solo parent record by ID
+// GET single Solo Parent record by ID
 router.get('/:id', async (req, res) => {
   try {
+    const { id } = req.params;
     const [rows] = await pool.query(`
       SELECT 
         spr.*,
@@ -111,20 +118,18 @@ router.get('/:id', async (req, res) => {
       LEFT JOIN official_signature sec_sig ON spr.secretary_signature_id = sec_sig.signature_id
       LEFT JOIN official_signature cap_sig ON spr.captain_signature_id = cap_sig.signature_id
       WHERE spr.solo_parent_id = ?
-    `, [req.params.id]);
+    `, [id]);
     
-    if (rows.length === 0) {
+    if (rows.length === 0)
       return res.status(404).json({ error: 'Record not found' });
-    }
-    
     res.json(rows[0]);
-  } catch (error) {
-    console.error('Error fetching solo parent record:', error);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Failed to fetch record' });
   }
 });
 
-// Create new solo parent record
+// CREATE new Solo Parent record
 router.post('/', async (req, res) => {
   const connection = await pool.getConnection();
   
@@ -143,12 +148,19 @@ router.post('/', async (req, res) => {
       employment_status,
       employment_remarks,
       date_issued,
+      transaction_number,
       use_signature,
       secretary_signature_id,
       captain_signature_id
     } = req.body;
 
-    const transactionNum = `SP-${Date.now()}`;
+    if (!full_name || !address || !dob) {
+      await connection.rollback();
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const finalTransactionNumber =
+      transaction_number || generateTransactionNumberForType('SP');
 
     // Check if the table has the required columns
     const [columns] = await connection.query("SHOW COLUMNS FROM solo_parent_records");
@@ -160,7 +172,6 @@ router.post('/', async (req, res) => {
     let query = `
       INSERT INTO solo_parent_records (
         resident_id,
-        transactionNum,
         full_name,
         age,
         address,
@@ -175,7 +186,6 @@ router.post('/', async (req, res) => {
     
     let values = [
       resident_id,
-      transactionNum,
       full_name,
       age,
       address,
@@ -186,7 +196,7 @@ router.post('/', async (req, res) => {
       employment_status,
       employment_remarks,
       date_issued,
-      transactionNum
+      finalTransactionNumber
     ];
     
     if (hasUseSignature) {
@@ -204,7 +214,7 @@ router.post('/', async (req, res) => {
       values.push(captain_signature_id || null);
     }
     
-    query += ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
+    query += ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
     
     if (hasUseSignature) {
       query += ', ?';
@@ -241,26 +251,22 @@ router.post('/', async (req, res) => {
     `, [result.insertId]);
 
     await connection.commit();
-    
     res.status(201).json(newRecord[0]);
-  } catch (error) {
+  } catch (err) {
     await connection.rollback();
-    console.error('Error creating solo parent record:', error);
+    console.error(err);
     res.status(500).json({ error: 'Failed to create record' });
   } finally {
     connection.release();
   }
 });
 
-// Update solo parent record
-// When updating, we create a NEW record entry with a new transaction number
-// The old record remains in history (marked as inactive)
+// UPDATE existing Solo Parent record
 router.put('/:id', async (req, res) => {
   const connection = await pool.getConnection();
-  
   try {
     await connection.beginTransaction();
-    
+
     const { id } = req.params;
     const {
       resident_id,
@@ -279,23 +285,21 @@ router.put('/:id', async (req, res) => {
       captain_signature_id
     } = req.body;
 
-    // Get the existing record
     const [existing] = await connection.query(
       'SELECT * FROM solo_parent_records WHERE solo_parent_id = ?',
       [id]
     );
-
     if (existing.length === 0) {
       await connection.rollback();
       return res.status(404).json({ error: 'Record not found' });
     }
 
-    // Generate a NEW transaction number for the new entry
     const newTransactionNumber = generateTransactionNumberForType('SP');
 
-    // Mark the old record as inactive (to preserve it in history)
     await connection.query(
-      'UPDATE solo_parent_records SET is_active = 0, date_updated = NOW() WHERE solo_parent_id = ?',
+      `UPDATE solo_parent_records
+       SET is_active = FALSE, date_updated = NOW()
+       WHERE solo_parent_id = ?`,
       [id]
     );
 
@@ -309,7 +313,6 @@ router.put('/:id', async (req, res) => {
     let query = `
       INSERT INTO solo_parent_records (
         resident_id,
-        transactionNum,
         full_name,
         age,
         address,
@@ -324,7 +327,6 @@ router.put('/:id', async (req, res) => {
     
     let values = [
       resident_id,
-      newTransactionNumber,
       full_name,
       age,
       address,
@@ -335,7 +337,7 @@ router.put('/:id', async (req, res) => {
       employment_status,
       employment_remarks,
       date_issued,
-      newTransactionNumber
+      newTransactionNumber,
     ];
     
     if (hasUseSignature) {
@@ -353,7 +355,7 @@ router.put('/:id', async (req, res) => {
       values.push(captain_signature_id || null);
     }
     
-    query += ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
+    query += ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
     
     if (hasUseSignature) {
       query += ', ?';
@@ -391,235 +393,29 @@ router.put('/:id', async (req, res) => {
 
     await connection.commit();
     res.json(newRecord[0]);
-  } catch (error) {
+  } catch (err) {
     await connection.rollback();
-    console.error('Error updating solo parent record:', error);
+    console.error('Failed to update Solo Parent record', err);
     res.status(500).json({ error: 'Failed to update record' });
   } finally {
     connection.release();
   }
 });
 
-// Soft delete solo parent record
+// DELETE Solo Parent record (soft delete)
 router.delete('/:id', async (req, res) => {
-  const connection = await pool.getConnection();
-  
   try {
-    await connection.beginTransaction();
-    
-    const [result] = await connection.query(
-      'UPDATE solo_parent_records SET is_active = 0 WHERE solo_parent_id = ?',
-      [req.params.id]
-    );
-
-    if (result.affectedRows === 0) {
-      await connection.rollback();
-      return res.status(404).json({ error: 'Record not found' });
-    }
-
-    await connection.commit();
-    res.json({ message: 'Solo parent record deleted successfully' });
-  } catch (error) {
-    await connection.rollback();
-    console.error('Error deleting solo parent record:', error);
-    res.status(500).json({ error: 'Failed to delete record' });
-  } finally {
-    connection.release();
-  }
-});
-
-// Get all children for a solo parent
-router.get('/:soloParentId/children', async (req, res) => {
-  try {
-    const [rows] = await pool.query(
-      'SELECT * FROM solo_parent_children WHERE solo_parent_id = ? ORDER BY date_created ASC',
-      [req.params.soloParentId]
-    );
-    res.json(rows);
-  } catch (error) {
-    console.error('Error fetching children:', error);
-    res.status(500).json({ error: 'Failed to fetch children' });
-  }
-});
-
-// Create children for a solo parent (bulk insert)
-router.post('/:soloParentId/children', async (req, res) => {
-  const connection = await pool.getConnection();
-  
-  try {
-    await connection.beginTransaction();
-    
-    const soloParentId = req.params.soloParentId;
-    const children = req.body;
-
-    if (!Array.isArray(children) || children.length === 0) {
-      return res.status(400).json({ error: 'Invalid children data' });
-    }
-
-    await connection.query(
-      'DELETE FROM solo_parent_children WHERE solo_parent_id = ?',
-      [soloParentId]
-    );
-
-    const values = children.map(child => [
-      soloParentId,
-      child.child_name,
-      child.child_age,
-      child.child_birthday,
-      child.child_level,
-      child.child_level_remarks,
-      child.child_gender,
-      child.child_relationship,
-      child.child_relationship_remarks
-    ]);
-
-    await connection.query(`
-      INSERT INTO solo_parent_children (
-        solo_parent_id,
-        child_name,
-        child_age,
-        child_birthday,
-        child_level,
-        child_level_remarks,
-        child_gender,
-        child_relationship,
-        child_relationship_remarks
-      ) VALUES ?
-    `, [values]);
-
-    await connection.commit();
-    res.status(201).json({ message: 'Children records created successfully' });
-  } catch (error) {
-    await connection.rollback();
-    console.error('Error creating children records:', error);
-    res.status(500).json({ error: 'Failed to create children records' });
-  } finally {
-    connection.release();
-  }
-});
-
-// Update children for a solo parent (replace all)
-router.put('/:soloParentId/children', async (req, res) => {
-  const connection = await pool.getConnection();
-  
-  try {
-    await connection.beginTransaction();
-    
-    const soloParentId = req.params.soloParentId;
-    const children = req.body;
-
-    await connection.query(
-      'DELETE FROM solo_parent_children WHERE solo_parent_id = ?',
-      [soloParentId]
-    );
-
-    if (Array.isArray(children) && children.length > 0) {
-      const values = children.map(child => [
-        soloParentId,
-        child.child_name,
-        child.child_age,
-        child.child_birthday,
-        child.child_level,
-        child.child_level_remarks,
-        child.child_gender,
-        child.child_relationship,
-        child.child_relationship_remarks
-      ]);
-
-      await connection.query(`
-        INSERT INTO solo_parent_children (
-          solo_parent_id,
-          child_name,
-          child_age,
-          child_birthday,
-          child_level,
-          child_level_remarks,
-          child_gender,
-          child_relationship,
-          child_relationship_remarks
-        ) VALUES ?
-      `, [values]);
-    }
-
-    await connection.commit();
-    res.json({ message: 'Children records updated successfully' });
-  } catch (error) {
-    await connection.rollback();
-    console.error('Error updating children records:', error);
-    res.status(500).json({ error: 'Failed to update children records' });
-  } finally {
-    connection.release();
-  }
-});
-
-// Delete a specific child
-router.delete('/:soloParentId/children/:childId', async (req, res) => {
-  try {
+    const { id } = req.params;
     const [result] = await pool.query(
-      'DELETE FROM solo_parent_children WHERE child_id = ? AND solo_parent_id = ?',
-      [req.params.childId, req.params.soloParentId]
+      `UPDATE solo_parent_records SET is_active = FALSE, date_updated = NOW() WHERE solo_parent_id = ?`,
+      [id]
     );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Child record not found' });
-    }
-
-    res.json({ message: 'Child record deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting child record:', error);
-    res.status(500).json({ error: 'Failed to delete child record' });
-  }
-});
-
-// Search solo parent records
-router.get('/search/:query', async (req, res) => {
-  try {
-    const searchQuery = `%${req.params.query}%`;
-    const [rows] = await pool.query(`
-      SELECT * FROM solo_parent_records
-      WHERE is_active = 1
-      AND (
-        full_name LIKE ? OR
-        address LIKE ? OR
-        contact_no LIKE ? OR
-        transaction_number LIKE ?
-      )
-      ORDER BY date_created DESC
-    `, [searchQuery, searchQuery, searchQuery, searchQuery]);
-    
-    res.json(rows);
-  } catch (error) {
-    console.error('Error searching records:', error);
-    res.status(500).json({ error: 'Failed to search records' });
-  }
-});
-
-// Get statistics
-router.get('/statistics/all', async (req, res) => {
-  try {
-    const [totalRecords] = await pool.query(
-      'SELECT COUNT(*) as count FROM solo_parent_records WHERE is_active = 1'
-    );
-    
-    const [totalChildren] = await pool.query(
-      'SELECT COUNT(*) as count FROM solo_parent_children'
-    );
-    
-    const [recordsThisMonth] = await pool.query(`
-      SELECT COUNT(*) as count FROM solo_parent_records
-      WHERE is_active = 1
-      AND MONTH(date_created) = MONTH(CURRENT_DATE())
-      AND YEAR(date_created) = YEAR(CURRENT_DATE())
-    `);
-
-    res.json({
-      totalRecords: totalRecords[0].count,
-      totalChildren: totalChildren[0].count,
-      recordsThisMonth: recordsThisMonth[0].count
-    });
-  } catch (error) {
-    console.error('Error fetching statistics:', error);
-    res.status(500).json({ error: 'Failed to fetch statistics' });
+    if (result.affectedRows === 0)
+      return res.status(404).json({ error: 'Record not found' });
+    res.json({ message: 'Record deleted successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete record' });
   }
 });
 

@@ -836,12 +836,13 @@ export default function Residents() {
         </Fab>
 
         {/* Modal for Form */}
-        <Modal
-          open={isModalOpen}
-          onClose={resetForm}
-          aria-labelledby="resident-form-modal"
-          aria-describedby="form-to-add-or-edit-resident"
-        >
+       <Modal
+        open={isModalOpen}
+        onClose={() => {}} // Empty function to prevent closing on outside click
+        aria-labelledby="resident-form-modal"
+        aria-describedby="form-to-add-or-edit-resident"
+        disableBackdropClick // This prop explicitly prevents closing on backdrop click
+      >
           <Box
             sx={{
               position: 'absolute',

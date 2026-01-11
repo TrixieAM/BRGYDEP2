@@ -49,6 +49,7 @@ import {
   FormControlLabel,
   Checkbox,
   Divider,
+  Alert,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -68,6 +69,7 @@ import {
   Folder as FolderIcon,
   Dashboard as DashboardIcon,
   Article as ArticleIcon,
+  Warning as WarningIcon,
 } from '@mui/icons-material';
 import { useMediaQuery } from '@mui/material';
 
@@ -239,6 +241,8 @@ export default function BhertCertificatePositive() {
   const [signatures, setSignatures] = useState([]);
   const [selectedSecretarySignature, setSelectedSecretarySignature] = useState(null);
   const [selectedCaptainSignature, setSelectedCaptainSignature] = useState(null);
+  const [showValidCertDialog, setShowValidCertDialog] = useState(false);
+  const [validCertInfo, setValidCertInfo] = useState(null);
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -359,6 +363,32 @@ export default function BhertCertificatePositive() {
 
     // Store back to localStorage
     localStorage.setItem('certificates', JSON.stringify(existingCertificates));
+  }
+
+  // Check if resident has a valid certificate (within the last year)
+  async function checkForValidCertificate(residentId) {
+    if (!residentId) return null;
+    
+    try {
+      // Calculate date one year ago from today
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+      const oneYearAgoStr = oneYearAgo.toISOString().split('T')[0];
+      
+      // Check if resident has a certificate issued within the last year
+      const res = await fetch(`${apiBase}/bhert-certificate-positive/resident/${residentId}/valid?date=${oneYearAgoStr}`, {
+        headers: getAuthHeaders()
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        return data.length > 0 ? data[0] : null;
+      }
+      return null;
+    } catch (e) {
+      console.error('Error checking for valid certificate:', e);
+      return null;
+    }
   }
 
   async function loadResidents() {
@@ -741,9 +771,26 @@ export default function BhertCertificatePositive() {
     setSelectedCaptainSignature(null);
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
+    // If creating a new record, check for valid certificate
+    if (!editingId && formData.resident_id) {
+      const validCert = await checkForValidCertificate(formData.resident_id);
+      if (validCert) {
+        setValidCertInfo(validCert);
+        setShowValidCertDialog(true);
+        return;
+      }
+    }
+    
+    // If editing or no valid certificate found, proceed with save/update
     if (editingId) handleUpdate();
     else handleCreate();
+  }
+
+  // Function to handle creating a certificate even if a valid one exists
+  function confirmSaveWithValidCert() {
+    setShowValidCertDialog(false);
+    handleCreate();
   }
 
   const filteredRecords = useMemo(
@@ -1352,8 +1399,8 @@ export default function BhertCertificatePositive() {
                   <div
                     style={{
                       position: 'absolute',
-                      bottom: '60px',
-                      right: '60px',
+                      bottom: '100px',
+                      right: '100px',
                       textAlign: 'center',
                       fontFamily: '"Times New Roman", serif',
                       fontSize: '10pt',
@@ -1371,8 +1418,8 @@ export default function BhertCertificatePositive() {
                             src={qrCodeUrl}
                             alt="Verification QR Code"
                             style={{
-                              width: '150px',
-                              height: '150px',
+                              width: '130px',
+                              height: '130px',
                               border: '2px solid #000',
                               padding: '5px',
                               background: '#fff',
@@ -1775,6 +1822,45 @@ export default function BhertCertificatePositive() {
         )}
       </Box>
 
+      {/* VALID CERTIFICATE DIALOG */}
+      <Dialog
+        open={showValidCertDialog}
+        onClose={() => setShowValidCertDialog(false)}
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ bgcolor: '#41644A', color: 'white', py: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            Resident Has Valid Certificate
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ p: 3 }}>
+          <Typography>
+            This resident already has a valid BHERT Certificate (Positive) issued on{' '}
+            {validCertInfo && formatDateDisplay(validCertInfo.date_issued)}.
+            Certificates are valid for 1 year.
+          </Typography>
+          <Typography sx={{ mt: 2 }}>
+            Are you sure you want to create a new certificate for this resident?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, borderTop: '1px solid #F1F0E9' }}>
+          <Button
+            onClick={() => setShowValidCertDialog(false)}
+            variant="outlined"
+            sx={{ borderColor: '#41644A', color: '#41644A' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={confirmSaveWithValidCert}
+            variant="contained"
+            sx={{ bgcolor: '#E9762B', '&:hover': { bgcolor: '#d8651f' } }}
+          >
+            Create Anyway
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* QR Code Details Dialog */}
       <Dialog
         open={qrDialogOpen}
@@ -1906,3 +1992,4 @@ export default function BhertCertificatePositive() {
     </ThemeProvider>
   );
 }
+

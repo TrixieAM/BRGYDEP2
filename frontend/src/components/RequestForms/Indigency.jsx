@@ -215,6 +215,21 @@ const theme = createTheme({
   },
 });
 
+// Add this function to check if a resident has a valid certificate
+function hasValidCertificate(residentId, records) {
+  if (!residentId || !records || records.length === 0) return false;
+  
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  
+  return records.some(record => {
+    if (record.resident_id !== residentId) return false;
+    
+    const issueDate = new Date(record.date_issued);
+    return issueDate >= sixMonthsAgo;
+  });
+}
+
 export default function Indigency() {
   const apiBase = 'http://localhost:5000';
   const navigate = useNavigate();
@@ -232,9 +247,14 @@ export default function Indigency() {
   const [zoomLevel, setZoomLevel] = useState(0.75); // Default zoom level
   const [signatures, setSignatures] = useState([]);
   const [selectedSignature, setSelectedSignature] = useState(null);
+  
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
+  const [showValidCertDialog, setShowValidCertDialog] = useState(false);
+const [validCertInfo, setValidCertInfo] = useState(null);
+
+  
   const { saveCertificate, getValidityPeriod, calculateExpirationDate } =
     useCertificateManager('Barangay Indigency');
 
@@ -247,6 +267,8 @@ export default function Indigency() {
       ...(token && { Authorization: `Bearer ${token}` }),
     };
   };
+  
+  
 
   const [formData, setFormData] = useState({
     resident_id: '',
@@ -612,45 +634,45 @@ export default function Indigency() {
   }
 
   async function handleUpdate() {
-    try {
-      const validityPeriod = getValidityPeriod('Barangay Indigency');
-      const updatedFormData = {
-        ...formData,
-        validity_period: validityPeriod, // Add validity period
-      };
+  try {
+    const validityPeriod = getValidityPeriod('Barangay Indigency');
+    const updatedFormData = {
+      ...formData,
+      validity_period: validityPeriod, // Add validity period
+    };
 
-      const res = await fetch(`${apiBase}/indigency/${editingId}`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(toServerPayload(updatedFormData)),
-      });
-      if (!res.ok) throw new Error('Update failed');
-      const updatedData = await res.json();
-      // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
-      const updatedRec = {
-        ...updatedData,
-        validity_period: validityPeriod,
-      };
-      // Remove old record and add new one
-      setRecords([
-        updatedRec,
-        ...records.filter((r) => r.indigency_id !== editingId),
-      ]);
-      setSelectedRecord(updatedRec);
+    const res = await fetch(`${apiBase}/indigency/${editingId}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(toServerPayload(updatedFormData)),
+    });
+    if (!res.ok) throw new Error('Update failed');
+    const updatedData = await res.json();
+    // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
+    const updatedRec = {
+      ...updatedData,
+      validity_period: validityPeriod,
+    };
+    // Remove old record and add new one
+    setRecords([
+      updatedRec,
+      ...records.filter((r) => r.indigency_id !== editingId),
+    ]);
+    setSelectedRecord(updatedRec);
 
-      // Save to certificates table
-      await saveCertificate(updated, false);
+    // Save to certificates table
+    await saveCertificate(updatedRec, false);  // Fixed: changed 'updated' to 'updatedRec'
 
-      // Store the updated certificate data
-      storeCertificateData(updated);
+    // Store the updated certificate data
+    storeCertificateData(updatedRec);  // Fixed: changed 'updated' to 'updatedRec'
 
-      resetForm();
-      setActiveTab('records');
-    } catch (e) {
-      console.error(e);
-      alert('Failed to update record');
-    }
+    resetForm();
+    setActiveTab('records');
+  } catch (e) {
+    console.error(e);
+    alert('Failed to update record');
   }
+}
 
   function handleEdit(record) {
     setFormData({
@@ -745,10 +767,52 @@ export default function Indigency() {
     setSelectedSignature(null); // Clear selected signature
   }
 
-  function handleSubmit() {
-    if (editingId) handleUpdate();
-    else handleCreate();
+  // Modify the handleSubmit function
+function handleSubmit() {
+  // Validate required fields
+  if (!formData.full_name || !formData.address || !formData.request_reason) {
+    alert('Please fill in all required fields');
+    return;
   }
+  
+  if (!formData.date_issued) {
+    alert('Please select the issued date');
+    return;
+  }
+  
+  if (formData.use_signature && !formData.signature_id) {
+    alert('Please select a signature when e-signature is enabled');
+    return;
+  }
+  
+  // Check if resident has a valid certificate (only for new records)
+  if (!editingId && formData.resident_id) {
+    const validCert = records.find(record => {
+      if (record.resident_id !== formData.resident_id) return false;
+      
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      const issueDate = new Date(record.date_issued);
+      
+      return issueDate >= sixMonthsAgo;
+    });
+    
+    if (validCert) {
+      setValidCertInfo(validCert);
+      setShowValidCertDialog(true);
+      return;
+    }
+  }
+  
+  if (editingId) handleUpdate();
+  else handleCreate();
+}
+
+// Add a new function to handle confirmation with valid certificate
+function confirmSaveWithValidCert() {
+  setShowValidCertDialog(false);
+  handleCreate();
+}
 
   const filteredRecords = useMemo(
     () =>
@@ -1554,7 +1618,7 @@ export default function Indigency() {
                     </div>
                   </div>
 
-                  {/* Applicant Signature with QR Code */}
+                 {/* Applicant Signature with QR Code */}
                   <div
                     style={{
                       position: 'absolute',
@@ -1587,8 +1651,35 @@ export default function Indigency() {
                     ></div>
 
                     {/* QR Code */}
+                    {qrCodeUrl && (
+                      <div style={{ marginTop: '5px' }}>
+                        <img
+                          src={qrCodeUrl}
+                          alt="QR Code"
+                          style={{
+                            width: '130px',
+                            height: '130px',
+                            display: 'block',
+                            margin: '0 auto',
+                            border: '2px solid #000',
+                            padding: '5px',
+                          }}
+                        />
+                        <div
+                          style={{
+                            fontSize: '8pt',
+                            color: '#666',
+                            marginTop: '5px',
+                            fontWeight: 'normal',
+                          }}
+                        >
+                          {display.date_created
+                            ? formatDateTimeDisplay(display.date_created)
+                            : new Date().toLocaleString()}
+                        </div>
+                      </div>
+                    )}
                   </div>
-
                   {/* Punong Barangay */}
 
                   <div
@@ -2371,6 +2462,46 @@ export default function Indigency() {
           </Button>
         </DialogActions>
       </Dialog>
+
+
+      // Add the dialog at the end of the component, before the closing tags
+<Dialog
+  open={showValidCertDialog}
+  onClose={() => setShowValidCertDialog(false)}
+  PaperProps={{ sx: { borderRadius: 2 } }}
+>
+  <DialogTitle sx={{ bgcolor: '#41644A', color: 'white', py: 2 }}>
+    <Typography variant="h6" sx={{ fontWeight: 700 }}>
+      Resident Has Valid Certificate
+    </Typography>
+  </DialogTitle>
+  <DialogContent sx={{ p: 3 }}>
+    <Typography>
+      This resident already has a valid Certificate of Indigency issued on{' '}
+      {validCertInfo && formatDateDisplay(validCertInfo.date_issued)}.
+      Certificates are valid for 6 months.
+    </Typography>
+    <Typography sx={{ mt: 2 }}>
+      Are you sure you want to create a new certificate for this resident?
+    </Typography>
+  </DialogContent>
+  <DialogActions sx={{ p: 2, borderTop: '1px solid #F1F0E9' }}>
+    <Button
+      onClick={() => setShowValidCertDialog(false)}
+      variant="outlined"
+      sx={{ borderColor: '#41644A', color: '#41644A' }}
+    >
+      Cancel
+    </Button>
+    <Button
+      onClick={confirmSaveWithValidCert}
+      variant="contained"
+      sx={{ bgcolor: '#E9762B', '&:hover': { bgcolor: '#d8651f' } }}
+    >
+      Create Anyway
+    </Button>
+  </DialogActions>
+</Dialog>
     </ThemeProvider>
   );
 }
@@ -2382,6 +2513,7 @@ function CertificateVerification() {
   const [error, setError] = useState(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(0.75);
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -2405,6 +2537,46 @@ function CertificateVerification() {
 
     setLoading(false);
   }, []);
+
+
+  // Generate QR code for verification page
+useEffect(() => {
+  const generateQRCode = async () => {
+    if (certificate && certificate.indigency_id) {
+      const qrContent = `CERTIFICATE VERIFICATION:
+      𝗧𝗿𝗮𝗻𝘀𝗮𝗰𝘁𝗶𝗼𝗻 𝗡𝗼: ${certificate.transaction_number || 'N/A'}
+      Name: ${certificate.full_name}
+      Date Issued: ${
+        certificate.date_created
+          ? formatDateTimeDisplay(certificate.date_created)
+          : new Date().toLocaleString()
+      }
+      Document Type: Indigency
+     
+      Ⓒ BRRMS | BARANGAY 145
+      CALOOCAN CITY
+      ALL RIGHTS RESERVED
+      `;
+
+      try {
+        const qrUrl = await QRCode.toDataURL(qrContent, {
+          width: 140,
+          margin: 1,
+          color: {
+            dark: '#000000',
+            light: '#FFFFFF',
+          },
+          errorCorrectionLevel: 'L',
+        });
+        setQrCodeUrl(qrUrl);
+      } catch (err) {
+        console.error('Failed to generate QR code:', err);
+      }
+    }
+  };
+
+  generateQRCode();
+}, [certificate]);
 
   // Helper function to format date consistently without timezone issues
   function formatDateDisplay(dateString) {
@@ -3258,7 +3430,7 @@ function CertificateVerification() {
                   </div>
                 </div>
 
-                {/* Applicant Signature with QR Code */}
+              {/* Applicant Signature with QR Code */}
                 <div
                   style={{
                     position: 'absolute',
@@ -3291,9 +3463,19 @@ function CertificateVerification() {
                   ></div>
 
                   {/* QR Code with date created */}
-                  <div style={{ marginTop: '15px' }}>
-                    {/* Assuming QR Code is embedded in certificate. If not, generate here */}
-                    {/* For verification page, typically QR code data itself is verified, not generated here */}
+                  <div style={{ marginTop: '5px' }}>
+                    {qrCodeUrl && (
+                      <img
+                        src={qrCodeUrl}
+                        alt="QR Code"
+                        style={{
+                          width: '130px',
+                          height: '130px',
+                          display: 'block',
+                          margin: '0 auto',
+                        }}
+                      />
+                    )}
                     <div
                       style={{
                         fontSize: '8pt',

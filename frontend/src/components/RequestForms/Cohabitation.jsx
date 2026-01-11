@@ -40,6 +40,10 @@ import {
   FormControlLabel,
   Checkbox,
   Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -230,6 +234,11 @@ export default function Cohabitation() {
   const [signatures, setSignatures] = useState([]);
   const [selectedSecretarySignature, setSelectedSecretarySignature] = useState(null);
   const [selectedCaptainSignature, setSelectedCaptainSignature] = useState(null);
+  
+  // New state for valid certificate dialog
+  const [showValidCertDialog, setShowValidCertDialog] = useState(false);
+  const [validCertInfo, setValidCertInfo] = useState(null);
+  const [pendingSave, setPendingSave] = useState(null);
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -403,6 +412,25 @@ const {
     }
   }
 
+  // Check if resident has valid certificate
+  function checkValidCertificate(residentId) {
+    if (!residentId) return null;
+    
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+    
+    const validCert = records.find(record => {
+      if (!record.date_issued) return false;
+      const issueDate = new Date(record.date_issued);
+      return (
+        (record.resident1_id === residentId || record.resident2_id === residentId) &&
+        issueDate >= oneYearAgo
+      );
+    });
+    
+    return validCert;
+  }
+
   // display chooses between editing/form mode and view mode
   const display = useMemo(() => {
     let data = null;
@@ -516,125 +544,157 @@ const {
     };
   }
 
- // Update the handleCreate function in Cohabitation.jsx
-async function handleCreate() {
-  try {
-    const tx = generateTransactionNumber();
-    const validityPeriod = getValidityPeriod('Cohabitation');
-    const updated = { 
-      ...formData, 
-      transaction_number: tx, 
-      date_created: new Date().toISOString(),
-      validity_period: validityPeriod,
-    };
-    const res = await fetch(`${apiBase}/certificate-of-cohabitation`, {
-      method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify(toServerPayload(updated)),
-    });
-    if (!res.ok) throw new Error("Create failed");
-    const created = await res.json();
-    const newRec = { 
-      ...updated, 
-      certificate_of_cohabitation_id: created.certificate_of_cohabitation_id,
-      sec_official_name: created.sec_official_name,
-      sec_designation: created.sec_designation,
-      sec_signature_path: created.sec_signature_path,
-      cap_official_name: created.cap_official_name,
-      cap_designation: created.cap_designation,
-      cap_signature_path: created.cap_signature_path,
-    };
-    setRecords([newRec, ...records]);
-    setSelectedRecord(newRec);
+  // Function to handle confirmation when creating with valid certificate
+  const confirmSaveWithValidCert = () => {
+    setShowValidCertDialog(false);
+    if (pendingSave) {
+      // Execute the pending save operation
+      if (editingId) {
+        handleUpdate();
+      } else {
+        handleCreateDirect();
+      }
+      setPendingSave(null);
+    }
+  };
 
-    // --- Save to certificates table ---
-    const combinedFullName = `${newRec.full_name1} & ${newRec.full_name2}`;
-    const reason = newRec.request_reason || "Cohabitation";
+  // Direct create function that bypasses the check
+  async function handleCreateDirect() {
+    try {
+      const tx = generateTransactionNumber();
+      const validityPeriod = getValidityPeriod('Cohabitation');
+      const updated = { 
+        ...formData, 
+        transaction_number: tx, 
+        date_created: new Date().toISOString(),
+        validity_period: validityPeriod,
+      };
+      const res = await fetch(`${apiBase}/certificate-of-cohabitation`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(toServerPayload(updated)),
+      });
+      if (!res.ok) throw new Error("Create failed");
+      const created = await res.json();
+      const newRec = { 
+        ...updated, 
+        certificate_of_cohabitation_id: created.certificate_of_cohabitation_id,
+        sec_official_name: created.sec_official_name,
+        sec_designation: created.sec_designation,
+        sec_signature_path: created.sec_signature_path,
+        cap_official_name: created.cap_official_name,
+        cap_designation: created.cap_designation,
+        cap_signature_path: created.cap_signature_path,
+      };
+      setRecords([newRec, ...records]);
+      setSelectedRecord(newRec);
 
-    // Save just ONE certificate record with the first person's resident ID
-    await saveCertificate({
-      full_name: combinedFullName,
-      resident_id: newRec.resident1_id, // Just use the first person's ID
-      request_reason: reason,
-      validity_period: validityPeriod,
-      date_issued: newRec.date_issued,
-    }, true);
+      // --- Save to certificates table ---
+      const combinedFullName = `${newRec.full_name1} & ${newRec.full_name2}`;
+      const reason = newRec.request_reason || "Cohabitation";
 
-    storeLocalDraft(newRec);
-    resetForm();
-    setActiveTab("records");
-  } catch (e) {
-    console.error(e);
-    alert("Failed to create record");
+      // Save just ONE certificate record with the first person's resident ID
+      await saveCertificate({
+        full_name: combinedFullName,
+        resident_id: newRec.resident1_id, // Just use the first person's ID
+        request_reason: reason,
+        validity_period: validityPeriod,
+        date_issued: newRec.date_issued,
+      }, true);
+
+      storeLocalDraft(newRec);
+      resetForm();
+      setActiveTab("records");
+    } catch (e) {
+      console.error(e);
+      alert("Failed to create record");
+    }
   }
-}
 
-// Update the handleUpdate function in Cohabitation.jsx
-async function handleUpdate() {
-  try {
-    const validityPeriod = getValidityPeriod('Cohabitation');
-    const updated = { 
-      ...formData, 
-      validity_period: validityPeriod,
-    };
-    const res = await fetch(`${apiBase}/certificate-of-cohabitation/${editingId}`, {
-      method: "PUT",
-      headers: getAuthHeaders(),
-      body: JSON.stringify(toServerPayload(updated)),
-    });
-    if (!res.ok) throw new Error("Update failed");
-    const updatedData = await res.json();
-    // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
-    const updatedRec = { 
-      ...updatedData,
-      certificate_of_cohabitation_id: updatedData.certificate_of_cohabitation_id,
-      full_name1: updatedData.full_name1,
-      dob1: updatedData.dob1 ? updatedData.dob1.split("T")[0] : "",
-      full_name2: updatedData.full_name2,
-      dob2: updatedData.dob2 ? updatedData.dob2.split("T")[0] : "",
-      address: updatedData.address,
-      date_started: updatedData.date_started,
-      date_issued: updatedData.date_issued ? updatedData.date_issued.split("T")[0] : "",
-      witness1_name: updatedData.witness1_name,
-      witness2_name: updatedData.witness2_name,
-      date_created: updatedData.date_created,
-      transaction_number: updatedData.transaction_number,
-      validity_period: validityPeriod,
-      use_signature: Boolean(updatedData.use_signature),
-      secretary_signature_id: updatedData.secretary_signature_id,
-      captain_signature_id: updatedData.captain_signature_id,
-      sec_official_name: updatedData.sec_official_name,
-      sec_designation: updatedData.sec_designation,
-      sec_signature_path: updatedData.sec_signature_path,
-      cap_official_name: updatedData.cap_official_name,
-      cap_designation: updatedData.cap_designation,
-      cap_signature_path: updatedData.cap_signature_path,
-    };
-    // Remove old record and add new one
-    setRecords([updatedRec, ...records.filter((r) => r.certificate_of_cohabitation_id !== editingId)]);
-    setSelectedRecord(updatedRec);
-
-    // --- Save to certificates table ---
-    const combinedFullName = `${updatedRec.full_name1} & ${updatedRec.full_name2}`;
-    const reason = updatedRec.request_reason || "Cohabitation";
-
-    // Update just ONE certificate record with the first person's resident ID
-    await saveCertificate({
-      full_name: combinedFullName,
-      resident_id: updatedRec.resident1_id, // Just use the first person's ID
-      request_reason: reason,
-      validity_period: validityPeriod,
-      date_issued: updatedRec.date_issued,
-    }, false);
-
-    storeLocalDraft(updatedRec);
-    resetForm();
-    setActiveTab("records");
-  } catch (e) {
-    console.error(e);
-    alert("Failed to update record");
+  // Update the handleCreate function in Cohabitation.jsx
+  async function handleCreate() {
+    // Check if either resident has a valid certificate
+    const validCert1 = checkValidCertificate(formData.resident1_id);
+    const validCert2 = checkValidCertificate(formData.resident2_id);
+    
+    if (validCert1 || validCert2) {
+      // Show confirmation dialog
+      setValidCertInfo(validCert1 || validCert2);
+      setPendingSave('create');
+      setShowValidCertDialog(true);
+      return;
+    }
+    
+    // No valid certificate, proceed with normal creation
+    handleCreateDirect();
   }
-}
+
+  // Update the handleUpdate function in Cohabitation.jsx
+  async function handleUpdate() {
+    try {
+      const validityPeriod = getValidityPeriod('Cohabitation');
+      const updated = { 
+        ...formData, 
+        validity_period: validityPeriod,
+      };
+      const res = await fetch(`${apiBase}/certificate-of-cohabitation/${editingId}`, {
+        method: "PUT",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(toServerPayload(updated)),
+      });
+      if (!res.ok) throw new Error("Update failed");
+      const updatedData = await res.json();
+      // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
+      const updatedRec = { 
+        ...updatedData,
+        certificate_of_cohabitation_id: updatedData.certificate_of_cohabitation_id,
+        full_name1: updatedData.full_name1,
+        dob1: updatedData.dob1 ? updatedData.dob1.split("T")[0] : "",
+        full_name2: updatedData.full_name2,
+        dob2: updatedData.dob2 ? updatedData.dob2.split("T")[0] : "",
+        address: updatedData.address,
+        date_started: updatedData.date_started,
+        date_issued: updatedData.date_issued ? updatedData.date_issued.split("T")[0] : "",
+        witness1_name: updatedData.witness1_name,
+        witness2_name: updatedData.witness2_name,
+        date_created: updatedData.date_created,
+        transaction_number: updatedData.transaction_number,
+        validity_period: validityPeriod,
+        use_signature: Boolean(updatedData.use_signature),
+        secretary_signature_id: updatedData.secretary_signature_id,
+        captain_signature_id: updatedData.captain_signature_id,
+        sec_official_name: updatedData.sec_official_name,
+        sec_designation: updatedData.sec_designation,
+        sec_signature_path: updatedData.sec_signature_path,
+        cap_official_name: updatedData.cap_official_name,
+        cap_designation: updatedData.cap_designation,
+        cap_signature_path: updatedData.cap_signature_path,
+      };
+      // Remove old record and add new one
+      setRecords([updatedRec, ...records.filter((r) => r.certificate_of_cohabitation_id !== editingId)]);
+      setSelectedRecord(updatedRec);
+
+      // --- Save to certificates table ---
+      const combinedFullName = `${updatedRec.full_name1} & ${updatedRec.full_name2}`;
+      const reason = updatedRec.request_reason || "Cohabitation";
+
+      // Update just ONE certificate record with the first person's resident ID
+      await saveCertificate({
+        full_name: combinedFullName,
+        resident_id: updatedRec.resident1_id, // Just use the first person's ID
+        request_reason: reason,
+        validity_period: validityPeriod,
+        date_issued: updatedRec.date_issued,
+      }, false);
+
+      storeLocalDraft(updatedRec);
+      resetForm();
+      setActiveTab("records");
+    } catch (e) {
+      console.error(e);
+      alert("Failed to update record");
+    }
+  }
 
   function handleEdit(record) {
     setFormData({
@@ -1889,6 +1949,45 @@ async function handleUpdate() {
           </Fab>
         )}
       </Box>
+
+      {/* Add the dialog at the end of the component, before the closing tags */}
+      <Dialog
+        open={showValidCertDialog}
+        onClose={() => setShowValidCertDialog(false)}
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ bgcolor: '#41644A', color: 'white', py: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            Resident Has Valid Certificate
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ p: 3 }}>
+          <Typography>
+            This resident already has a valid Certificate of Cohabitation issued on{' '}
+            {validCertInfo && formatDateDisplay(validCertInfo.date_issued)}.
+            Certificates are valid for 1 year.
+          </Typography>
+          <Typography sx={{ mt: 2 }}>
+            Are you sure you want to create a new certificate for this resident?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, borderTop: '1px solid #F1F0E9' }}>
+          <Button
+            onClick={() => setShowValidCertDialog(false)}
+            variant="outlined"
+            sx={{ borderColor: '#41644A', color: '#41644A' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={confirmSaveWithValidCert}
+            variant="contained"
+            sx={{ bgcolor: '#E9762B', '&:hover': { bgcolor: '#d8651f' } }}
+          >
+            Create Anyway
+          </Button>
+        </DialogActions>
+      </Dialog>
     </ThemeProvider>
   );
 }
