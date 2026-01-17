@@ -549,7 +549,7 @@ const [validCertInfo, setValidCertInfo] = useState(null);
         }
         Document Type: Permit to Travel
        
-        Ⓒ RRMS | BARANGAY 145
+        Ⓒ BRRMS | BARANGAY 145
         CALOOCAN CITY
         ALL RIGHTS RESERVED
         `;

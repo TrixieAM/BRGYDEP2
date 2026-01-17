@@ -224,7 +224,7 @@ export default function IndigencyTransactionLog() {
                 Date Issued: ${display.date_created ? formatDateTimeDisplay(display.date_created) : new Date().toLocaleString()}
                 Document Type: Indigency
                
-                Ⓒ RRMS | BARANGAY 145
+                Ⓒ BRRMS | BARANGAY 145
                 CALOOCAN CITY
                 ALL RIGHTS RESERVED`;
         

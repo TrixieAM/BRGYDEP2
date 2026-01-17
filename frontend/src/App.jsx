@@ -62,6 +62,7 @@ import VerifyCohabitation from './components/RequestForms/VerifyCohabitation';
 import FinancialAssistance from './components/RequestForms/FinancialAssistance';
 import BhertCertPositive from './components/RequestForms/BhertCertPositive';
 import Resident from './components/Resident';
+import BarangayID from './components/BarangayID';
 import Reports from './components/Reports';
 import BhertCertNormal from './components/RequestForms/BhertCertNormal';
 import { CertificateVerification } from './components/RequestForms/Indigency';
@@ -110,7 +111,7 @@ function Header() {
             variant="body2"
             sx={{ lineHeight: 1.2, margin: 0, opacity: 0.9 }}
           >
-            Record and Management Request System
+            Records and Management Request System
           </Typography>
         </Box>
       </Box>
@@ -159,6 +160,12 @@ function Navigation() {
       path: '/residents',
       label: 'Residents',
       icon: <PeopleIcon />,
+      permission: 'access_residents',
+    },
+    {
+      path: '/barangay-id',
+      label: 'Barangay ID',
+      icon: <AssignmentIcon />,
       permission: 'access_residents',
     },
     {
@@ -246,7 +253,7 @@ function Navigation() {
                 noWrap
                 sx={{ color: 'white', fontWeight: 'bold', marginTop: '-5px' }}
               >
-                Record and Request Management System
+                Records and Request Management System
               </Typography>
             </Box>
           </Box>
@@ -468,6 +475,15 @@ function AppContent() {
                 </ProtectedRoute>
               }
             />
+
+            {/* <Route
+              path="/barangay-id"
+              element={
+                <ProtectedRoute requiredPermission="access_residents">
+                  <BarangayID />
+                </ProtectedRoute>
+              }
+            /> */}
 
             <Route
               path="/reports"
@@ -715,7 +731,7 @@ function AppContent() {
 
         <Typography variant="body2">
           {
-            '© 2025 - Caloocan Barangay 145 Record and Request Management System. All rights reserved.'
+            '© 2026 Barangay 145 Records and Request Management System. All Rights Reserved.'
           }
         </Typography>
 

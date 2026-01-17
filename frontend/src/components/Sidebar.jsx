@@ -106,6 +106,12 @@ export default function Sidebar() {
       permission: 'access_residents',
     },
     {
+      path: '/barangay-id',
+      label: 'Barangay ID',
+      icon: <AssignmentIcon />,
+      permission: 'access_residents',
+    },
+    {
       path: '/reports',
       label: 'Reports',
       icon: <ChartBarIcon />,
@@ -238,7 +244,7 @@ export default function Sidebar() {
           '0 20px 60px rgba(13, 71, 21, 0.4), 0 0 0 1px rgba(241, 240, 233, 0.1)',
         overflow: 'hidden',
         position: 'relative',
-        cursor: isMouseDown ? 'grabbing' : 'grab',
+        cursor: isMouseDown ? 'default' : 'default',
         '&::before': {
           content: '""',
           position: 'absolute',
@@ -319,6 +325,7 @@ export default function Sidebar() {
                 '0 8px 24px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
               position: 'relative',
               zIndex: 1,
+              cursor: 'default',
             }}
           >
             <AccountCircleIcon sx={{ fontSize: 38 }} />
@@ -346,6 +353,8 @@ export default function Sidebar() {
                 fontSize: 18,
                 fontFamily: `'Inter', 'Roboto', 'Segoe UI', 'system-ui', Arial, sans-serif`,
                 textShadow: '0 2px 4px rgba(0, 0, 0, 0.3)',
+                cursor: 'default'
+
               }}
             >
               {user?.name || 'Guest'}

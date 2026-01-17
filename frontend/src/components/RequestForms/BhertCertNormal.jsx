@@ -521,7 +521,7 @@ export default function BhertCertificateNormal() {
         }
         Document Type: BHERT Certificate (Normal)
        
-        Ⓒ RRMS | BARANGAY 145
+        Ⓒ BRRMS | BARANGAY 145
         CALOOCAN CITY
         ALL RIGHTS RESERVED
         `;

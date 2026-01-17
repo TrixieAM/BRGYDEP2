@@ -814,7 +814,7 @@ function confirmSaveWithValidCert() {
         }
         Document Type: Oath of Undertaking Job Seeker
        
-        Ⓒ RRMS | BARANGAY 145
+        Ⓒ BRRMS | BARANGAY 145
         CALOOCAN CITY
         ALL RIGHTS RESERVED
         `;

@@ -228,7 +228,7 @@ const Login = () => {
           boxShadow:
             '0 12px 32px rgba(0,0,0,0.16), 0 0 0 2px #0D471520, 0 0 18px 4px #41644A14',
           padding: '3rem',
-          marginLeft: '50rem',
+          //marginLeft: '50rem', // LOGIN FORM POSITION TO LEFT OR RIGHT 
           height: '100vh',
           maxHeight: '640px',
           width: '100%',
@@ -407,7 +407,7 @@ const Login = () => {
 
           <div
             style={{
-              marginBottom: '2rem',
+              marginBottom: '1rem',
               textAlign: 'left',
             }}
           >
@@ -511,11 +511,11 @@ const Login = () => {
           aria-hidden="true"
           style={{
             position: 'absolute',
-            bottom: '1.25rem',
-            left: '50%',
+            bottom: '1.9rem',
+            left: '62%',
             transform: 'translateX(-50%)',
-            width: '78%',
-            maxWidth: '340px',
+            width: '80%',
+            maxWidth: '500px',
             minWidth: '230px',
             opacity: 0.97,
             pointerEvents: 'none',
@@ -526,8 +526,8 @@ const Login = () => {
             src={CmBldg}
             alt="Community building"
             style={{
-              width: '455px',
-              height: '270px',
+              width: '100%',
+              height: '300px',
               marginBottom: '-49px',
               marginLeft: '-55px',
               objectFit: 'contain',

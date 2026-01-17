@@ -165,7 +165,7 @@ const BarangayDashboard = () => {
     {
       id: 1,
       title: 'Add Resident',
-      description: 'Register new resident',
+      // description: 'Register new resident',
       icon: <AddIcon />,
       color: '#41644A',
       type: 'resident',
@@ -173,7 +173,7 @@ const BarangayDashboard = () => {
     {
       id: 2,
       title: 'Issue Certificate',
-      description: 'Create new certificate',
+      // description: 'Create new certificate',
       icon: <AssignmentIcon />,
       color: '#E9762B',
       type: 'certificate',
@@ -181,7 +181,7 @@ const BarangayDashboard = () => {
     {
       id: 3,
       title: 'Schedule Event',
-      description: 'Plan community event',
+      // description: 'Plan community event',
       icon: <EventIcon />,
       color: '#41644A',
       type: 'event',
@@ -189,7 +189,7 @@ const BarangayDashboard = () => {
     {
       id: 4,
       title: 'Announcement',
-      description: 'Create announcement',
+      // description: 'Create announcement',
       icon: <CampaignIcon />,
       color: '#E9762B',
       type: 'announcement',
@@ -197,7 +197,7 @@ const BarangayDashboard = () => {
     {
       id: 5,
       title: 'Barangay Officials',
-      description: 'Manage barangay officials',
+      // description: 'Manage barangay officials',
       icon: <HealthIcon />,
       color: '#41644A',
       type: 'official',
@@ -205,7 +205,7 @@ const BarangayDashboard = () => {
     {
       id: 6,
       title: 'Generate Reports',
-      description: 'Create barangay reports',
+      // description: 'Create barangay reports',
       icon: <AssessmentIcon />,
       color: '#E9762B',
       type: 'report',
@@ -387,11 +387,11 @@ const BarangayDashboard = () => {
       case 'resident':
         return (
           <Box>
-            <Typography variant="body1" sx={{ mb: 2 }}>
-              Redirecting to Residents Management page where you can add a new resident.
+            <Typography variant="subtitle1" sx={{ mb: 2 }}>
+              Go to Residents Management page where you can add a new resident?
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Click "Submit" to navigate to the Residents page.
+              Click "GO" to navigate to Residents page.
             </Typography>
           </Box>
         );
@@ -399,11 +399,11 @@ const BarangayDashboard = () => {
       case 'certificate':
         return (
           <Box>
-            <Typography variant="body1" sx={{ mb: 2 }}>
-              Redirecting to Certificates page where you can issue a new certificate.
+            <Typography variant="subtitle1" sx={{ mb: 2 }}>
+              Go to Certificates page where you can issue a new certificate?
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Click "Submit" to navigate to the Transactions/Certificates page.
+              Click "GO" to navigate to the Transactions/Certificates page.
             </Typography>
           </Box>
         );
@@ -609,11 +609,11 @@ const BarangayDashboard = () => {
       case 'report':
         return (
           <Box>
-            <Typography variant="body1" sx={{ mb: 2 }}>
-              Redirecting to Reports page where you can generate various reports.
+            <Typography variant="subtitle1" sx={{ mb: 2 }}>
+              Go to Reports page where you can generate various reports?
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Click "Submit" to navigate to the Reports page.
+              Click "GO" to navigate to the Reports page.
             </Typography>
           </Box>
         );
@@ -1369,10 +1369,10 @@ const BarangayDashboard = () => {
                       </Typography>
                     </Box>
 
-                    <Box sx={{ p: 2, display: 'flex', alignItems: 'center' }}>
+                    <Box sx={{ p: 2, pr: 6.4, display: 'flex', alignItems: 'center' }}>
                       <Typography
                         variant="body2"
-                        sx={{ color: '#41644A', fontWeight: 'bold' }}
+                        sx={{ color: '#41644A'}}
                       >
                         Community Category
                       </Typography>
@@ -1491,10 +1491,11 @@ const BarangayDashboard = () => {
                                 borderRadius: 1.5,
                                 backgroundColor: 'rgba(65, 100, 74, 0.05)',
                                 '&:last-child': { mb: 0 },
+                                
                               }}
                             >
                               <ListItemIcon sx={{ minWidth: 40 }}>
-                                <Avatar sx={{ backgroundColor: '#41644A' }}>
+                                <Avatar sx={{ backgroundColor: '#41644A', margin: 2 }}>
                                   <AnnouncementIcon />
                                 </Avatar>
                               </ListItemIcon>
@@ -2204,6 +2205,7 @@ const BarangayDashboard = () => {
                               height: 36,
                               backgroundColor: activity.color,
                               fontSize: '1rem',
+                              mr: 2,
                             }}
                           >
                             {activity.icon}
@@ -2913,9 +2915,9 @@ const BarangayDashboard = () => {
                 <Box sx={{ p: 2 }}>
                   <Grid container spacing={2}>
                     <Grid item xs={12} md={4}>
-                      <Card sx={{ p: 2, textAlign: 'center' }}>
+                      <Card sx={{ p: 2, textAlign: 'center', }}>
                         <AssessmentIcon
-                          sx={{ fontSize: 48, color: '#41644A', mb: 1 }}
+                          sx={{ fontSize: 48, color: '#41644A', mb: 1,  }}
                         />
                         <Typography
                           variant="h6"

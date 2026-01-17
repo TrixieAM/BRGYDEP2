@@ -164,7 +164,7 @@ const Footer = () => {
             margin: 0,
             fontSize: '0.9rem'
           }}>
-            © 2024 Barangay 145 Management System. All rights reserved.
+            © 2026 Barangay 145 Records and Request Management System. All Rights Reserved.
           </p>
         </div>
       </div>

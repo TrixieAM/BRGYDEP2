@@ -500,7 +500,7 @@ const {
         }
         Document Type: Certificate of Cohabitation
        
-        Ⓒ RRMS | BARANGAY 145
+        Ⓒ BRRMS | BARANGAY 145
         CALOOCAN CITY
         ALL RIGHTS RESERVED
         `;

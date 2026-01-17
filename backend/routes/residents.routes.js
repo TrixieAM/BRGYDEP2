@@ -20,6 +20,24 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /residents/:id - Get single resident
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await pool.query(
+      'SELECT * FROM residents WHERE resident_id = ?',
+      [id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Resident not found' });
+    }
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch resident' });
+  }
+});
+
 // POST /residents - Create new resident
 router.post('/', async (req, res) => {
   const {
