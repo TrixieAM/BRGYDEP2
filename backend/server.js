@@ -19,7 +19,6 @@ app.use('/uploads/officials', express.static('uploads/officials'));
 const authRoutes = require('./routes/auth.routes');
 const usersRoutes = require('./routes/users.routes');
 const residentsRoutes = require('./routes/residents.routes');
-const barangayIDRoutes = require('./routes/barangay-id.routes');
 const indigencyRoutes = require('./routes/indigency.routes');
 const barangayClearanceRoutes = require('./routes/barangay-clearance.routes');
 const businessClearanceRoutes = require('./routes/business-clearance.routes');
@@ -61,7 +60,6 @@ app.use('/auth', authRoutes);
 // Protected routes (require authentication)
 app.use('/users', usersRoutes);
 app.use('/residents', residentsRoutes);
-app.use('/barangay-id', barangayIDRoutes);
 app.use('/indigency', indigencyRoutes);
 app.use('/barangay-clearance', barangayClearanceRoutes);
 app.use('/business-clearance', businessClearanceRoutes);

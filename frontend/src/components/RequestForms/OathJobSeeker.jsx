@@ -946,7 +946,7 @@ function confirmSaveWithValidCert() {
     iframe.style.left = '-9999px'; // Move it way off-screen
     iframe.style.top = '0';
     iframe.style.width = '0';
-    iframe.style.height = '0';
+    iframe.style.height = '0';0
     document.body.appendChild(iframe);
 
     // 3. Write the certificate content and styles into the iframe

@@ -2420,7 +2420,7 @@ export default function SoloParentForm() {
                                   onClick={() => removeChild(index)}
                                   sx={{ color: 'error.main' }}
                                 >
-                                  <RemoveIcon />
+                                  <RemoveIcon sx={{ color: '#000000'}} />
                                 </IconButton>
                               </Box>
                               <Grid container spacing={1.5}>

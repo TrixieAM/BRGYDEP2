@@ -106,12 +106,6 @@ export default function Sidebar() {
       permission: 'access_residents',
     },
     {
-      path: '/barangay-id',
-      label: 'Barangay ID',
-      icon: <AssignmentIcon />,
-      permission: 'access_residents',
-    },
-    {
       path: '/reports',
       label: 'Reports',
       icon: <ChartBarIcon />,
@@ -343,7 +337,7 @@ export default function Sidebar() {
                 fontWeight: 500,
               }}
             >
-              Profile
+              BRRMS
             </Typography>
             <Typography
               variant="h6"

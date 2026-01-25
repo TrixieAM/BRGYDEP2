@@ -88,15 +88,13 @@ export const AuthProvider = ({ children }) => {
       // Ensure critical admin capabilities remain available even if not stored
       if (permission === 'manage_users' && user.role === 'admin') return true;
       if (permission === 'view_dashboard' && user.role === 'admin') return true;
-      if (permission === 'access_residents' && user.role === 'admin') return true;
-      if (permission === 'access_certification_action' && user.role === 'admin') return true;
       return false;
     }
     // Fallback legacy static map
     const rolePermissions = {
-      admin: ['view_dashboard', 'manage_users', 'manage_residents', 'access_residents', 'manage_certificates', 'access_certification_action', 'view_reports'],
-      chairman: ['view_dashboard', 'manage_residents', 'access_residents', 'manage_certificates', 'view_reports'],
-      staff: ['view_dashboard', 'manage_residents', 'access_residents', 'manage_certificates', 'view_reports'],
+      admin: ['view_dashboard', 'manage_users', 'manage_residents', 'manage_certificates', 'view_reports'],
+      chairman: ['view_dashboard', 'manage_residents', 'manage_certificates', 'view_reports'],
+      staff: ['view_dashboard', 'manage_residents', 'manage_certificates', 'view_reports'],
     };
     return rolePermissions[user.role]?.includes(permission) || false;
   };

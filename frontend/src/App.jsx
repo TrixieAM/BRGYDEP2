@@ -62,7 +62,6 @@ import VerifyCohabitation from './components/RequestForms/VerifyCohabitation';
 import FinancialAssistance from './components/RequestForms/FinancialAssistance';
 import BhertCertPositive from './components/RequestForms/BhertCertPositive';
 import Resident from './components/Resident';
-import BarangayID from './components/BarangayID';
 import Reports from './components/Reports';
 import BhertCertNormal from './components/RequestForms/BhertCertNormal';
 import { CertificateVerification } from './components/RequestForms/Indigency';
@@ -141,8 +140,8 @@ function Navigation() {
     logout();
     handleProfileMenuClose();
     setTimeout(() => {
-      navigate('/home');
-    }, 1500);
+      navigate('/login');
+    }, 100);
   };
 
   const handleCertificatesDropdownToggle = () => {
@@ -160,12 +159,6 @@ function Navigation() {
       path: '/residents',
       label: 'Residents',
       icon: <PeopleIcon />,
-      permission: 'access_residents',
-    },
-    {
-      path: '/barangay-id',
-      label: 'Barangay ID',
-      icon: <AssignmentIcon />,
       permission: 'access_residents',
     },
     {
@@ -446,18 +439,22 @@ function AppContent() {
           }}
         >
           {user && <Toolbar />}
+
           <Routes>
-            <Route path="/login" element={<Login />} />
+            {/* Root path - redirect to login if not authenticated, home if authenticated */}
             <Route
               path="/"
               element={
-                user ? (
-                  <Navigate to="/home" replace />
-                ) : (
-                  <Navigate to="/login" replace />
-                )
+                user ? <Navigate to="/home" replace /> : <Navigate to="/login" replace />
               }
             />
+
+            {/* Login route - redirect to home if already authenticated */}
+            <Route
+              path="/login"
+              element={user ? <Navigate to="/home" replace /> : <Login />}
+            />
+
             <Route
               path="/home"
               element={
@@ -475,15 +472,6 @@ function AppContent() {
                 </ProtectedRoute>
               }
             />
-
-            {/* <Route
-              path="/barangay-id"
-              element={
-                <ProtectedRoute requiredPermission="access_residents">
-                  <BarangayID />
-                </ProtectedRoute>
-              }
-            /> */}
 
             <Route
               path="/reports"
@@ -688,10 +676,10 @@ function AppContent() {
                       404
                     </Typography>
                     <Typography variant="h5" fontWeight="bold">
-                      Unauthorized
+                      Page Not Found
                     </Typography>
                     <Typography>
-                      Unauthorized, please ask for assistance if you need something.
+                      The page you're looking for doesn't exist.
                     </Typography>
                   </Box>
                 </ProtectedRoute>
