@@ -7,6 +7,7 @@ import CaloocanLogo from '../../assets/CaloocanLogo.png';
 import Logo145 from '../../assets/Logo145.png';
 import BagongPilipinas from '../../assets/BagongPilipinas.png';
 import WordName from '../../assets/WordName.png';
+import Monumento from '../../assets/Monumento.png';
 import { useCertificateManager } from '../../hooks/useCertificateManager';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -14,7 +15,6 @@ import {
   getSignatureImageUrl,
 } from '../../services/signatureService';
 
-// Import Material UI components
 import {
   Container,
   Paper,
@@ -29,7 +29,6 @@ import {
   Box,
   Card,
   CardContent,
-  CardHeader,
   InputAdornment,
   IconButton,
   Chip,
@@ -47,8 +46,6 @@ import {
   Badge,
   Tooltip,
   Fab,
-  AppBar,
-  Toolbar,
   Checkbox,
   FormControlLabel,
   Divider,
@@ -62,42 +59,38 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Description as FileTextIcon,
-  QrCodeScanner as QrCodeIcon,
-  Receipt as ReceiptIcon,
   Print as PrintIcon,
   ZoomIn as ZoomInIcon,
   ZoomOut as ZoomOutIcon,
   RestartAlt as ResetIcon,
   Folder as FolderIcon,
-  Dashboard as DashboardIcon,
   Article as ArticleIcon,
   CheckCircle as CheckCircleIcon,
 } from '@mui/icons-material';
 import { useMediaQuery } from '@mui/material';
 
-// Define the custom theme (mirrored from BarangayClearance)
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#41644A', // Darker green from palette
-      light: '#A0B2A6', // Lighter shade for hover/focus
-      dark: '#0D4715', // Even darker green for strong accents
+      main: '#41644A',
+      light: '#A0B2A6',
+      dark: '#0D4715',
     },
     secondary: {
-      main: '#E9762B', // Orange from palette for highlighting
+      main: '#E9762B',
     },
     success: {
-      main: '#41644A', // Darker green from palette
+      main: '#41644A',
       light: '#A0B2A6',
       dark: '#0D4715',
     },
     background: {
-      default: '#F1F0E9', // Off-white/light beige
+      default: '#F1F0E9',
       paper: '#FFFFFF',
     },
     text: {
-      primary: '#000000', // Black for main text
-      secondary: '#41644A', // Another shade for secondary text
+      primary: '#000000',
+      secondary: '#41644A',
     },
     error: {
       main: '#E9762B',
@@ -111,9 +104,7 @@ const theme = createTheme({
           fontWeight: 600,
           borderRadius: 8,
           boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-          '&:hover': {
-            boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
-          },
+          '&:hover': { boxShadow: '0 4px 8px rgba(0,0,0,0.15)' },
         },
         containedPrimary: {
           background: 'linear-gradient(45deg, #41644A 30%, #527D60 90%)',
@@ -136,13 +127,7 @@ const theme = createTheme({
         },
       },
     },
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          backgroundImage: 'none',
-        },
-      },
-    },
+    MuiPaper: { styleOverrides: { root: { backgroundImage: 'none' } } },
     MuiTab: {
       styleOverrides: {
         root: {
@@ -150,42 +135,24 @@ const theme = createTheme({
           fontWeight: 600,
           minHeight: 48,
           color: '#000000',
-          '&.Mui-selected': {
-            color: '#41644A',
-          },
+          '&.Mui-selected': { color: '#41644A' },
         },
       },
     },
-    MuiInputBase: {
-      styleOverrides: {
-        input: {
-          color: '#000000',
-        },
-      },
-    },
+    MuiInputBase: { styleOverrides: { input: { color: '#000000' } } },
     MuiInputLabel: {
       styleOverrides: {
         root: {
           color: '#000000',
-          '&.Mui-focused': {
-            color: '#41644A',
-          },
+          '&.Mui-focused': { color: '#41644A' },
         },
       },
     },
-    MuiFormHelperText: {
-      styleOverrides: {
-        root: {
-          color: '#000000',
-        },
-      },
-    },
+    MuiFormHelperText: { styleOverrides: { root: { color: '#000000' } } },
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
-          '& .MuiOutlinedInput-notchedOutline': {
-            borderColor: '#000000',
-          },
+          '& .MuiOutlinedInput-notchedOutline': { borderColor: '#000000' },
           '&:hover .MuiOutlinedInput-notchedOutline': {
             borderColor: '#41644A',
           },
@@ -199,9 +166,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiOutlinedInput-root': {
-            '& .MuiOutlinedInput-notchedOutline': {
-              borderColor: '#000000',
-            },
+            '& .MuiOutlinedInput-notchedOutline': { borderColor: '#000000' },
             '&:hover .MuiOutlinedInput-notchedOutline': {
               borderColor: '#41644A',
             },
@@ -215,16 +180,12 @@ const theme = createTheme({
   },
 });
 
-// Add this function to check if a resident has a valid certificate
 function hasValidCertificate(residentId, records) {
   if (!residentId || !records || records.length === 0) return false;
-  
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-  
-  return records.some(record => {
+  return records.some((record) => {
     if (record.resident_id !== residentId) return false;
-    
     const issueDate = new Date(record.date_issued);
     return issueDate >= sixMonthsAgo;
   });
@@ -244,20 +205,15 @@ export default function Indigency() {
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState(0.75); // Default zoom level
+  const [zoomLevel, setZoomLevel] = useState(0.75);
   const [signatures, setSignatures] = useState([]);
   const [selectedSignature, setSelectedSignature] = useState(null);
-  
+  const [showValidCertDialog, setShowValidCertDialog] = useState(false);
+  const [validCertInfo, setValidCertInfo] = useState(null);
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-
-  const [showValidCertDialog, setShowValidCertDialog] = useState(false);
-const [validCertInfo, setValidCertInfo] = useState(null);
-
-  
-  const { saveCertificate, getValidityPeriod, calculateExpirationDate } =
+  const { saveCertificate, getValidityPeriod } =
     useCertificateManager('Barangay Indigency');
-
   const { getToken } = useAuth();
 
   const getAuthHeaders = () => {
@@ -267,25 +223,28 @@ const [validCertInfo, setValidCertInfo] = useState(null);
       ...(token && { Authorization: `Bearer ${token}` }),
     };
   };
-  
-  
 
   const [formData, setFormData] = useState({
     resident_id: '',
     full_name: '',
     address: '',
+    barangay: '',
+    provincial_address: '',
     dob: '',
     age: '',
-    provincial_address: '',
-    contact_no: '',
     civil_status: 'Single',
-    remarks:
-      'Residence in this Barangay and certifies that he/she belongs to indigent families.',
+    contact_no: '',
+    source_of_income: '',
+    monthly_income: '',
     request_reason: '',
+    remarks: '',
     date_issued: new Date().toISOString().split('T')[0],
-    transaction_number: '', // New field for transaction number
-    use_signature: false, // Added for e-signature
-    signature_id: null, // Added for e-signature
+    transaction_number: '',
+    control_no: generateControlNumber(),
+    prepared_by_name: '',
+    prepared_by_position: '',
+    use_signature: false,
+    signature_id: null,
   });
 
   const civilStatusOptions = [
@@ -296,19 +255,12 @@ const [validCertInfo, setValidCertInfo] = useState(null);
     'Separated',
   ];
 
-  // Helper function to format date consistently without timezone issues
   function formatDateDisplay(dateString) {
     if (!dateString) return '';
-
-    // Extract just the date part if it's a datetime string
     const dateOnly = dateString.includes('T')
       ? dateString.split('T')[0]
       : dateString;
-
-    // Parse the date components
     const [year, month, day] = dateOnly.split('-');
-
-    // Format as month name, day, year
     const monthNames = [
       'January',
       'February',
@@ -323,18 +275,12 @@ const [validCertInfo, setValidCertInfo] = useState(null);
       'November',
       'December',
     ];
-
     return `${monthNames[parseInt(month) - 1]} ${parseInt(day)}, ${year}`;
   }
 
-  // Helper function to format date and time
   function formatDateTimeDisplay(dateString) {
     if (!dateString) return '';
-
-    // Create a new Date object from the string
     const date = new Date(dateString);
-
-    // Format as month name, day, year, time
     const monthNames = [
       'January',
       'February',
@@ -349,73 +295,59 @@ const [validCertInfo, setValidCertInfo] = useState(null);
       'November',
       'December',
     ];
-
     const month = monthNames[date.getMonth()];
     const day = date.getDate();
     const year = date.getFullYear();
-
-    // Format time with AM/PM
     let hours = date.getHours();
     const minutes = date.getMinutes().toString().padStart(2, '0');
     const ampm = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12;
-    hours = hours ? hours : 12; // the hour '0' should be '12'
-
+    hours = hours ? hours : 12;
     return `${month} ${day}, ${year} ${hours}:${minutes} ${ampm}`;
   }
 
-  // Helper function to calculate age from date string
   function calculateAge(dateString) {
     if (!dateString) return '';
-
     const [year, month, day] = dateString.split('-');
     const birthDate = new Date(
       parseInt(year),
       parseInt(month) - 1,
-      parseInt(day)
+      parseInt(day),
     );
     const today = new Date();
-
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
-
     if (
       monthDiff < 0 ||
       (monthDiff === 0 && today.getDate() < birthDate.getDate())
     ) {
       age--;
     }
-
     return age.toString();
   }
 
-  // Generate a unique transaction number
   function generateTransactionNumber() {
     const date = new Date();
     const year = date.getFullYear().toString().slice(-2);
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const day = date.getDate().toString().padStart(2, '0');
-    const random =
-      Math.floor(Math.random() * 900) +
-      (100) // 3-digit random number
-        .toString()
-        .padStart(3, '0');
+    const random = (Math.floor(Math.random() * 900) + 100).toString();
     return `IND-${year}${month}${day}-${random}`;
   }
 
-  // Store certificate data in localStorage for QR code verification
+  function generateControlNumber() {
+    const random = Math.floor(Math.random() * 10000)
+      .toString()
+      .padStart(4, '0');
+    return `2026145-${random}`;
+  }
+
   function storeCertificateData(certificateData) {
     if (!certificateData.indigency_id) return;
-
-    // Get existing certificates from localStorage
     const existingCertificates = JSON.parse(
-      localStorage.getItem('certificates') || '{}'
+      localStorage.getItem('certificates') || '{}',
     );
-
-    // Add or update the certificate
     existingCertificates[certificateData.indigency_id] = certificateData;
-
-    // Store back to localStorage
     localStorage.setItem('certificates', JSON.stringify(existingCertificates));
   }
 
@@ -425,12 +357,9 @@ const [validCertInfo, setValidCertInfo] = useState(null);
         headers: getAuthHeaders(),
       });
       const data = await res.json();
-      // Format dates properly when loading residents - extract only YYYY-MM-DD
-      const formattedResidents = data.map((resident) => ({
-        ...resident,
-        dob: resident.dob ? resident.dob.split('T')[0] : '',
-      }));
-      setResidents(formattedResidents);
+      setResidents(
+        data.map((r) => ({ ...r, dob: r.dob ? r.dob.split('T')[0] : '' })),
+      );
     } catch (e) {
       console.error(e);
     }
@@ -464,24 +393,30 @@ const [validCertInfo, setValidCertInfo] = useState(null);
               resident_id: r.resident_id,
               full_name: r.full_name,
               address: r.address,
+              barangay: r.barangay || '',
+              provincial_address: r.provincial_address || '',
               dob: r.dob?.split('T')[0] || '',
               age: String(r.age ?? ''),
-              provincial_address: r.provincial_address || '',
-              contact_no: r.contact_no || '',
               civil_status: r.civil_status,
-              remarks: r.remarks,
+              contact_no: r.contact_no || '',
+              source_of_income: r.source_of_income || '',
+              monthly_income: r.monthly_income || '',
               request_reason: r.request_reason,
+              remarks: r.remarks || '',
               date_issued: r.date_issued?.split('T')[0] || '',
               date_created: r.date_created,
               transaction_number:
-                r.transaction_number || generateTransactionNumber(), // Generate if missing
-              use_signature: Boolean(r.use_signature), // Added for e-signature
-              signature_id: r.signature_id || null, // Added for e-signature
-              official_name: r.official_name || null, // Added for e-signature
-              designation: r.designation || null, // Added for e-signature
-              signature_path: r.signature_path || null, // Added for e-signature
+                r.transaction_number || generateTransactionNumber(),
+              control_no: r.control_no || '',
+              prepared_by_name: r.prepared_by_name || '',
+              prepared_by_position: r.prepared_by_position || '',
+              use_signature: Boolean(r.use_signature),
+              signature_id: r.signature_id || null,
+              official_name: r.official_name || null,
+              designation: r.designation || null,
+              signature_path: r.signature_path || null,
             }))
-          : []
+          : [],
       );
     } catch (e) {
       console.error(e);
@@ -498,16 +433,7 @@ const [validCertInfo, setValidCertInfo] = useState(null);
   }
 
   const display = useMemo(() => {
-    let data = null;
-    if (editingId || isFormOpen) {
-      data = formData;
-    } else if (selectedRecord) {
-      data = selectedRecord;
-    } else {
-      data = formData;
-    }
-
-    // If signature is enabled, ensure signature data is available
+    let data = editingId || isFormOpen ? formData : selectedRecord || formData;
     if (
       data &&
       data.use_signature &&
@@ -524,43 +450,26 @@ const [validCertInfo, setValidCertInfo] = useState(null);
         };
       }
     }
-
     return data;
   }, [editingId, isFormOpen, selectedRecord, formData, signatures]);
 
-  // Generate QR code with URL for PDF download
   useEffect(() => {
     const generateQRCode = async () => {
       if (display.indigency_id || display.full_name) {
-        // Store the certificate data in localStorage
         storeCertificateData(display);
-
-        // Create a URL that points to a verification page
-        // Using window.location.origin to get the current domain
-
         const qrContent = `CERTIFICATE VERIFICATION:
-                𝗧𝗿𝗮𝗻𝘀𝗮𝗰𝘁𝗶𝗼𝗻 𝗡𝗼: ${display.transaction_number || 'N/A'}
+                Transaction No: ${display.transaction_number || 'N/A'}
                 Name: ${display.full_name}
-                Date Issued: ${
-                  display.date_created
-                    ? formatDateTimeDisplay(display.date_created)
-                    : new Date().toLocaleString()
-                }
+                Date Issued: ${display.date_created ? formatDateTimeDisplay(display.date_created) : new Date().toLocaleString()}
                 Document Type: Indigency
-               
                 Ⓒ BRRMS | BARANGAY 145
                 CALOOCAN CITY
-                ALL RIGHTS RESERVED
-                `;
-
+                ALL RIGHTS RESERVED`;
         try {
           const qrUrl = await QRCode.toDataURL(qrContent, {
             width: 140,
             margin: 1,
-            color: {
-              dark: '#000000',
-              light: '#FFFFFF',
-            },
+            color: { dark: '#000000', light: '#FFFFFF' },
             errorCorrectionLevel: 'L',
           });
           setQrCodeUrl(qrUrl);
@@ -571,7 +480,6 @@ const [validCertInfo, setValidCertInfo] = useState(null);
         setQrCodeUrl('');
       }
     };
-
     generateQRCode();
   }, [display]);
 
@@ -580,33 +488,37 @@ const [validCertInfo, setValidCertInfo] = useState(null);
       resident_id: data.resident_id || null,
       full_name: data.full_name,
       address: data.address,
+      barangay: data.barangay || null,
+      provincial_address: data.provincial_address || null,
       dob: data.dob || null,
       age: data.age ? Number(data.age) : null,
-      provincial_address: data.provincial_address || null,
-      contact_no: data.contact_no || null,
       civil_status: data.civil_status,
-      remarks: data.remarks,
+      contact_no: data.contact_no || null,
+      source_of_income: data.source_of_income || null,
+      monthly_income: data.monthly_income || null,
       request_reason: data.request_reason,
+      remarks: data.remarks || null,
       date_issued: data.date_issued,
-      transaction_number: data.transaction_number, // Include transaction number
-      use_signature: data.use_signature ? 1 : 0, // Added for e-signature
+      transaction_number: data.transaction_number,
+      control_no: data.control_no || null,
+      prepared_by_name: data.prepared_by_name || null,
+      prepared_by_position: data.prepared_by_position || null,
+      use_signature: data.use_signature ? 1 : 0,
       signature_id:
-        data.use_signature && data.signature_id ? data.signature_id : null, // Added for e-signature
+        data.use_signature && data.signature_id ? data.signature_id : null,
     };
   }
 
   async function handleCreate() {
     try {
-      // Generate a transaction number for new certificates
       const transactionNumber = generateTransactionNumber();
       const validityPeriod = getValidityPeriod('Barangay Indigency');
       const updatedFormData = {
         ...formData,
         transaction_number: transactionNumber,
-        date_created: new Date().toISOString(), // Add current timestamp
-        validity_period: validityPeriod, // Add validity period
+        date_created: new Date().toISOString(),
+        validity_period: validityPeriod,
       };
-
       const res = await fetch(`${apiBase}/indigency`, {
         method: 'POST',
         headers: getAuthHeaders(),
@@ -615,16 +527,10 @@ const [validCertInfo, setValidCertInfo] = useState(null);
       if (!res.ok) throw new Error('Create failed');
       const created = await res.json();
       const newRec = { ...updatedFormData, indigency_id: created.indigency_id };
-
       setRecords([newRec, ...records]);
       setSelectedRecord(newRec);
-
-      // Save to certificates table
       await saveCertificate(newRec, true);
-
-      // Store the new certificate data
       storeCertificateData(newRec);
-
       resetForm();
       setActiveTab('records');
     } catch (e) {
@@ -634,45 +540,31 @@ const [validCertInfo, setValidCertInfo] = useState(null);
   }
 
   async function handleUpdate() {
-  try {
-    const validityPeriod = getValidityPeriod('Barangay Indigency');
-    const updatedFormData = {
-      ...formData,
-      validity_period: validityPeriod, // Add validity period
-    };
-
-    const res = await fetch(`${apiBase}/indigency/${editingId}`, {
-      method: 'PUT',
-      headers: getAuthHeaders(),
-      body: JSON.stringify(toServerPayload(updatedFormData)),
-    });
-    if (!res.ok) throw new Error('Update failed');
-    const updatedData = await res.json();
-    // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
-    const updatedRec = {
-      ...updatedData,
-      validity_period: validityPeriod,
-    };
-    // Remove old record and add new one
-    setRecords([
-      updatedRec,
-      ...records.filter((r) => r.indigency_id !== editingId),
-    ]);
-    setSelectedRecord(updatedRec);
-
-    // Save to certificates table
-    await saveCertificate(updatedRec, false);  // Fixed: changed 'updated' to 'updatedRec'
-
-    // Store the updated certificate data
-    storeCertificateData(updatedRec);  // Fixed: changed 'updated' to 'updatedRec'
-
-    resetForm();
-    setActiveTab('records');
-  } catch (e) {
-    console.error(e);
-    alert('Failed to update record');
+    try {
+      const validityPeriod = getValidityPeriod('Barangay Indigency');
+      const updatedFormData = { ...formData, validity_period: validityPeriod };
+      const res = await fetch(`${apiBase}/indigency/${editingId}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(toServerPayload(updatedFormData)),
+      });
+      if (!res.ok) throw new Error('Update failed');
+      const updatedData = await res.json();
+      const updatedRec = { ...updatedData, validity_period: validityPeriod };
+      setRecords([
+        updatedRec,
+        ...records.filter((r) => r.indigency_id !== editingId),
+      ]);
+      setSelectedRecord(updatedRec);
+      await saveCertificate(updatedRec, false);
+      storeCertificateData(updatedRec);
+      resetForm();
+      setActiveTab('records');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to update record');
+    }
   }
-}
 
   function handleEdit(record) {
     setFormData({
@@ -683,13 +575,10 @@ const [validCertInfo, setValidCertInfo] = useState(null);
     setEditingId(record.indigency_id);
     setIsFormOpen(true);
     setActiveTab('form');
-
-    // Set selected signature if available
     if (record.signature_id) {
-      const sig = signatures.find(
-        (s) => s.signature_id === record.signature_id
+      setSelectedSignature(
+        signatures.find((s) => s.signature_id === record.signature_id) || null,
       );
-      setSelectedSignature(sig || null);
     } else {
       setSelectedSignature(null);
     }
@@ -705,15 +594,13 @@ const [validCertInfo, setValidCertInfo] = useState(null);
       if (!res.ok) throw new Error('Delete failed');
       setRecords(records.filter((r) => r.indigency_id !== id));
       if (selectedRecord?.indigency_id === id) setSelectedRecord(null);
-
-      // Remove from localStorage
       const existingCertificates = JSON.parse(
-        localStorage.getItem('certificates') || '{}'
+        localStorage.getItem('certificates') || '{}',
       );
       delete existingCertificates[id];
       localStorage.setItem(
         'certificates',
-        JSON.stringify(existingCertificates)
+        JSON.stringify(existingCertificates),
       );
     } catch (e) {
       console.error(e);
@@ -722,22 +609,19 @@ const [validCertInfo, setValidCertInfo] = useState(null);
   }
 
   function handleView(record) {
-    setSelectedRecord(record); // Set selected record for display
+    setSelectedRecord(record);
     setFormData({
       ...record,
       use_signature: Boolean(record.use_signature),
       signature_id: record.signature_id || null,
-    }); // Also populate form data for QR generation/dialog
-    setEditingId(record.indigency_id); // To indicate viewing a specific record
-    setIsFormOpen(true); // Keep the form open with the record details
+    });
+    setEditingId(record.indigency_id);
+    setIsFormOpen(true);
     setActiveTab('form');
-
-    // Set selected signature if available
     if (record.signature_id) {
-      const sig = signatures.find(
-        (s) => s.signature_id === record.signature_id
+      setSelectedSignature(
+        signatures.find((s) => s.signature_id === record.signature_id) || null,
       );
-      setSelectedSignature(sig || null);
     } else {
       setSelectedSignature(null);
     }
@@ -748,71 +632,64 @@ const [validCertInfo, setValidCertInfo] = useState(null);
       resident_id: '',
       full_name: '',
       address: '',
+      barangay: '',
+      provincial_address: '',
       dob: '',
       age: '',
-      provincial_address: '',
-      contact_no: '',
       civil_status: 'Single',
-      remarks:
-        'Residence in this Barangay and certifies that he/she belongs to indigent families.',
+      contact_no: '',
+      source_of_income: '',
+      monthly_income: '',
       request_reason: '',
+      remarks: '',
       date_issued: new Date().toISOString().split('T')[0],
       transaction_number: '',
-      use_signature: false, // Added for e-signature
-      signature_id: null, // Added for e-signature
+      control_no: generateControlNumber(),
+      prepared_by_name: '',
+      prepared_by_position: '',
+      use_signature: false,
+      signature_id: null,
     });
     setEditingId(null);
     setIsFormOpen(false);
-    setSelectedRecord(null); // Clear selected record
-    setSelectedSignature(null); // Clear selected signature
+    setSelectedRecord(null);
+    setSelectedSignature(null);
   }
 
-  // Modify the handleSubmit function
-function handleSubmit() {
-  // Validate required fields
-  if (!formData.full_name || !formData.address || !formData.request_reason) {
-    alert('Please fill in all required fields');
-    return;
-  }
-  
-  if (!formData.date_issued) {
-    alert('Please select the issued date');
-    return;
-  }
-  
-  if (formData.use_signature && !formData.signature_id) {
-    alert('Please select a signature when e-signature is enabled');
-    return;
-  }
-  
-  // Check if resident has a valid certificate (only for new records)
-  if (!editingId && formData.resident_id) {
-    const validCert = records.find(record => {
-      if (record.resident_id !== formData.resident_id) return false;
-      
-      const sixMonthsAgo = new Date();
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-      const issueDate = new Date(record.date_issued);
-      
-      return issueDate >= sixMonthsAgo;
-    });
-    
-    if (validCert) {
-      setValidCertInfo(validCert);
-      setShowValidCertDialog(true);
+  function handleSubmit() {
+    if (!formData.full_name || !formData.address || !formData.request_reason) {
+      alert('Please fill in all required fields');
       return;
     }
+    if (!formData.date_issued) {
+      alert('Please select the issued date');
+      return;
+    }
+    if (formData.use_signature && !formData.signature_id) {
+      alert('Please select a signature when e-signature is enabled');
+      return;
+    }
+    if (!editingId && formData.resident_id) {
+      const validCert = records.find((record) => {
+        if (record.resident_id !== formData.resident_id) return false;
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        return new Date(record.date_issued) >= sixMonthsAgo;
+      });
+      if (validCert) {
+        setValidCertInfo(validCert);
+        setShowValidCertDialog(true);
+        return;
+      }
+    }
+    if (editingId) handleUpdate();
+    else handleCreate();
   }
-  
-  if (editingId) handleUpdate();
-  else handleCreate();
-}
 
-// Add a new function to handle confirmation with valid certificate
-function confirmSaveWithValidCert() {
-  setShowValidCertDialog(false);
-  handleCreate();
-}
+  function confirmSaveWithValidCert() {
+    setShowValidCertDialog(false);
+    handleCreate();
+  }
 
   const filteredRecords = useMemo(
     () =>
@@ -820,47 +697,33 @@ function confirmSaveWithValidCert() {
         (r) =>
           r.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           r.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (r.contact_no || '').includes(searchTerm)
+          (r.contact_no || '').includes(searchTerm),
       ),
-    [records, searchTerm]
+    [records, searchTerm],
   );
 
-  // Generate PDF function
   async function generatePDF() {
     if (!display.indigency_id) {
       alert('Please save the record first before downloading PDF');
       return;
     }
-
     setIsGeneratingPDF(true);
-
     try {
       const certificateElement = document.getElementById('certificate-preview');
-
-      // --- 1. Remove the zoom (scale) from the preview's parent while exporting ---
       const parentOfPreview = certificateElement.parentNode;
       const prevTransform = parentOfPreview.style.transform;
       const prevTransformOrigin = parentOfPreview.style.transformOrigin;
-
       parentOfPreview.style.transform = 'scale(1)';
       parentOfPreview.style.transformOrigin = 'top center';
-
-      // --- 2. Wait a short moment for layout to apply ---
       await new Promise((resolve) => setTimeout(resolve, 150));
-
-      // --- 3. Capture crisp certificate at high scale ---
       const canvas = await html2canvas(certificateElement, {
-        scale: 3, // High scale for better quality
+        scale: 3,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
       });
-
-      // --- 4. Restore zoom to preview ---
       parentOfPreview.style.transform = prevTransform;
       parentOfPreview.style.transformOrigin = prevTransformOrigin;
-
-      // --- 5. Output the PDF at 8.5x11 inches (US Letter) ---
       const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
         orientation: 'portrait',
@@ -868,11 +731,9 @@ function confirmSaveWithValidCert() {
         format: [8.5, 11],
       });
       pdf.addImage(imgData, 'PNG', 0, 0, 8.5, 11);
-
-      const fileName = `Indigency_Certificate_${
-        display.indigency_id
-      }_${display.full_name.replace(/\s+/g, '_')}.pdf`;
-      pdf.save(fileName);
+      pdf.save(
+        `Indigency_Certificate_${display.indigency_id}_${display.full_name.replace(/\s+/g, '_')}.pdf`,
+      );
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Failed to generate PDF. Please try again.');
@@ -882,105 +743,47 @@ function confirmSaveWithValidCert() {
   }
 
   function handlePrint() {
-    // Check if there's a certificate to print
     if (!display.indigency_id) {
       alert('Please save the record first before printing');
       return;
     }
-
-    // 1. Get the certificate element
     const certificateElement = document.getElementById('certificate-preview');
     if (!certificateElement) {
       alert('Certificate not found for printing.');
       return;
     }
-
-    // 2. Create a hidden iframe
     const iframe = document.createElement('iframe');
-    iframe.style.position = 'absolute';
-    iframe.style.left = '-9999px'; // Move it way off-screen
-    iframe.style.top = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
+    iframe.style.cssText =
+      'position:absolute;left:-9999px;top:0;width:0;height:0;';
     document.body.appendChild(iframe);
-
-    // 3. Write the certificate content and styles into the iframe
     const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-    iframeDoc.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Print Certificate</title>
-          <style>
-            @page {
-              size: 8.5in 11in;
-              margin: 0;
-            }
-            body {
-              margin: 0;
-              padding: 0;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-              color-adjust: exact !important;
-            }
-            #certificate-preview {
-              width: 8.5in;
-              height: 11in;
-              position: relative;
-              overflow: hidden;
-              background: white;
-              box-sizing: border-box;
-            }
-            #certificate-preview * {
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-              color-adjust: exact !important;
-            }
-          </style>
-        </head>
-        <body>
-          ${certificateElement.outerHTML}
-        </body>
-      </html>
-    `);
+    iframeDoc.write(`<!DOCTYPE html><html><head><title>Print Certificate</title>
+      <style>
+        @page { size: 8.5in 13in; margin: 0; }
+        body { margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        #certificate-preview { width: 8.5in; height: 13in; position: relative; overflow: hidden; background: white; box-sizing: border-box; }
+        #certificate-preview * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      </style></head><body>${certificateElement.outerHTML}</body></html>`);
     iframeDoc.close();
-
-    // 4. Trigger the print dialog once the iframe content is loaded
     setTimeout(() => {
       const iframeWindow = iframe.contentWindow || iframe;
-      iframeWindow.focus(); // Required for some browsers
+      iframeWindow.focus();
       iframeWindow.print();
-
-      // 5. Clean up by removing the iframe after the print dialog
       window.onafterprint = () => {
         document.body.removeChild(iframe);
       };
-      // Fallback cleanup in case onafterprint doesn't fire
       setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
+        if (document.body.contains(iframe)) document.body.removeChild(iframe);
       }, 1000);
-    }, 250); // A short delay to render
+    }, 250);
   }
 
-  // Function to handle QR code click
-
-  const handleZoomIn = () => {
-    setZoomLevel((prev) => Math.min(prev + 0.1, 2)); // Max zoom: 2x (200%)
-  };
-
-  const handleZoomOut = () => {
-    setZoomLevel((prev) => Math.max(prev - 0.1, 0.3)); // Min zoom: 0.3x (30%)
-  };
-
-  const handleResetZoom = () => {
-    setZoomLevel(0.75); // Reset to default
-  };
+  const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 0.1, 2));
+  const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 0.1, 0.3));
+  const handleResetZoom = () => setZoomLevel(0.75);
 
   useEffect(() => {
     const handleKeyPress = (e) => {
-      // Check if Ctrl/Cmd is pressed
       if (e.ctrlKey || e.metaKey) {
         if (e.key === '=' || e.key === '+') {
           e.preventDefault();
@@ -994,10 +797,34 @@ function confirmSaveWithValidCert() {
         }
       }
     };
-
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [zoomLevel]);
+
+  // ── Helper: parse date_issued into day / month / year ──────────────────────
+  function getIssuedParts(dateStr) {
+    if (!dateStr) return { day: '___', month: '________', year: '____' };
+    const d = new Date(dateStr + 'T00:00:00');
+    const monthNames = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return {
+      day: d.getDate(),
+      month: monthNames[d.getMonth()],
+      year: d.getFullYear(),
+    };
+  }
 
   return (
     <ThemeProvider theme={theme}>
@@ -1010,7 +837,7 @@ function confirmSaveWithValidCert() {
           bgcolor: 'background.default',
         }}
       >
-        {/* TOP HEADER */}
+        {/* ── TOP HEADER ── */}
         <Paper elevation={2} sx={{ zIndex: 10, borderRadius: 0 }}>
           <Box
             sx={{
@@ -1033,7 +860,6 @@ function confirmSaveWithValidCert() {
                 </Typography>
               </Box>
             </Box>
-
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Badge badgeContent={records.length} color="secondary">
                 <Chip
@@ -1046,7 +872,6 @@ function confirmSaveWithValidCert() {
                   }}
                 />
               </Badge>
-
               <Button
                 variant="contained"
                 color="secondary"
@@ -1101,9 +926,9 @@ function confirmSaveWithValidCert() {
           </Box>
         </Paper>
 
-        {/* MAIN CONTENT AREA */}
+        {/* ── MAIN CONTENT ── */}
         <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          {/* LEFT: Certificate preview */}
+          {/* ── LEFT: Certificate Preview ── */}
           <Box
             sx={{
               flex: 1,
@@ -1172,7 +997,6 @@ function confirmSaveWithValidCert() {
                     </IconButton>
                   </Tooltip>
                 </Box>
-
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <Tooltip title="Download PDF">
                     <Button
@@ -1223,7 +1047,7 @@ function confirmSaveWithValidCert() {
                   style={{
                     position: 'relative',
                     width: '8.5in',
-                    height: '11in',
+                    height: '13in',
                     boxShadow: '0 0 8px rgba(0,0,0,0.2)',
                     background: '#fff',
                     WebkitPrintColorAdjust: 'exact',
@@ -1231,446 +1055,424 @@ function confirmSaveWithValidCert() {
                     colorAdjust: 'exact',
                     boxSizing: 'border-box',
                     overflow: 'hidden',
+                    fontFamily: '"Times New Roman", serif',
                   }}
                 >
-                  {/* Certificate content remains the same */}
+                  {/* Monumento Background */}
                   <img
+                    src={Monumento}
+                    alt="Monumento Background"
                     style={{
                       position: 'absolute',
-                      width: '80px',
-                      height: '80px',
-                      top: '60px',
-                      left: '40px',
+                      left: 125,
+                      top: 250,
+                      height: '100%',
+                      width: '120%',
+                      objectFit: 'cover',
+                      objectPosition: 'center top',
+                      opacity: 0.5,
+                      zIndex: 0,
+                      transform: 'scale(0.8)',
+                      transformOrigin: 'top right',
                     }}
-                    src={CaloocanLogo}
-                    alt="Logo 1"
-                  />
-                  <img
-                    style={{
-                      position: 'absolute',
-                      width: '80px',
-                      height: '80px',
-                      top: '60px',
-                      left: '130px',
-                    }}
-                    src={BagongPilipinas}
-                    alt="Logo 2"
-                  />
-                  <img
-                    style={{
-                      position: 'absolute',
-                      width: '100px',
-                      height: '100px',
-                      top: '50px',
-                      right: '40px',
-                    }}
-                    src={Logo145}
-                    alt="Logo 3"
                   />
 
-                  {/* Watermark */}
-                  <img
-                    style={{
-                      position: 'absolute',
-                      opacity: 0.1,
-                      width: '550px',
-                      left: '50%',
-                      top: '270px',
-                      transform: 'translateX(-50%)',
-                    }}
-                    src={Logo145}
-                    alt="Watermark"
-                  />
-                  {/* Header Text */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      whiteSpace: 'pre',
-                      textAlign: 'center',
-                      width: '100%',
-                      fontSize: '20px',
-                      fontWeight: 'bold',
-                      fontFamily: '"Lucida Calligraphy", cursive',
-                      top: '50px',
-                    }}
-                  >
-                    Republic of the Philippines
-                  </div>
-
-                  <div
-                    style={{
-                      position: 'absolute',
-                      whiteSpace: 'pre',
-                      textAlign: 'center',
-                      width: '100%',
-                      fontSize: '13pt',
-                      fontWeight: 'bold',
-                      fontFamily: 'Arial, sans-serif',
-                      top: '84px',
-                    }}
-                  >
-                    CITY OF CALOOCAN
-                  </div>
-
-                  <div
-                    style={{
-                      position: 'absolute',
-                      whiteSpace: 'pre',
-                      textAlign: 'center',
-                      width: '100%',
-                      fontSize: '18px',
-                      fontWeight: 'bold',
-                      fontFamily: '"Arial Black", sans-serif',
-                      top: '110px',
-                    }}
-                  >
-                    BARANGAY 145 ZONES 13 DIST. 1
-                  </div>
-
-                  <div
-                    style={{
-                      position: 'absolute',
-                      whiteSpace: 'pre',
-                      textAlign: 'center',
-                      width: '100%',
-                      fontSize: '18px',
-                      fontWeight: 'bold',
-                      fontFamily: '"Arial Black", sans-serif',
-                      top: '138px',
-                    }}
-                  >
-                    Tel. No. 8711 - 7134
-                  </div>
-
-                  <div
-                    style={{
-                      position: 'absolute',
-                      whiteSpace: 'pre',
-                      textAlign: 'center',
-                      width: '100%',
-                      fontSize: '19px',
-                      fontWeight: 'bold',
-                      fontFamily: '"Arial Black", sans-serif',
-                      top: '166px',
-                    }}
-                  >
-                    OFFICE OF THE BARANGAY CHAIRMAN
-                  </div>
-
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '220px',
-                      width: '100%',
-                      textAlign: 'center',
-                    }}
-                  >
-                    <span
+                  <div style={{ position: 'relative', zIndex: 1 }}>
+                    {/* ── HEADER ── */}
+                    <div
                       style={{
-                        fontFamily: '"Brush Script MT", cursive',
-                        fontSize: '28pt',
-                        fontWeight: 'normal',
-                        display: 'inline-block',
-                        background: theme.palette.success.main, // Using theme color
-                        color: '#fff',
-                        padding: '4px 70px',
-                        borderRadius: '8px',
-                        position: 'relative',
-                        boxShadow: '5px 5px 0 #d8d5d5ff', // white diagonal bottom shadow
-                        WebkitPrintColorAdjust: 'exact',
-                        printColorAdjust: 'exact',
-                        colorAdjust: 'exact',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '30px 50px 10px 50px',
                       }}
                     >
-                      Barangay Indigency
-                    </span>
-                  </div>
-
-                  {/* Date */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      whiteSpace: 'pre',
-                      top: '320px',
-                      right: '80px',
-                      fontFamily: '"Times New Roman", serif',
-                      fontSize: '12pt',
-                      fontWeight: 'bold',
-                      color: 'red', // Using theme orange
-                    }}
-                  >
-                    Date:{' '}
-                    {display.date_issued
-                      ? formatDateDisplay(display.date_issued)
-                      : ''}
-                  </div>
-
-                  {/* Body */}
-                  <div
-                    style={{
-                      width: '640px',
-                      textAlign: 'justify',
-                      fontFamily: '"Times New Roman", serif',
-                      fontSize: '12pt',
-                      fontWeight: 'bold',
-                      color: 'black',
-                      whiteSpace: 'normal',
-                      marginBottom: '50px',
-                      paddingTop: '330px',
-                      float: 'right',
-                      marginRight: '80px',
-                      lineHeight: '1.5',
-                    }}
-                  >
-                    <p style={{ margin: 0, marginBottom: '1em' }}>
-                      To whom it may concern:
-                    </p>
-                    <p style={{ margin: 0, textIndent: '50px' }}>
-                      This is to certify that the person whose name and thumb
-                      print appear hereon has requested a{' '}
-                      <i> Barangay Indigency</i> from this office and the
-                      result/s is/are listed below and valid for six (6) months
-                      only.
-                    </p>
-                  </div>
-
-                  {/* Info */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      whiteSpace: 'pre',
-                      top: '470px',
-                      left: '95px',
-                      width: '640px',
-                      lineHeight: '1.8',
-                      fontFamily: '"Times New Roman", serif',
-                      fontSize: '12pt',
-                      fontWeight: 'bold',
-                    }}
-                  >
-                    <div>
-                      <span
+                      <img
+                        src={CaloocanLogo}
+                        alt="Caloocan Logo"
                         style={{
-                          color: 'red', // Using theme orange
-                          fontWeight: 'bold',
-                          fontFamily: '"Times New Roman", serif',
+                          width: '120px',
+                          height: '120px',
+                          objectFit: 'contain',
                         }}
-                      >
-                        Name:
-                      </span>{' '}
-                      <span style={{ color: 'black', marginLeft: '10px' }}>
-                        {display.full_name || ''}
-                      </span>
-                      <br />
-                      <span
-                        style={{
-                          color: 'red', // Using theme orange
-                          fontWeight: 'bold',
-                          fontFamily: '"Times New Roman", serif',
-                        }}
-                      >
-                        Address:
-                      </span>{' '}
-                      <span style={{ color: 'black', marginLeft: '10px' }}>
-                        {display.address || ''}
-                      </span>
-                      <br />
+                      />
                       <div
                         style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          width: '640px',
+                          textAlign: 'center',
+                          flex: 1,
+                          padding: '0 20px',
                         }}
                       >
-                        <div style={{ width: '420px' }}>
-                          <span
-                            style={{
-                              color: 'red', // Using theme orange
-                              fontWeight: 'bold',
-                              fontFamily: '"Times New Roman", serif',
-                            }}
-                          >
-                            Birthday:
-                          </span>{' '}
-                          <span style={{ color: 'black', marginLeft: '10px' }}>
-                            {display.dob ? formatDateDisplay(display.dob) : ''}
-                          </span>
+                        <div
+                          style={{
+                            fontFamily: 'Old English Text MT',
+                            fontSize: '16pt',
+                          }}
+                        >
+                          Republic of the Philippines
                         </div>
-                        <div style={{ width: '500px', textAlign: 'left' }}>
-                          <span
-                            style={{
-                              color: 'red', // Using theme orange
-                              fontWeight: 'bold',
-                              fontFamily: '"Times New Roman", serif',
-                            }}
-                          >
-                            Age:
-                          </span>{' '}
-                          <span style={{ color: 'black', marginLeft: '10px' }}>
-                            {display.age || ''}
-                          </span>
+                        <div
+                          style={{
+                            fontFamily: '"Times New Roman"',
+                            fontSize: '16pt',
+                            marginTop: '2px',
+                          }}
+                        >
+                          City of Caloocan
+                        </div>
+                        <div
+                          style={{
+                            fontFamily: '"Times New Roman"',
+                            fontSize: '16pt',
+                            marginTop: '2px',
+                          }}
+                        >
+                          Barangay 145, Zone 13, District 1
+                        </div>
+                        <div
+                          style={{
+                            fontFamily: '"Times New Roman"',
+                            fontSize: '12pt',
+                            marginTop: '2px',
+                          }}
+                        >
+                          Reparo St. Cor. Gen. Tirona St. Bagong Barrio,
+                          Caloocan City
                         </div>
                       </div>
+                      <img
+                        src={Logo145}
+                        alt="Barangay 145 Logo"
+                        style={{
+                          width: '120px',
+                          height: '120px',
+                          objectFit: 'contain',
+                        }}
+                      />
+                    </div>
+
+                    {/* Office Title */}
+                    <div
+                      style={{
+                        textAlign: 'center',
+                        fontFamily: '"Times New Roman"',
+                        fontSize: '16pt',
+                        fontWeight: 'bold',
+                        marginTop: '10px',
+                        letterSpacing: '0.5px',
+                      }}
+                    >
+                      OFFICE OF THE SANGGUNIANG BARANGAY
+                    </div>
+
+                    {/* Certificate Title */}
+                    <div
+                      style={{
+                        textAlign: 'center',
+                        fontFamily: '"Times New Roman"',
+                        fontSize: '16pt',
+                        fontWeight: 'bold',
+                        margin: '40px 0 40px 0',
+                      }}
+                    >
+                      CERTIFICATE OF INDIGENCY
+                    </div>
+
+                    {/* ── BODY ── */}
+                    <div
+                      style={{
+                        padding: '0 70px',
+                        fontFamily: '"Times New Roman", Times, serif',
+                        fontSize: '12pt',
+                        lineHeight: '1.8',
+                        color: '#000',
+                        textAlign: 'justify',
+                      }}
+                    >
+                      <p style={{ fontWeight: 'bold', margin: '0 0 10px 0' }}>
+                        TO WHOM IT MAY CONCERN:
+                      </p>
+
+                      {/* Paragraph 1 */}
+                      <p style={{ margin: '0 0 10px 0', textIndent: '50px' }}>
+                        This is to certify that{' '}
+                        <strong>
+                          {display.full_name || '_______________'}
+                        </strong>
+                        , <strong>{display.age || '__'}</strong> years old,{' '}
+                        <strong>{display.civil_status || '______'}</strong>, and
+                        a resident of{' '}
+                        <strong>{display.address || '_______________'}</strong>,
+                        Caloocan City, belongs to the indigent family's barangay
+                        of{' '}
+                        <strong>{display.barangay || '_______________'}</strong>
+                        .
+                      </p>
+
+                      {/* Paragraph 2 - HIDDEN */}
+                      <p
+                        style={{
+                          margin: '0 0 10px 0',
+                          textIndent: '50px',
+                          display: 'none',
+                        }}
+                      >
+                        This certification is issued upon the request of the
+                        above-mentioned individual is currently working as a{' '}
+                        <strong>
+                          {display.source_of_income || '_______________'}
+                        </strong>{' '}
+                        and is only earning{' '}
+                        <strong>
+                          {display.monthly_income || '_______________'}
+                        </strong>{' '}
+                        per month.
+                      </p>
+
+                      {/* Paragraph 3 */}
+                      <p style={{ margin: '0 0 10px 0', textIndent: '50px' }}>
+                        This certification is issued upon the request of the
+                        above-mentioned individual for{' '}
+                        <strong>
+                          {display.request_reason || '_______________'}
+                        </strong>{' '}
+                        and is valid for six (6) months from the date of its
+                        issuance.
+                      </p>
+
+                      {/* Issued line */}
+                      {(() => {
+                        const { day, month, year } = getIssuedParts(
+                          display.date_issued,
+                        );
+                        return (
+                          <p
+                            style={{ margin: '0 0 6px 0', textIndent: '50px' }}
+                          >
+                            Issued this <strong>{day}</strong> day of{' '}
+                            <strong>{month}</strong>, <strong>{year}</strong>,
+                            at Barangay{' '}
+                            <strong>{display.barangay || '_______'}</strong>,
+                            Caloocan City.
+                          </p>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Photo & Thumbmark */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: '40px',
+                        padding: '14px 70px',
+                        alignItems: 'flex-end',
+                      }}
+                    >
+                      <div style={{ textAlign: 'center' }}>
+                        <div
+                          style={{
+                            width: '150px',
+                            height: '150px',
+                            border: '1.5px solid #000',
+                          }}
+                        />
+                        <div style={{ fontSize: '10pt', marginTop: '6px' }}>
+                          Applicant Photo
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div
+                          style={{
+                            width: '150px',
+                            height: '150px',
+                            border: '1.5px solid #000',
+                          }}
+                        />
+                        <div style={{ fontSize: '10pt', marginTop: '6px' }}>
+                          Applicant Thumbmark
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Punong Barangay Signature */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        padding: '0 70px',
+                        marginTop: '10px',
+                      }}
+                    >
                       <div
                         style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'flex-start',
-                          width: '640px',
+                          textAlign: 'center',
+                          width: '300px',
+                          marginTop: '50px',
                         }}
                       >
-                        {/* Left side: Provincial Address */}
+                        {display.use_signature && display.signature_path ? (
+                          <div
+                            style={{
+                              height: '70px',
+                              display: 'flex',
+                              alignItems: 'flex-end',
+                              justifyContent: 'center',
+                              marginBottom: '-10px',
+                            }}
+                          >
+                            <img
+                              src={getSignatureImageUrl(display.signature_path)}
+                              alt="Signature"
+                              style={{
+                                maxWidth: '200px',
+                                maxHeight: '65px',
+                                objectFit: 'contain',
+                              }}
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                              }}
+                            />
+                          </div>
+                        ) : null}
                         <div
                           style={{
-                            width: '420px', // fixed width for stable layout
-                            overflowWrap: 'break-word',
-                            wordBreak: 'break-word',
-                            whiteSpace: 'normal',
+                            height: '55px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
                           }}
                         >
-                          <span
+                          <img
+                            src={WordName}
+                            alt="Arnold Dondonayos"
                             style={{
-                              color: 'red', // Using theme orange
-                              fontWeight: 'bold',
-                              fontFamily: '"Times New Roman", serif',
+                              width: '240px',
+                              height: 'auto',
+                              maxHeight: '55px',
+                              objectFit: 'contain',
                             }}
-                          >
-                            Provincial Address:
-                          </span>{' '}
-                          <span
-                            style={{
-                              color: 'black',
-                              marginLeft: '10px',
-                            }}
-                          >
-                            {display.provincial_address || ''}
-                          </span>
+                          />
                         </div>
-
-                        {/* Right side: Contact No. */}
                         <div
                           style={{
-                            width: '400px', // fixed width so it won't move
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            marginRight: '95px',
-                          }}
-                        >
-                          <span
-                            style={{
-                              color: 'red', // Using theme orange
-                              fontWeight: 'bold',
-                              fontFamily: '"Times New Roman", serif',
-                            }}
-                          >
-                            Contact No.
-                          </span>{' '}
-                          <span style={{ color: 'black', marginLeft: '10px' }}>
-                            {display.contact_no || ''}
-                          </span>
-                        </div>
-                      </div>
-                      <span
-                        style={{
-                          color: 'red', // Using theme orange
-                          fontWeight: 'bold',
-                          fontFamily: '"Times New Roman", serif',
-                        }}
-                      >
-                        Civil Status:
-                      </span>{' '}
-                      <span style={{ color: 'black', marginLeft: '10px' }}>
-                        {display.civil_status || ''}
-                      </span>
-                      <br />
-                      <span
-                        style={{
-                          color: 'red', // Using theme orange
-                          fontWeight: 'bold',
-                          fontFamily: '"Times New Roman", serif',
-                        }}
-                      >
-                        Remarks:
-                      </span>{' '}
-                      <span
-                        style={{
-                          color: 'black',
-                          fontWeight: 'bold',
-                          fontFamily: '"Times New Roman", serif',
-                        }}
-                      >
-                        {display.remarks || ''}
-                      </span>{' '}
-                      <br />
-                      <span
-                        style={{
-                          color: 'red', // Using theme orange
-                          fontWeight: 'bold',
-                          fontFamily: '"Times New Roman", serif',
-                        }}
-                      >
-                        This certification is being issued upon request for
-                      </span>{' '}
-                      <span style={{ color: 'black' }}>
-                        {display.request_reason || ''}
-                      </span>
-                    </div>
-                  </div>
-
-                 {/* Applicant Signature with QR Code */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '730px',
-                      left: '50px',
-                      width: '250px',
-                      textAlign: 'center',
-                      fontFamily: '"Times New Roman", serif',
-                      fontSize: '12pt',
-                      fontWeight: 'bold',
-                    }}
-                  >
-                    <div
-                      style={{
-                        borderTop: '2px solid #000',
-                        width: '65%',
-                        margin: 'auto',
-                      }}
-                    ></div>
-                    <div style={{ color: 'black', fontFamily: 'inherit' }}>
-                      Applicant's Signature
-                    </div>
-                    <div
-                      style={{
-                        margin: '15px auto 0 auto',
-                        width: '150px',
-                        height: '75px',
-                        border: '1px solid #000',
-                      }}
-                    ></div>
-
-                    {/* QR Code */}
-                    {qrCodeUrl && (
-                      <div style={{ marginTop: '5px' }}>
-                        <img
-                          src={qrCodeUrl}
-                          alt="QR Code"
-                          style={{
-                            width: '130px',
-                            height: '130px',
-                            display: 'block',
-                            margin: '0 auto',
-                            border: '2px solid #000',
-                            padding: '5px',
+                            borderTop: '2px solid #000',
+                            width: '90%',
+                            margin: '0 auto 4px auto',
                           }}
                         />
                         <div
                           style={{
-                            fontSize: '8pt',
+                            fontFamily: '"Times New Roman"',
+                            fontSize: '11pt',
+                            fontWeight: 'bold',
+                          }}
+                        >
+                          [Punong Barangay / Authorized Official]
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Barangay Seal & Control No. */}
+                    <div
+                      style={{ padding: '30px 70px 0 70px', fontSize: '11pt' }}
+                    >
+                      <div>Barangay Seal</div>
+                      <div style={{ marginTop: '4px' }}>
+                        Control No.{' '}
+                        <span
+                          style={{ minWidth: '120px', display: 'inline-block' }}
+                        >
+                          {display.control_no ||
+                            '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0'}
+                        </span>
+                      </div>
+                      <ul
+                        style={{
+                          marginTop: '8px',
+                          paddingLeft: '20px',
+                          fontSize: '9pt',
+                          lineHeight: '1.6',
+                          listStyleType: 'disc',
+                        }}
+                      >
+                        <li>
+                          This certification is not valid without the Official
+                          Barangay Dry Seal and the Barangay Chairman's
+                          Signature/Stamp.
+                        </li>
+                        <li>
+                          Officials and applicants who submit false
+                          certifications or documents shall be held liable for
+                          administrative/criminal liabilities.
+                        </li>
+                      </ul>
+                      <div
+                        style={{
+                          fontSize: '10pt',
+                          marginTop: '50px',
+                          fontFamily: '"Times New Roman"',
+                        }}
+                      >
+                        <div>
+                          Prepared by:{' '}
+                          <strong>
+                            {display.prepared_by_name || 'Roselyn Anore'}
+                          </strong>
+                        </div>
+                        <div style={{ marginLeft: '80px' }}>
+                          <strong>
+                            {display.prepared_by_position ||
+                              'Barangay Secretary'}
+                          </strong>
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          textAlign: 'center',
+                          fontFamily: '"Times New Roman"',
+                          fontSize: '13pt',
+                          marginTop: '60px',
+                          fontStyle: 'italic',
+                        }}
+                      >
+                        This certification is{' '}
+                        <strong>
+                          valid for six (6) months from the date of issuance.
+                        </strong>
+                      </div>
+                      <div
+                        style={{
+                          marginTop: '12px',
+                          textAlign: 'right',
+                          paddingRight: '10px',
+                          height: '110px',
+                          visibility:
+                            qrCodeUrl && display.use_signature
+                              ? 'visible'
+                              : 'hidden',
+                        }}
+                      >
+                        <img
+                          src={
+                            qrCodeUrl ||
+                            'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="80"%3E%3C/svg%3E'
+                          }
+                          alt="QR Code"
+                          style={{
+                            width: '80px',
+                            height: '80px',
+                            display: 'inline-block',
+                            border: '2px solid #000',
+                            padding: '3px',
+                          }}
+                        />
+                        <div
+                          style={{
+                            fontSize: '7pt',
                             color: '#666',
-                            marginTop: '5px',
+                            marginTop: '3px',
                             fontWeight: 'normal',
+                            textAlign: 'right',
                           }}
                         >
                           {display.date_created
@@ -1678,136 +1480,25 @@ function confirmSaveWithValidCert() {
                             : new Date().toLocaleString()}
                         </div>
                       </div>
-                    )}
-                  </div>
-                  {/* Punong Barangay */}
-
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '850px',
-                      right: '100px',
-                      width: '300px',
-                      textAlign: 'center',
-                    }}
-                  >
-                    {/* E-Signature positioned to overlap with the name */}
-                    {display.use_signature && display.signature_path ? (
-                      <div
-                        style={{
-                          position: 'relative',
-                          marginTop: '-40px', // Pull the signature up to overlap
-                          height: '70px',
-                          display: 'flex',
-                          alignItems: 'flex-end',
-                          justifyContent: 'center',
-                          zIndex: 2, // Ensure signature is on top
-                        }}
-                      >
-                        <img
-                          src={getSignatureImageUrl(display.signature_path)}
-                          alt="Signature"
-                          style={{
-                            maxWidth: '200px',
-                            maxHeight: '70px',
-                            objectFit: 'contain',
-                            display: 'block',
-                          }}
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                          }}
-                        />
-                      </div>
-                    ) : null}
-
-                    {/* WordName image positioned below/overlapping with signature */}
-                    <div
-                      style={{
-                        position: 'relative',
-                        marginTop:
-                          display.use_signature && display.signature_path
-                            ? '-35px'
-                            : '-5px', // Adjust overlap based on whether signature is present
-                        height: '60px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 1, // Ensure name is below signature but above other elements
-                      }}
-                    >
-                      <img
-                        src={WordName}
-                        alt="Arnold Dondonayos"
-                        style={{
-                          width: '250px',
-                          height: 'auto',
-                          maxHeight: '60px',
-                          objectFit: 'contain',
-                        }}
-                      />
-                    </div>
-
-                    {/* Line positioned at the bottom of the name */}
-                    <div
-                      style={{
-                        borderTop: '2.5px solid #000',
-                        width: '90%',
-                        margin: 'auto',
-                        marginTop:
-                          display.use_signature && display.signature_path
-                            ? '5px'
-                            : '-2px', // Adjust spacing based on signature presence
-                      }}
-                    ></div>
-
-                    <div
-                      style={{
-                        fontFamily: '"Brush Script MT", cursive',
-                        fontSize: '20pt',
-                        color: '#000',
-                        marginTop: '5px',
-                      }}
-                    >
-                      Punong Barangay
                     </div>
                   </div>
+                  {/* end zIndex wrapper */}
                 </div>
               </Box>
             </Box>
 
-            <style>
-              {`
-      @media print {
-        body * {
-          visibility: hidden;
-        }
-        #certificate-preview, #certificate-preview * {
-          visibility: visible;
-        }
-        #certificate-preview {
-          position: absolute;
-          left: 0;
-          top: 0;
-          width: 8.5in;
-          height: 11in;
-          transform: none !important; /* Remove any transforms */
-        }
-        @page {
-          size: portrait;
-          margin: 0;
-        }
-        /* Ensure colors are preserved when printing */
-        #certificate-preview * {
-          -webkit-print-color-adjust: exact !important;
-          print-color-adjust: exact !important;
-          color-adjust: exact !important;
-        }
-      }
-    `}
-            </style>
+            <style>{`
+              @media print {
+                body * { visibility: hidden; }
+                #certificate-preview, #certificate-preview * { visibility: visible; }
+                #certificate-preview { position: absolute; left: 0; top: 0; width: 8.5in; height: 13in; transform: none !important; }
+                @page { size: portrait; margin: 0; }
+                #certificate-preview * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+              }
+            `}</style>
           </Box>
 
-          {/* RIGHT: FORM/RECORDS PANEL */}
+          {/* ── RIGHT: FORM / RECORDS PANEL ── */}
           <Box
             sx={{
               width: { xs: '100%', md: '50%', lg: '40%' },
@@ -1819,7 +1510,7 @@ function confirmSaveWithValidCert() {
               overflow: 'hidden',
             }}
           >
-            {/* FORM */}
+            {/* ── FORM ── */}
             {activeTab === 'form' && (
               <Box
                 sx={{
@@ -1857,27 +1548,24 @@ function confirmSaveWithValidCert() {
 
                 <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
                   <Stack spacing={3}>
+                    {/* Full Name */}
                     <Autocomplete
                       options={residents}
                       getOptionLabel={(option) => option.full_name || ''}
                       value={
                         residents.find(
-                          (r) => r.full_name === formData.full_name
+                          (r) => r.full_name === formData.full_name,
                         ) || null
                       }
                       onChange={(e, nv) => {
                         if (nv) {
-                          // Ensure date is properly formatted without timezone issues
-                          const dobFormatted = nv.dob
-                            ? nv.dob.slice(0, 10)
-                            : '';
                           setFormData({
                             ...formData,
                             resident_id: nv.resident_id,
                             full_name: nv.full_name,
                             address: nv.address || '',
                             provincial_address: nv.provincial_address || '',
-                            dob: dobFormatted,
+                            dob: nv.dob ? nv.dob.slice(0, 10) : '',
                             age: nv.age ? String(nv.age) : '',
                             civil_status: nv.civil_status || 'Single',
                             contact_no: nv.contact_no || '',
@@ -1898,6 +1586,7 @@ function confirmSaveWithValidCert() {
                       )}
                     />
 
+                    {/* Address */}
                     <TextField
                       label="Address"
                       variant="outlined"
@@ -1912,6 +1601,21 @@ function confirmSaveWithValidCert() {
                       required
                     />
 
+                    {/* Barangay */}
+                    <TextField
+                      label="Barangay"
+                      variant="outlined"
+                      fullWidth
+                      size="small"
+                      placeholder="e.g. 145"
+                      value={formData.barangay}
+                      onChange={(e) =>
+                        setFormData({ ...formData, barangay: e.target.value })
+                      }
+                      required
+                    />
+
+                    {/* Birthday & Age */}
                     <Grid container spacing={2}>
                       <Grid item xs={12} sm={6}>
                         <TextField
@@ -1935,40 +1639,13 @@ function confirmSaveWithValidCert() {
                           value={formData.age}
                           InputProps={{ readOnly: true }}
                           sx={{
-                            '& .MuiOutlinedInput-root': {
-                              bgcolor: 'grey.100',
-                            },
+                            '& .MuiOutlinedInput-root': { bgcolor: 'grey.100' },
                           }}
                         />
                       </Grid>
                     </Grid>
 
-                    <TextField
-                      label="Provincial Address"
-                      variant="outlined"
-                      fullWidth
-                      size="small"
-                      value={formData.provincial_address}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          provincial_address: e.target.value,
-                        })
-                      }
-                    />
-
-                    <TextField
-                      label="Contact Number"
-                      variant="outlined"
-                      fullWidth
-                      size="small"
-                      placeholder="09XXXXXXXXX"
-                      value={formData.contact_no}
-                      onChange={(e) =>
-                        setFormData({ ...formData, contact_no: e.target.value })
-                      }
-                    />
-
+                    {/* Civil Status */}
                     <FormControl fullWidth size="small">
                       <InputLabel>Civil Status</InputLabel>
                       <Select
@@ -1989,22 +1666,73 @@ function confirmSaveWithValidCert() {
                       </Select>
                     </FormControl>
 
+                    {/* Contact Number */}
                     <TextField
-                      label="Remarks"
+                      label="Contact Number"
                       variant="outlined"
                       fullWidth
                       size="small"
-                      multiline
-                      rows={2}
-                      value={formData.remarks}
+                      placeholder="09XXXXXXXXX"
+                      value={formData.contact_no}
                       onChange={(e) =>
-                        setFormData({ ...formData, remarks: e.target.value })
+                        setFormData({ ...formData, contact_no: e.target.value })
                       }
-                      required
                     />
 
+                    {/* Provincial Address */}
                     <TextField
-                      label="Request Reason"
+                      label="Provincial Address"
+                      variant="outlined"
+                      fullWidth
+                      size="small"
+                      value={formData.provincial_address}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          provincial_address: e.target.value,
+                        })
+                      }
+                    />
+
+                    {/* Source of Income & Monthly Income - HIDDEN */}
+                    <Grid container spacing={2} sx={{ display: 'none' }}>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          label="Source of Income"
+                          variant="outlined"
+                          fullWidth
+                          size="small"
+                          placeholder="e.g. Vendor, Driver"
+                          value={formData.source_of_income}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              source_of_income: e.target.value,
+                            })
+                          }
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          label="Monthly Income"
+                          variant="outlined"
+                          fullWidth
+                          size="small"
+                          placeholder="e.g. ₱5,000"
+                          value={formData.monthly_income}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              monthly_income: e.target.value,
+                            })
+                          }
+                        />
+                      </Grid>
+                    </Grid>
+
+                    {/* Purpose / Request Reason */}
+                    <TextField
+                      label="Purpose of Certificate"
                       variant="outlined"
                       fullWidth
                       size="small"
@@ -2021,6 +1749,21 @@ function confirmSaveWithValidCert() {
                       required
                     />
 
+                    {/* Remarks */}
+                    <TextField
+                      label="Remarks"
+                      variant="outlined"
+                      fullWidth
+                      size="small"
+                      multiline
+                      rows={2}
+                      value={formData.remarks}
+                      onChange={(e) =>
+                        setFormData({ ...formData, remarks: e.target.value })
+                      }
+                    />
+
+                    {/* Date Issued */}
                     <TextField
                       label="Date Issued"
                       type="date"
@@ -2038,12 +1781,63 @@ function confirmSaveWithValidCert() {
                       required
                     />
 
-                    <Divider sx={{ my: 2 }} />
+                    {/* Control No. */}
+                    <TextField
+                      label="Control No."
+                      variant="outlined"
+                      fullWidth
+                      size="small"
+                      value={formData.control_no}
+                      InputProps={{ readOnly: true }}
+                      sx={{
+                        '& .MuiOutlinedInput-root': { bgcolor: 'grey.100' },
+                      }}
+                    />
 
+                    {/* Prepared By */}
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          label="Prepared By (Name)"
+                          variant="outlined"
+                          fullWidth
+                          size="small"
+                          placeholder="e.g. Roselyn Anore"
+                          value={formData.prepared_by_name}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              prepared_by_name: e.target.value,
+                            })
+                          }
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          label="Prepared By (Position)"
+                          variant="outlined"
+                          fullWidth
+                          size="small"
+                          placeholder="e.g. Barangay Secretary"
+                          value={formData.prepared_by_position}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              prepared_by_position: e.target.value,
+                            })
+                          }
+                        />
+                      </Grid>
+                    </Grid>
+
+                    <Divider sx={{ my: 1 }} />
+
+                    {/* E-Signature */}
                     <FormControlLabel
                       control={
                         <Checkbox
                           checked={formData.use_signature || false}
+                          color="primary"
                           onChange={(e) => {
                             const checked = e.target.checked;
                             setFormData({
@@ -2054,11 +1848,8 @@ function confirmSaveWithValidCert() {
                                   ? selectedSignature.signature_id
                                   : null,
                             });
-                            if (!checked) {
-                              setSelectedSignature(null);
-                            }
+                            if (!checked) setSelectedSignature(null);
                           }}
-                          color="primary"
                         />
                       }
                       label="Add E-Signature"
@@ -2093,6 +1884,7 @@ function confirmSaveWithValidCert() {
                       />
                     )}
 
+                    {/* Action Buttons */}
                     <Box sx={{ display: 'flex', gap: 2, pt: 2 }}>
                       <Button
                         onClick={handleSubmit}
@@ -2121,7 +1913,7 @@ function confirmSaveWithValidCert() {
               </Box>
             )}
 
-            {/* RECORDS */}
+            {/* ── RECORDS ── */}
             {activeTab === 'records' && (
               <Box
                 sx={{
@@ -2145,8 +1937,7 @@ function confirmSaveWithValidCert() {
                       gap: 1,
                     }}
                   >
-                    <FolderIcon color="primary" />
-                    Certificate Records
+                    <FolderIcon color="primary" /> Certificate Records
                   </Typography>
                   <TextField
                     fullWidth
@@ -2304,16 +2095,12 @@ function confirmSaveWithValidCert() {
           </Box>
         </Box>
 
-        {/* FLOATING ACTION BUTTON FOR MOBILE */}
+        {/* MOBILE FAB */}
         {isMobile && activeTab !== 'form' && (
           <Fab
             color="primary"
             aria-label="add"
-            sx={{
-              position: 'absolute',
-              bottom: 16,
-              right: 16,
-            }}
+            sx={{ position: 'absolute', bottom: 16, right: 16 }}
             onClick={() => {
               resetForm();
               setIsFormOpen(true);
@@ -2341,21 +2128,15 @@ function confirmSaveWithValidCert() {
               <Typography variant="body2" sx={{ color: 'grey.600' }}>
                 Certificate ID:
               </Typography>
-              <Typography
-                variant="body1"
-                sx={{ fontWeight: 600, color: 'text.primary' }}
-              >
-                {display.indigency_id || 'Draft (Not yet saved)'}
+              <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                {display.indigency_id || 'Draft'}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
               <Typography variant="body2" sx={{ color: 'grey.600' }}>
                 Transaction Number:
               </Typography>
-              <Typography
-                variant="body1"
-                sx={{ fontWeight: 600, color: 'text.primary' }}
-              >
+              <Typography variant="body1" sx={{ fontWeight: 600 }}>
                 {display.transaction_number || 'N/A'}
               </Typography>
             </Grid>
@@ -2363,10 +2144,7 @@ function confirmSaveWithValidCert() {
               <Typography variant="body2" sx={{ color: 'grey.600' }}>
                 Full Name:
               </Typography>
-              <Typography
-                variant="body1"
-                sx={{ fontWeight: 600, color: 'text.primary' }}
-              >
+              <Typography variant="body1" sx={{ fontWeight: 600 }}>
                 {display.full_name}
               </Typography>
             </Grid>
@@ -2374,15 +2152,21 @@ function confirmSaveWithValidCert() {
               <Typography variant="body2" sx={{ color: 'grey.600' }}>
                 Address:
               </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {display.address}
+              <Typography variant="body1">{display.address}</Typography>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                Barangay:
+              </Typography>
+              <Typography variant="body1">
+                {display.barangay || 'N/A'}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
               <Typography variant="body2" sx={{ color: 'grey.600' }}>
                 Date of Birth:
               </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+              <Typography variant="body1">
                 {display.dob ? formatDateDisplay(display.dob) : 'N/A'}
               </Typography>
             </Grid>
@@ -2390,39 +2174,49 @@ function confirmSaveWithValidCert() {
               <Typography variant="body2" sx={{ color: 'grey.600' }}>
                 Age:
               </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {display.age}
-              </Typography>
+              <Typography variant="body1">{display.age}</Typography>
             </Grid>
             <Grid item xs={12} md={6}>
               <Typography variant="body2" sx={{ color: 'grey.600' }}>
                 Civil Status:
               </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {display.civil_status}
+              <Typography variant="body1">{display.civil_status}</Typography>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                Source of Income:
+              </Typography>
+              <Typography variant="body1">
+                {display.source_of_income || 'N/A'}
               </Typography>
             </Grid>
-            <Grid item xs={12}>
+            <Grid item xs={12} md={6}>
               <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Remarks:
+                Monthly Income:
               </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {display.remarks}
+              <Typography variant="body1">
+                {display.monthly_income || 'N/A'}
               </Typography>
             </Grid>
             <Grid item xs={12}>
               <Typography variant="body2" sx={{ color: 'grey.600' }}>
                 Request Reason:
               </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {display.request_reason}
+              <Typography variant="body1">{display.request_reason}</Typography>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                Control No.:
+              </Typography>
+              <Typography variant="body1">
+                {display.control_no || 'N/A'}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
               <Typography variant="body2" sx={{ color: 'grey.600' }}>
                 Date Issued:
               </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+              <Typography variant="body1">
                 {formatDateDisplay(display.date_issued)}
               </Typography>
             </Grid>
@@ -2430,7 +2224,7 @@ function confirmSaveWithValidCert() {
               <Typography variant="body2" sx={{ color: 'grey.600' }}>
                 Date Created:
               </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+              <Typography variant="body1">
                 {display.date_created
                   ? formatDateTimeDisplay(display.date_created)
                   : 'N/A'}
@@ -2438,9 +2232,18 @@ function confirmSaveWithValidCert() {
             </Grid>
             <Grid item xs={12} md={6}>
               <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                Prepared By:
+              </Typography>
+              <Typography variant="body1">
+                {display.prepared_by_name || 'N/A'} —{' '}
+                {display.prepared_by_position || 'N/A'}
+              </Typography>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>
                 E-Signature:
               </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+              <Typography variant="body1">
                 {display.use_signature ? 'Yes' : 'No'}
               </Typography>
             </Grid>
@@ -2449,8 +2252,8 @@ function confirmSaveWithValidCert() {
                 <Typography variant="body2" sx={{ color: 'grey.600' }}>
                   Signed By:
                 </Typography>
-                <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                  {display.official_name} - {display.designation}
+                <Typography variant="body1">
+                  {display.official_name} — {display.designation}
                 </Typography>
               </Grid>
             )}
@@ -2463,50 +2266,49 @@ function confirmSaveWithValidCert() {
         </DialogActions>
       </Dialog>
 
-
-      // Add the dialog at the end of the component, before the closing tags
-<Dialog
-  open={showValidCertDialog}
-  onClose={() => setShowValidCertDialog(false)}
-  PaperProps={{ sx: { borderRadius: 2 } }}
->
-  <DialogTitle sx={{ bgcolor: '#41644A', color: 'white', py: 2 }}>
-    <Typography variant="h6" sx={{ fontWeight: 700 }}>
-      Resident Has Valid Certificate
-    </Typography>
-  </DialogTitle>
-  <DialogContent sx={{ p: 3 }}>
-    <Typography>
-      This resident already has a valid Certificate of Indigency issued on{' '}
-      {validCertInfo && formatDateDisplay(validCertInfo.date_issued)}.
-      Certificates are valid for 6 months.
-    </Typography>
-    <Typography sx={{ mt: 2 }}>
-      Are you sure you want to create a new certificate for this resident?
-    </Typography>
-  </DialogContent>
-  <DialogActions sx={{ p: 2, borderTop: '1px solid #F1F0E9' }}>
-    <Button
-      onClick={() => setShowValidCertDialog(false)}
-      variant="outlined"
-      sx={{ borderColor: '#41644A', color: '#41644A' }}
-    >
-      Cancel
-    </Button>
-    <Button
-      onClick={confirmSaveWithValidCert}
-      variant="contained"
-      sx={{ bgcolor: '#E9762B', '&:hover': { bgcolor: '#d8651f' } }}
-    >
-      Create Anyway
-    </Button>
-  </DialogActions>
-</Dialog>
+      {/* Valid Certificate Warning Dialog */}
+      <Dialog
+        open={showValidCertDialog}
+        onClose={() => setShowValidCertDialog(false)}
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ bgcolor: '#41644A', color: 'white', py: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            Resident Has Valid Certificate
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ p: 3 }}>
+          <Typography>
+            This resident already has a valid Certificate of Indigency issued on{' '}
+            {validCertInfo && formatDateDisplay(validCertInfo.date_issued)}.
+            Certificates are valid for 6 months.
+          </Typography>
+          <Typography sx={{ mt: 2 }}>
+            Are you sure you want to create a new certificate for this resident?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, borderTop: '1px solid #F1F0E9' }}>
+          <Button
+            onClick={() => setShowValidCertDialog(false)}
+            variant="outlined"
+            sx={{ borderColor: '#41644A', color: '#41644A' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={confirmSaveWithValidCert}
+            variant="contained"
+            sx={{ bgcolor: '#E9762B', '&:hover': { bgcolor: '#d8651f' } }}
+          >
+            Create Anyway
+          </Button>
+        </DialogActions>
+      </Dialog>
     </ThemeProvider>
   );
 }
 
-// Create a separate verification page component
+// ── CERTIFICATE VERIFICATION PAGE ────────────────────────────────────────────
 function CertificateVerification() {
   const [certificate, setCertificate] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -2518,79 +2320,52 @@ function CertificateVerification() {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const certificateId = urlParams.get('id');
-
     if (certificateId) {
-      // Retrieve certificate from localStorage
       const certificates = JSON.parse(
-        localStorage.getItem('certificates') || '{}'
+        localStorage.getItem('certificates') || '{}',
       );
       const cert = certificates[certificateId];
-
-      if (cert) {
-        setCertificate(cert);
-      } else {
-        setError('Certificate not found');
-      }
+      if (cert) setCertificate(cert);
+      else setError('Certificate not found');
     } else {
       setError('No certificate ID provided');
     }
-
     setLoading(false);
   }, []);
 
-
-  // Generate QR code for verification page
-useEffect(() => {
-  const generateQRCode = async () => {
-    if (certificate && certificate.indigency_id) {
-      const qrContent = `CERTIFICATE VERIFICATION:
-      𝗧𝗿𝗮𝗻𝘀𝗮𝗰𝘁𝗶𝗼𝗻 𝗡𝗼: ${certificate.transaction_number || 'N/A'}
+  useEffect(() => {
+    const generateQRCode = async () => {
+      if (certificate && certificate.indigency_id) {
+        const qrContent = `CERTIFICATE VERIFICATION:
+      Transaction No: ${certificate.transaction_number || 'N/A'}
       Name: ${certificate.full_name}
-      Date Issued: ${
-        certificate.date_created
-          ? formatDateTimeDisplay(certificate.date_created)
-          : new Date().toLocaleString()
-      }
+      Date Issued: ${certificate.date_created ? formatDateTimeDisplay(certificate.date_created) : new Date().toLocaleString()}
       Document Type: Indigency
-     
       Ⓒ BRRMS | BARANGAY 145
       CALOOCAN CITY
-      ALL RIGHTS RESERVED
-      `;
-
-      try {
-        const qrUrl = await QRCode.toDataURL(qrContent, {
-          width: 140,
-          margin: 1,
-          color: {
-            dark: '#000000',
-            light: '#FFFFFF',
-          },
-          errorCorrectionLevel: 'L',
-        });
-        setQrCodeUrl(qrUrl);
-      } catch (err) {
-        console.error('Failed to generate QR code:', err);
+      ALL RIGHTS RESERVED`;
+        try {
+          const qrUrl = await QRCode.toDataURL(qrContent, {
+            width: 140,
+            margin: 1,
+            color: { dark: '#000000', light: '#FFFFFF' },
+            errorCorrectionLevel: 'L',
+          });
+          setQrCodeUrl(qrUrl);
+        } catch (err) {
+          console.error('Failed to generate QR code:', err);
+        }
       }
-    }
-  };
+    };
+    generateQRCode();
+  }, [certificate]);
 
-  generateQRCode();
-}, [certificate]);
-
-  // Helper function to format date consistently without timezone issues
   function formatDateDisplay(dateString) {
     if (!dateString) return '';
-
-    // Extract just the date part if it's a datetime string
     const dateOnly = dateString.includes('T')
       ? dateString.split('T')[0]
       : dateString;
-
-    // Parse the date components
     const [year, month, day] = dateOnly.split('-');
-
-    // Format as month name, day, year
     const monthNames = [
       'January',
       'February',
@@ -2605,18 +2380,12 @@ useEffect(() => {
       'November',
       'December',
     ];
-
     return `${monthNames[parseInt(month) - 1]} ${parseInt(day)}, ${year}`;
   }
 
-  // Helper function to format date and time
   function formatDateTimeDisplay(dateString) {
     if (!dateString) return '';
-
-    // Create a new Date object from the string
     const date = new Date(dateString);
-
-    // Format as month name, day, year, time
     const monthNames = [
       'January',
       'February',
@@ -2631,55 +2400,61 @@ useEffect(() => {
       'November',
       'December',
     ];
-
     const month = monthNames[date.getMonth()];
     const day = date.getDate();
     const year = date.getFullYear();
-
-    // Format time with AM/PM
     let hours = date.getHours();
     const minutes = date.getMinutes().toString().padStart(2, '0');
     const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12;
-    hours = hours ? hours : 12; // the hour '0' should be '12'
-
+    hours = hours % 12 || 12;
     return `${month} ${day}, ${year} ${hours}:${minutes} ${ampm}`;
   }
 
-  // Generate PDF function
+  function getIssuedParts(dateStr) {
+    if (!dateStr) return { day: '___', month: '________', year: '____' };
+    const d = new Date(dateStr + 'T00:00:00');
+    const monthNames = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return {
+      day: d.getDate(),
+      month: monthNames[d.getMonth()],
+      year: d.getFullYear(),
+    };
+  }
+
   async function generatePDF() {
     if (!certificate) return;
-
     setIsGeneratingPDF(true);
-
     try {
       const certificateElement = document.getElementById('certificate-preview');
-
-      // Capture the certificate as an image
       const canvas = await html2canvas(certificateElement, {
         scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
       });
-
       const imgData = canvas.toDataURL('image/png');
-
-      // Create PDF (8.5 x 11 inches)
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'in',
         format: [8.5, 11],
       });
-
-      // Add the certificate image
       pdf.addImage(imgData, 'PNG', 0, 0, 8.5, 11);
-
-      // Save the PDF
-      const fileName = `Indigency_Certificate_${
-        certificate.indigency_id
-      }_${certificate.full_name.replace(/\s+/g, '_')}.pdf`;
-      pdf.save(fileName);
+      pdf.save(
+        `Indigency_Certificate_${certificate.indigency_id}_${certificate.full_name.replace(/\s+/g, '_')}.pdf`,
+      );
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Failed to generate PDF. Please try again.');
@@ -2688,29 +2463,17 @@ useEffect(() => {
     }
   }
 
-  // Print function
   function handlePrint() {
     if (!certificate) return;
-
-    // Directly trigger the browser's print dialog
     window.print();
   }
 
-  const handleZoomIn = () => {
-    setZoomLevel((prev) => Math.min(prev + 0.1, 2)); // Max zoom: 2x (200%)
-  };
-
-  const handleZoomOut = () => {
-    setZoomLevel((prev) => Math.max(prev - 0.1, 0.3)); // Min zoom: 0.3x (30%)
-  };
-
-  const handleResetZoom = () => {
-    setZoomLevel(0.75); // Reset to default
-  };
+  const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 0.1, 2));
+  const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 0.1, 0.3));
+  const handleResetZoom = () => setZoomLevel(0.75);
 
   useEffect(() => {
     const handleKeyPress = (e) => {
-      // Check if Ctrl/Cmd is pressed
       if (e.ctrlKey || e.metaKey) {
         if (e.key === '=' || e.key === '+') {
           e.preventDefault();
@@ -2724,12 +2487,11 @@ useEffect(() => {
         }
       }
     };
-
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [zoomLevel]);
 
-  if (loading) {
+  if (loading)
     return (
       <Box
         sx={{
@@ -2737,15 +2499,13 @@ useEffect(() => {
           justifyContent: 'center',
           alignItems: 'center',
           height: '100vh',
-          bgcolor: 'background.default',
         }}
       >
-        <Typography color="text.primary">Loading certificate...</Typography>
+        <Typography>Loading certificate...</Typography>
       </Box>
     );
-  }
 
-  if (error) {
+  if (error)
     return (
       <Box
         sx={{
@@ -2753,13 +2513,11 @@ useEffect(() => {
           justifyContent: 'center',
           alignItems: 'center',
           height: '100vh',
-          bgcolor: 'background.default',
         }}
       >
         <Typography color="error">{error}</Typography>
       </Box>
     );
-  }
 
   return (
     <ThemeProvider theme={theme}>
@@ -2789,10 +2547,7 @@ useEffect(() => {
                 color="primary"
                 onClick={handlePrint}
                 startIcon={<PrintIcon />}
-                sx={{
-                  fontWeight: 600,
-                  px: 3,
-                }}
+                sx={{ fontWeight: 600, px: 3 }}
               >
                 Print
               </Button>
@@ -2802,145 +2557,92 @@ useEffect(() => {
                 onClick={generatePDF}
                 disabled={isGeneratingPDF}
                 startIcon={<FileTextIcon />}
-                sx={{
-                  fontWeight: 600,
-                  px: 3,
-                }}
+                sx={{ fontWeight: 600, px: 3 }}
               >
                 {isGeneratingPDF ? 'Generating PDF...' : 'Download PDF'}
               </Button>
             </Box>
           </Box>
 
-          <Paper sx={{ p: 5, mb: 2, borderRadius: 3, boxShadow: 1 }}>
-            <Typography variant="h6" sx={{ mb: 2, color: 'text.primary' }}>
+          {/* Certificate Details Panel */}
+          <Paper sx={{ p: 4, mb: 2, borderRadius: 3, boxShadow: 1 }}>
+            <Typography variant="h6" sx={{ mb: 2 }}>
               Certificate Details
             </Typography>
             <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                  Certificate ID:
-                </Typography>
-                <Typography
-                  variant="body1"
-                  sx={{ fontWeight: 600, color: 'text.primary' }}
-                >
-                  {certificate.indigency_id}
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                  Transaction Number:
-                </Typography>
-                <Typography
-                  variant="body1"
-                  sx={{ fontWeight: 600, color: 'text.primary' }}
-                >
-                  {certificate.transaction_number}
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                  Full Name:
-                </Typography>
-                <Typography
-                  variant="body1"
-                  sx={{ fontWeight: 600, color: 'text.primary' }}
-                >
-                  {certificate.full_name}
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                  Address:
-                </Typography>
-                <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                  {certificate.address}
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                  Date of Birth:
-                </Typography>
-                <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                  {formatDateDisplay(certificate.dob)}
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                  Age:
-                </Typography>
-                <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                  {certificate.age}
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                  Civil Status:
-                </Typography>
-                <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                  {certificate.civil_status}
-                </Typography>
-              </Grid>
-              <Grid item xs={12}>
-                <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                  Remarks:
-                </Typography>
-                <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                  {certificate.remarks}
-                </Typography>
-              </Grid>
-              <Grid item xs={12}>
-                <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                  Request Reason:
-                </Typography>
-                <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                  {certificate.request_reason}
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                  Date Issued:
-                </Typography>
-                <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                  {formatDateDisplay(certificate.date_issued)}
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                  Date Created:
-                </Typography>
-                <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                  {certificate.date_created
+              {[
+                { label: 'Certificate ID', value: certificate.indigency_id },
+                {
+                  label: 'Transaction Number',
+                  value: certificate.transaction_number,
+                },
+                { label: 'Full Name', value: certificate.full_name },
+                { label: 'Address', value: certificate.address },
+                { label: 'Barangay', value: certificate.barangay || 'N/A' },
+                {
+                  label: 'Date of Birth',
+                  value: formatDateDisplay(certificate.dob),
+                },
+                { label: 'Age', value: certificate.age },
+                { label: 'Civil Status', value: certificate.civil_status },
+                {
+                  label: 'Source of Income',
+                  value: certificate.source_of_income || 'N/A',
+                },
+                {
+                  label: 'Monthly Income',
+                  value: certificate.monthly_income || 'N/A',
+                },
+                { label: 'Request Reason', value: certificate.request_reason },
+                {
+                  label: 'Control No.',
+                  value: certificate.control_no || 'N/A',
+                },
+                {
+                  label: 'Date Issued',
+                  value: formatDateDisplay(certificate.date_issued),
+                },
+                {
+                  label: 'Date Created',
+                  value: certificate.date_created
                     ? formatDateTimeDisplay(certificate.date_created)
-                    : 'N/A'}
-                </Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                  E-Signature:
-                </Typography>
-                <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                  {certificate.use_signature ? 'Yes' : 'No'}
-                </Typography>
-              </Grid>
+                    : 'N/A',
+                },
+                {
+                  label: 'Prepared By',
+                  value: `${certificate.prepared_by_name || 'N/A'} — ${certificate.prepared_by_position || 'N/A'}`,
+                },
+                {
+                  label: 'E-Signature',
+                  value: certificate.use_signature ? 'Yes' : 'No',
+                },
+              ].map(({ label, value }) => (
+                <Grid item xs={12} md={6} key={label}>
+                  <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                    {label}:
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: 'text.primary' }}>
+                    {value}
+                  </Typography>
+                </Grid>
+              ))}
               {certificate.use_signature && (
                 <Grid item xs={12} md={6}>
                   <Typography variant="body2" sx={{ color: 'grey.600' }}>
                     Signed By:
                   </Typography>
-                  <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                    {certificate.official_name} - {certificate.designation}
+                  <Typography variant="body1">
+                    {certificate.official_name} — {certificate.designation}
                   </Typography>
                 </Grid>
               )}
             </Grid>
           </Paper>
 
+          {/* Zoom Controls */}
           <Box
             sx={{
               display: 'flex',
-              justifyContent: 'space-between',
               alignItems: 'center',
               mb: 2,
               gap: 1,
@@ -2950,74 +2652,44 @@ useEffect(() => {
               boxShadow: 1,
             }}
           >
-            {/* Left side: Zoom controls */}
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <IconButton
-                onClick={handleZoomOut}
-                disabled={zoomLevel <= 0.3}
-                color="primary"
-                sx={{
-                  border: '1px solid',
-                  borderColor: 'grey.300',
-                  '&:hover': {
-                    bgcolor: 'grey.100',
-                  },
-                }}
-              >
-                <ZoomOutIcon />
-              </IconButton>
-
-              <Typography
-                variant="body2"
-                sx={{
-                  minWidth: '60px',
-                  textAlign: 'center',
-                  fontWeight: 600,
-                  color: 'grey.700',
-                }}
-              >
-                {Math.round(zoomLevel * 100)}%
-              </Typography>
-
-              <IconButton
-                onClick={handleZoomIn}
-                disabled={zoomLevel >= 2}
-                color="primary"
-                sx={{
-                  border: '1px solid',
-                  borderColor: 'grey.300',
-                  '&:hover': {
-                    bgcolor: 'grey.100',
-                  },
-                }}
-              >
-                <ZoomInIcon />
-              </IconButton>
-
-              <IconButton
-                onClick={handleResetZoom}
-                color="primary"
-                size="small"
-                sx={{
-                  border: '1px solid',
-                  borderColor: 'grey.300',
-                  '&:hover': {
-                    bgcolor: 'grey.100',
-                  },
-                }}
-                title="Reset Zoom"
-              >
-                <ResetIcon fontSize="small" />
-              </IconButton>
-            </Box>
+            <IconButton
+              onClick={handleZoomOut}
+              disabled={zoomLevel <= 0.3}
+              color="primary"
+              sx={{ border: '1px solid', borderColor: 'grey.300' }}
+            >
+              <ZoomOutIcon />
+            </IconButton>
+            <Typography
+              variant="body2"
+              sx={{ minWidth: '60px', textAlign: 'center', fontWeight: 600 }}
+            >
+              {Math.round(zoomLevel * 100)}%
+            </Typography>
+            <IconButton
+              onClick={handleZoomIn}
+              disabled={zoomLevel >= 2}
+              color="primary"
+              sx={{ border: '1px solid', borderColor: 'grey.300' }}
+            >
+              <ZoomInIcon />
+            </IconButton>
+            <IconButton
+              onClick={handleResetZoom}
+              color="primary"
+              size="small"
+              sx={{ border: '1px solid', borderColor: 'grey.300' }}
+            >
+              <ResetIcon fontSize="small" />
+            </IconButton>
           </Box>
 
+          {/* Certificate Preview */}
           <div
             style={{
               display: 'flex',
               justifyContent: 'center',
               alignItems: 'flex-start',
-              flex: 1,
               overflow: 'auto',
               padding: '20px 0',
             }}
@@ -3033,7 +2705,7 @@ useEffect(() => {
                 style={{
                   position: 'relative',
                   width: '8.5in',
-                  height: '11in',
+                  height: '13in',
                   boxShadow: '0 0 8px rgba(0,0,0,0.2)',
                   background: '#fff',
                   WebkitPrintColorAdjust: 'exact',
@@ -3041,561 +2713,452 @@ useEffect(() => {
                   colorAdjust: 'exact',
                   boxSizing: 'border-box',
                   overflow: 'hidden',
+                  fontFamily: '"Times New Roman", serif',
                 }}
               >
-                {/* Logos */}
                 <img
+                  src={Monumento}
+                  alt="Monumento Background"
                   style={{
                     position: 'absolute',
-                    width: '80px',
-                    height: '80px',
-                    top: '60px',
-                    left: '40px',
+                    left: 220,
+                    top: 220,
+                    height: '100%',
+                    width: '100%',
+                    objectFit: 'cover',
+                    objectPosition: 'center top',
+                    opacity: 0.5,
+                    zIndex: 0,
+                    transform: 'scale(0.8)',
+                    transformOrigin: 'top right',
                   }}
-                  src={CaloocanLogo}
-                  alt="Logo 1"
-                />
-                <img
-                  style={{
-                    position: 'absolute',
-                    width: '80px',
-                    height: '80px',
-                    top: '60px',
-                    left: '130px',
-                  }}
-                  src={BagongPilipinas}
-                  alt="Logo 2"
-                />
-                <img
-                  style={{
-                    position: 'absolute',
-                    width: '100px',
-                    height: '100px',
-                    top: '50px',
-                    right: '40px',
-                  }}
-                  src={Logo145}
-                  alt="Logo 3"
                 />
 
-                {/* Watermark */}
-                <img
-                  style={{
-                    position: 'absolute',
-                    opacity: 0.2,
-                    width: '550px',
-                    left: '50%',
-                    top: '270px',
-                    transform: 'translateX(-50%)',
-                  }}
-                  src={Logo145}
-                  alt="Watermark"
-                />
-
-                {/* Header Text */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    whiteSpace: 'pre',
-                    textAlign: 'center',
-                    width: '100%',
-                    fontSize: '20px',
-                    fontWeight: 'bold',
-                    fontFamily: '"Lucida Calligraphy", cursive',
-                    top: '50px',
-                  }}
-                >
-                  Republic of the Philippines
-                </div>
-
-                <div
-                  style={{
-                    position: 'absolute',
-                    whiteSpace: 'pre',
-                    textAlign: 'center',
-                    width: '100%',
-                    fontSize: '13pt',
-                    fontWeight: 'bold',
-                    fontFamily: 'Arial, sans-serif',
-                    top: '84px',
-                  }}
-                >
-                  CITY OF CALOOCAN
-                </div>
-
-                <div
-                  style={{
-                    position: 'absolute',
-                    whiteSpace: 'pre',
-                    textAlign: 'center',
-                    width: '100%',
-                    fontSize: '18px',
-                    fontWeight: 'bold',
-                    fontFamily: '"Arial Black", sans-serif',
-                    top: '110px',
-                  }}
-                >
-                  BARANGAY 145 ZONES 13 DIST. 1
-                </div>
-
-                <div
-                  style={{
-                    position: 'absolute',
-                    whiteSpace: 'pre',
-                    textAlign: 'center',
-                    width: '100%',
-                    fontSize: '18px',
-                    fontWeight: 'bold',
-                    fontFamily: '"Arial Black", sans-serif',
-                    top: '138px',
-                  }}
-                >
-                  Tel. No. 8711 - 7134
-                </div>
-
-                <div
-                  style={{
-                    position: 'absolute',
-                    whiteSpace: 'pre',
-                    textAlign: 'center',
-                    width: '100%',
-                    fontSize: '19px',
-                    fontWeight: 'bold',
-                    fontFamily: '"Arial Black", sans-serif',
-                    top: '166px',
-                  }}
-                >
-                  OFFICE OF THE BARANGAY CHAIRMAN
-                </div>
-
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '220px',
-                    width: '100%',
-                    textAlign: 'center',
-                  }}
-                >
-                  <span
+                <div style={{ position: 'relative', zIndex: 1 }}>
+                  {/* Header */}
+                  <div
                     style={{
-                      fontFamily: '"Brush Script MT", cursive',
-                      fontSize: '28pt',
-                      fontWeight: 'normal',
-                      display: 'inline-block',
-                      background: theme.palette.success.main, // Using theme color
-                      color: '#fff',
-                      padding: '4px 70px',
-                      borderRadius: '8px',
-                      position: 'relative',
-                      boxShadow: '5px 5px 0 #d8d5d5ff',
-                      WebkitPrintColorAdjust: 'exact',
-                      printColorAdjust: 'exact',
-                      colorAdjust: 'exact',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '30px 50px 10px 50px',
                     }}
                   >
-                    Barangay Indigency
-                  </span>
-                </div>
-
-                {/* Date */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    whiteSpace: 'pre',
-                    top: '320px',
-                    right: '80px',
-                    fontFamily: '"Times New Roman", serif',
-                    fontSize: '12pt',
-                    fontWeight: 'bold',
-                    color: 'red', // Using theme orange
-                  }}
-                >
-                  Date:{' '}
-                  {certificate.date_issued
-                    ? formatDateDisplay(certificate.date_issued)
-                    : ''}
-                </div>
-
-                {/* Body */}
-                <div
-                  style={{
-                    width: '640px',
-                    textAlign: 'justify',
-                    fontFamily: '"Times New Roman", serif',
-                    fontSize: '12pt',
-                    fontWeight: 'bold',
-                    color: 'black',
-                    whiteSpace: 'normal',
-                    marginBottom: '50px',
-                    paddingTop: '330px',
-                    float: 'right',
-                    marginRight: '80px',
-                    lineHeight: '1.5',
-                  }}
-                >
-                  <p style={{ margin: 0, marginBottom: '1em' }}>
-                    To whom it may concern:
-                  </p>
-                  <p style={{ margin: 0, textIndent: '50px' }}>
-                    This is to certify that the person whose name and thumb
-                    print appear hereon has requested a{' '}
-                    <i> Barangay Indigency</i> from this office and the result/s
-                    is/are listed below and valid for six (6) months only.
-                  </p>
-                </div>
-
-                {/* Info */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    whiteSpace: 'pre',
-                    top: '470px',
-                    left: '95px',
-                    width: '640px',
-                    lineHeight: '1.8',
-                    fontFamily: '"Times New Roman", serif',
-                    fontSize: '12pt',
-                    fontWeight: 'bold',
-                  }}
-                >
-                  <div>
-                    <span
-                      style={{
-                        color: 'red', // Using theme orange
-                        fontWeight: 'bold',
-                        fontFamily: '"Times New Roman", serif',
-                      }}
-                    >
-                      Name:
-                    </span>{' '}
-                    <span style={{ color: 'black', marginLeft: '10px' }}>
-                      {certificate.full_name || ''}
-                    </span>
-                    <br />
-                    <span
-                      style={{
-                        color: 'red', // Using theme orange
-                        fontWeight: 'bold',
-                        fontFamily: '"Times New Roman", serif',
-                      }}
-                    >
-                      Address:
-                    </span>{' '}
-                    <span style={{ color: 'black', marginLeft: '10px' }}>
-                      {certificate.address || ''}
-                    </span>
-                    <br />
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        width: '640px',
-                      }}
-                    >
-                      <div style={{ width: '420px' }}>
-                        <span
-                          style={{
-                            color: 'red', // Using theme orange
-                            fontWeight: 'bold',
-                            fontFamily: '"Times New Roman", serif',
-                          }}
-                        >
-                          Birthday:
-                        </span>{' '}
-                        <span style={{ color: 'black', marginLeft: '10px' }}>
-                          {certificate.dob
-                            ? formatDateDisplay(certificate.dob)
-                            : ''}
-                        </span>
-                      </div>
-                      <div style={{ width: '500px', textAlign: 'left' }}>
-                        <span
-                          style={{
-                            color: 'red', // Using theme orange
-                            fontWeight: 'bold',
-                            fontFamily: '"Times New Roman", serif',
-                          }}
-                        >
-                          Age:
-                        </span>{' '}
-                        <span style={{ color: 'black', marginLeft: '10px' }}>
-                          {certificate.age || ''}
-                        </span>
-                      </div>
-                    </div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        width: '640px',
-                      }}
-                    >
-                      {/* Left side: Provincial Address */}
-                      <div
-                        style={{
-                          width: '420px',
-                          overflowWrap: 'break-word',
-                          wordBreak: 'break-word',
-                          whiteSpace: 'normal',
-                        }}
-                      >
-                        <span
-                          style={{
-                            color: 'red', // Using theme orange
-                            fontWeight: 'bold',
-                            fontFamily: '"Times New Roman", serif',
-                          }}
-                        >
-                          Provincial Address:
-                        </span>{' '}
-                        <span
-                          style={{
-                            color: 'black',
-                            marginLeft: '10px',
-                          }}
-                        >
-                          {certificate.provincial_address || ''}
-                        </span>
-                      </div>
-
-                      {/* Right side: Contact No. */}
-                      <div
-                        style={{
-                          width: '400px',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          marginRight: '95px',
-                        }}
-                      >
-                        <span
-                          style={{
-                            color: 'red', // Using theme orange
-                            fontWeight: 'bold',
-                            fontFamily: '"Times New Roman", serif',
-                          }}
-                        >
-                          Contact No.
-                        </span>{' '}
-                        <span style={{ color: 'black', marginLeft: '10px' }}>
-                          {certificate.contact_no || ''}
-                        </span>
-                      </div>
-                    </div>
-                    <span
-                      style={{
-                        color: 'red', // Using theme orange
-                        fontWeight: 'bold',
-                        fontFamily: '"Times New Roman", serif',
-                      }}
-                    >
-                      Civil Status:
-                    </span>{' '}
-                    <span style={{ color: 'black', marginLeft: '10px' }}>
-                      {certificate.civil_status || ''}
-                    </span>
-                    <br />
-                    <span
-                      style={{
-                        color: 'red', // Using theme orange
-                        fontWeight: 'bold',
-                        fontFamily: '"Times New Roman", serif',
-                      }}
-                    >
-                      Remarks:
-                    </span>{' '}
-                    <span
-                      style={{
-                        color: 'black',
-                        fontWeight: 'bold',
-                        fontFamily: '"Times New Roman", serif',
-                      }}
-                    >
-                      {certificate.remarks || ''}
-                    </span>{' '}
-                    <br />
-                    <span
-                      style={{
-                        color: 'red', // Using theme orange
-                        fontWeight: 'bold',
-                        fontFamily: '"Times New Roman", serif',
-                      }}
-                    >
-                      This certification is being issued upon request for
-                    </span>{' '}
-                    <span style={{ color: 'black' }}>
-                      {certificate.request_reason || ''}
-                    </span>
-                  </div>
-                </div>
-
-              {/* Applicant Signature with QR Code */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '730px',
-                    left: '50px',
-                    width: '250px',
-                    textAlign: 'center',
-                    fontFamily: '"Times New Roman", serif',
-                    fontSize: '12pt',
-                    fontWeight: 'bold',
-                  }}
-                >
-                  <div
-                    style={{
-                      borderTop: '2px solid #000',
-                      width: '65%',
-                      margin: 'auto',
-                    }}
-                  ></div>
-                  <div style={{ color: 'black', fontFamily: 'inherit' }}>
-                    Applicant's Signature
-                  </div>
-                  <div
-                    style={{
-                      margin: '15px auto 0 auto',
-                      width: '150px',
-                      height: '75px',
-                      border: '1px solid #000',
-                    }}
-                  ></div>
-
-                  {/* QR Code with date created */}
-                  <div style={{ marginTop: '5px' }}>
-                    {qrCodeUrl && (
-                      <img
-                        src={qrCodeUrl}
-                        alt="QR Code"
-                        style={{
-                          width: '130px',
-                          height: '130px',
-                          display: 'block',
-                          margin: '0 auto',
-                        }}
-                      />
-                    )}
-                    <div
-                      style={{
-                        fontSize: '8pt',
-                        color: '#666',
-                        marginTop: '5px',
-                        fontWeight: 'normal',
-                      }}
-                    >
-                      {certificate.date_created
-                        ? formatDateTimeDisplay(certificate.date_created)
-                        : new Date().toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Punong Barangay */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '900px',
-                    right: '100px',
-                    width: '300px',
-                    textAlign: 'center',
-                  }}
-                >
-                  <div
-                    style={{
-                      borderTop: '2.5px solid #000',
-                      width: '90%',
-                      margin: 'auto',
-                    }}
-                  ></div>
-
-                  {/* E-Signature */}
-                  {certificate.use_signature && certificate.signature_path ? (
-                    <div
-                      style={{
-                        marginBottom: '5px',
-                        height: '60px',
-                        display: 'flex',
-                        alignItems: 'flex-end',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <img
-                        src={getSignatureImageUrl(certificate.signature_path)}
-                        alt="Signature"
-                        style={{
-                          maxWidth: '180px',
-                          maxHeight: '60px',
-                          objectFit: 'contain',
-                          display: 'block',
-                        }}
-                        onError={(e) => {
-                          e.target.style.display = 'none';
-                        }}
-                      />
-                    </div>
-                  ) : (
                     <img
-                      src={WordName}
-                      alt="Arnold Dondonayos"
+                      src={CaloocanLogo}
+                      alt="Caloocan Logo"
                       style={{
-                        position: 'absolute',
-                        right: '20px',
-                        width: '250px',
-                        bottom: '33px',
+                        width: '90px',
+                        height: '90px',
+                        objectFit: 'contain',
                       }}
                     />
-                  )}
+                    <div
+                      style={{
+                        textAlign: 'center',
+                        flex: 1,
+                        padding: '0 20px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontFamily:
+                            ' "Old English Text MT", ',
+                          fontSize: '15pt',
+                        }}
+                      >
+                        Republic of the Philippines
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: '"Times New Roman"',
+                          fontSize: '14pt',
+                          marginTop: '2px',
+                        }}
+                      >
+                        City of Caloocan
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: '"Times New Roman"',
+                          fontSize: '13pt',
+                          fontWeight: 'bold',
+                          marginTop: '2px',
+                        }}
+                      >
+                        Barangay 145, Zone 13, District 1
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: '"Times New Roman"',
+                          fontSize: '10pt',
+                          marginTop: '2px',
+                        }}
+                      >
+                        Reparo St. Cor. Gen. Tirona St. Bagong Barrio, Caloocan
+                        City
+                      </div>
+                    </div>
+                    <img
+                      src={Logo145}
+                      alt="Barangay 145 Logo"
+                      style={{
+                        width: '90px',
+                        height: '90px',
+                        objectFit: 'contain',
+                      }}
+                    />
+                  </div>
 
                   <div
+                    style={{ borderTop: '3px solid #000', margin: '0 50px' }}
+                  />
+                  <div
                     style={{
-                      fontFamily: '"Brush Script MT", cursive',
-                      fontSize: '20pt',
-                      color: '#000',
-                      marginTop: '-2px',
+                      borderTop: '1px solid #000',
+                      margin: '3px 50px 0 50px',
+                    }}
+                  />
+                  <div
+                    style={{
+                      textAlign: 'center',
+                      fontFamily: '"Times New Roman"',
+                      fontSize: '13pt',
+                      fontWeight: 'bold',
+                      marginTop: '10px',
                     }}
                   >
-                    Punong Barangay
+                    OFFICE OF THE SANGGUNIANG BARANGAY
+                  </div>
+                  <div
+                    style={{
+                      borderTop: '1px solid #000',
+                      margin: '8px 50px 0 50px',
+                    }}
+                  />
+                  <div
+                    style={{
+                      borderTop: '3px solid #000',
+                      margin: '3px 50px 0 50px',
+                    }}
+                  />
+                  <div
+                    style={{
+                      textAlign: 'center',
+                      fontFamily: '"Times New Roman"',
+                      fontSize: '16pt',
+                      fontWeight: 'bold',
+                      margin: '16px 0 14px 0',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    CERTIFICATE OF INDIGENCY
+                  </div>
+
+                  {/* Body */}
+                  <div
+                    style={{
+                      padding: '0 70px',
+                      fontFamily: '"Times New Roman", Times, serif',
+                      fontSize: '12pt',
+                      lineHeight: '1.8',
+                      color: '#000',
+                      textAlign: 'justify',
+                    }}
+                  >
+                    <p style={{ fontWeight: 'bold', margin: '0 0 10px 0' }}>
+                      TO WHOM IT MAY CONCERN:
+                    </p>
+                    <p style={{ margin: '0 0 10px 0', textIndent: '50px' }}>
+                      This is to certify that{' '}
+                      <strong>
+                        {certificate.full_name || '_______________'}
+                      </strong>
+                      , <strong>{certificate.age || '__'}</strong> years old,{' '}
+                      <strong>{certificate.civil_status || '______'}</strong>,
+                      and a resident of{' '}
+                      <strong>
+                        {certificate.address || '_______________'}
+                      </strong>
+                      , Caloocan City, belongs to the indigent family's barangay
+                      of{' '}
+                      <strong>
+                        {certificate.barangay || '_______________'}
+                      </strong>
+                      .
+                    </p>
+                    <p style={{ margin: '0 0 10px 0', textIndent: '50px' }}>
+                      The above-mentioned individual is currently working as a{' '}
+                      <strong>
+                        {certificate.source_of_income || '_______________'}
+                      </strong>{' '}
+                      and is only earning{' '}
+                      <strong>
+                        {certificate.monthly_income || '_______________'}
+                      </strong>{' '}
+                      per month.
+                    </p>
+                    <p style={{ margin: '0 0 10px 0', textIndent: '50px' }}>
+                      This certification is issued upon the request of the
+                      above-mentioned individual for{' '}
+                      <strong>
+                        {certificate.request_reason || '_______________'}
+                      </strong>{' '}
+                      and is valid for six (6) months from the date of its
+                      issuance.
+                    </p>
+                    {(() => {
+                      const { day, month, year } = getIssuedParts(
+                        certificate.date_issued,
+                      );
+                      return (
+                        <p style={{ margin: '0 0 6px 0', textIndent: '50px' }}>
+                          Issued this <strong>{day}</strong> day of{' '}
+                          <strong>{month}</strong>, <strong>{year}</strong>, at
+                          Barangay{' '}
+                          <strong>{certificate.barangay || '_______'}</strong>,
+                          Caloocan City.
+                        </p>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Signed */}
+                  <div
+                    style={{
+                      textAlign: 'right',
+                      padding: '10px 120px 0 0',
+                      fontFamily: '"Times New Roman"',
+                      fontSize: '12pt',
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    Signed:
+                  </div>
+
+                  {/* Photo & Thumbmark */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '40px',
+                      padding: '14px 70px',
+                      alignItems: 'flex-end',
+                    }}
+                  >
+                    <div style={{ textAlign: 'center' }}>
+                      <div
+                        style={{
+                          width: '120px',
+                          height: '140px',
+                          border: '1.5px solid #000',
+                        }}
+                      />
+                      <div style={{ fontSize: '10pt', marginTop: '6px' }}>
+                        Applicant Photo
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <div
+                        style={{
+                          width: '120px',
+                          height: '140px',
+                          border: '1.5px solid #000',
+                        }}
+                      />
+                      <div style={{ fontSize: '10pt', marginTop: '6px' }}>
+                        Applicant Thumbmark
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Punong Barangay */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'flex-end',
+                      padding: '0 70px',
+                      marginTop: '10px',
+                    }}
+                  >
+                    <div style={{ textAlign: 'center', width: '300px' }}>
+                      {certificate.use_signature &&
+                      certificate.signature_path ? (
+                        <div
+                          style={{
+                            height: '70px',
+                            display: 'flex',
+                            alignItems: 'flex-end',
+                            justifyContent: 'center',
+                            marginBottom: '-10px',
+                          }}
+                        >
+                          <img
+                            src={getSignatureImageUrl(
+                              certificate.signature_path,
+                            )}
+                            alt="Signature"
+                            style={{
+                              maxWidth: '200px',
+                              maxHeight: '65px',
+                              objectFit: 'contain',
+                            }}
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      ) : null}
+                      <div
+                        style={{
+                          height: '55px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <img
+                          src={WordName}
+                          alt="Arnold Dondonayos"
+                          style={{
+                            width: '240px',
+                            height: 'auto',
+                            maxHeight: '55px',
+                            objectFit: 'contain',
+                          }}
+                        />
+                      </div>
+                      <div
+                        style={{
+                          borderTop: '2px solid #000',
+                          width: '90%',
+                          margin: '0 auto 4px auto',
+                        }}
+                      />
+                      <div
+                        style={{
+                          fontFamily: '"Times New Roman"',
+                          fontSize: '11pt',
+                          fontWeight: 'bold',
+                        }}
+                      >
+                        [Punong Barangay / Authorized Official]
+                      </div>
+                      {qrCodeUrl && (
+                        <div style={{ marginTop: '8px' }}>
+                          <img
+                            src={qrCodeUrl}
+                            alt="QR Code"
+                            style={{
+                              width: '90px',
+                              height: '90px',
+                              display: 'block',
+                              margin: '0 auto',
+                              border: '2px solid #000',
+                              padding: '3px',
+                            }}
+                          />
+                          <div
+                            style={{
+                              fontSize: '7pt',
+                              color: '#666',
+                              marginTop: '3px',
+                              fontWeight: 'normal',
+                            }}
+                          >
+                            {certificate.date_created
+                              ? formatDateTimeDisplay(certificate.date_created)
+                              : new Date().toLocaleString()}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Footer */}
+                  <div
+                    style={{ padding: '10px 70px 0 70px', fontSize: '11pt' }}
+                  >
+                    <div style={{ fontWeight: 'bold' }}>Barangay Seal</div>
+                    <div style={{ fontWeight: 'bold', marginTop: '4px' }}>
+                      Control No.{' '}
+                      <span
+                        style={{ minWidth: '120px', display: 'inline-block' }}
+                      >
+                        {certificate.control_no ||
+                          '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0'}
+                      </span>
+                    </div>
+                    <ul
+                      style={{
+                        marginTop: '8px',
+                        paddingLeft: '20px',
+                        fontSize: '9pt',
+                        lineHeight: '1.6',
+                        listStyleType: 'disc',
+                      }}
+                    >
+                      <li>
+                        This certification is not valid without the Official
+                        Barangay Dry Seal and the Barangay Chairman's
+                        Signature/Stamp.
+                      </li>
+                      <li>
+                        Officials and applicants who submit false certifications
+                        or documents shall be held liable for
+                        administrative/criminal liabilities.
+                      </li>
+                    </ul>
+                    <div
+                      style={{
+                        fontSize: '10pt',
+                        marginTop: '8px',
+                        fontFamily: '"Times New Roman"',
+                      }}
+                    >
+                      <div>
+                        Prepared by:{' '}
+                        <strong>
+                          {certificate.prepared_by_name || 'Roselyn Anore'}
+                        </strong>
+                      </div>
+                      <div style={{ marginLeft: '80px' }}>
+                        <strong>
+                          {certificate.prepared_by_position ||
+                            'Barangay Secretary'}
+                        </strong>
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        textAlign: 'center',
+                        fontFamily: '"Times New Roman"',
+                        fontSize: '11pt',
+                        marginTop: '10px',
+                        fontStyle: 'italic',
+                      }}
+                    >
+                      This certification is valid for six (6) months from the
+                      date of issuance.
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <style>
-            {`
-        @media print {
-          body * {
-            visibility: hidden; /* Hide everything */
-          }
-          #certificate-preview, #certificate-preview * {
-            visibility: visible; /* Show only the certificate */
-          }
-          #certificate-preview {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 8.5in;
-            height: 11in;
-          }
-          @page {
-            size: portrait;
-            margin: 0;
-          }
-          /* Ensure colors are preserved when printing */
-          #certificate-preview * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            color-adjust: exact !important;
-          }
-        }
-      `}
-          </style>
+          <style>{`
+            @media print {
+              body * { visibility: hidden; }
+              #certificate-preview, #certificate-preview * { visibility: visible; }
+              #certificate-preview { position: absolute; left: 0; top: 0; width: 8.5in; height: 13in; }
+              @page { size: portrait; margin: 0; }
+              #certificate-preview * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+            }
+          `}</style>
         </Container>
       </Box>
     </ThemeProvider>
   );
 }
 
-// Export both components
 export { CertificateVerification };

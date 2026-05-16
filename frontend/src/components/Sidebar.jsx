@@ -166,6 +166,18 @@ export default function Sidebar() {
           permission: 'access_certificate_residency',
         },
         {
+          path: '/certificate-low-income',
+          label: 'Certificate of Low Income',
+          icon: <AssignmentIcon />,
+          permission: 'access_certificate_low_income',
+        },
+        {
+          path: '/certificate-good-moral',
+          label: 'Certificate of Good Moral',
+          icon: <AssignmentIcon />,
+          permission: 'access_certificate_good_moral',
+        },
+        {
           path: '/permit-to-travel',
           label: 'Permit To Travel',
           icon: <AssignmentIcon />,

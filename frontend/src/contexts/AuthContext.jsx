@@ -33,6 +33,11 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (error) {
       console.error('Error fetching role permissions:', error);
+      if (error.response?.status === 401) {
+        setUser(null);
+        localStorage.removeItem('user');
+        localStorage.removeItem('token');
+      }
     } finally {
       setPermissionsLoading(false);
     }

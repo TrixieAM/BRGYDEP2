@@ -5,22 +5,32 @@ const { pool } = require('../config/db.config');
 const { verifyToken } = require('../middleware/auth.middleware');
 const { generateTransactionNumber, generateTransactionNumberForType } = require('../utils/transaction.utils');
 
-// Apply authentication middleware to all routes
 router.use(verifyToken);
 
-// GET all active indigency records
+// ─── SELECT helper (reused in every query) ───────────────────────────────────
+const SELECT_FIELDS = `
+  indigency.indigency_id, indigency.resident_id, indigency.full_name,
+  indigency.address, indigency.barangay, indigency.provincial_address,
+  indigency.dob, indigency.age, indigency.civil_status, indigency.contact_no,
+  indigency.source_of_income, indigency.monthly_income,
+  indigency.request_reason, indigency.remarks,
+  indigency.date_issued, indigency.transaction_number, indigency.control_no,
+  indigency.prepared_by_name, indigency.prepared_by_position,
+  indigency.date_created, indigency.date_updated, indigency.is_active,
+  indigency.use_signature, indigency.signature_id,
+  sig.official_name, sig.designation, sig.signature_path
+`;
+
+const FROM_JOIN = `
+  FROM indigency
+  LEFT JOIN official_signature sig ON indigency.signature_id = sig.signature_id
+`;
+
+// ─── GET all active records ───────────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    // Join with official_signature to get signature data
     const [rows] = await pool.query(
-      `SELECT
-         indigency.indigency_id, indigency.resident_id, indigency.full_name, indigency.address, indigency.provincial_address,
-         indigency.dob, indigency.age, indigency.civil_status, indigency.contact_no, indigency.request_reason, indigency.remarks,
-         indigency.date_issued, indigency.transaction_number, indigency.date_created, indigency.date_updated, indigency.is_active,
-         indigency.use_signature, indigency.signature_id,
-         sig.signature_id, sig.official_name, sig.designation, sig.signature_path
-       FROM indigency
-       LEFT JOIN official_signature sig ON indigency.signature_id = sig.signature_id
+      `SELECT ${SELECT_FIELDS} ${FROM_JOIN}
        WHERE indigency.is_active = TRUE
        ORDER BY indigency.indigency_id DESC`
     );
@@ -31,20 +41,11 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET all records including historical (for transaction log)
+// ─── GET all records including historical ────────────────────────────────────
 router.get('/transactions/all', async (req, res) => {
   try {
-    // Get all records including inactive ones for complete transaction history
-    // This shows all transactions including old ones that were edited
     const [rows] = await pool.query(
-      `SELECT
-         indigency.indigency_id, indigency.resident_id, indigency.full_name, indigency.address, indigency.provincial_address,
-         indigency.dob, indigency.age, indigency.civil_status, indigency.contact_no, indigency.request_reason, indigency.remarks,
-         indigency.date_issued, indigency.transaction_number, indigency.date_created, indigency.date_updated, indigency.is_active,
-         indigency.use_signature, indigency.signature_id,
-         sig.signature_id, sig.official_name, sig.designation, sig.signature_path
-       FROM indigency
-       LEFT JOIN official_signature sig ON indigency.signature_id = sig.signature_id
+      `SELECT ${SELECT_FIELDS} ${FROM_JOIN}
        ORDER BY indigency.date_created DESC, indigency.indigency_id DESC`
     );
     res.json(rows);
@@ -54,23 +55,15 @@ router.get('/transactions/all', async (req, res) => {
   }
 });
 
-// GET single record by ID
+// ─── GET single record by ID ──────────────────────────────────────────────────
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const [rows] = await pool.query(
-      `SELECT
-         indigency.indigency_id, indigency.resident_id, indigency.full_name, indigency.address, indigency.provincial_address,
-         indigency.dob, indigency.age, indigency.civil_status, indigency.contact_no, indigency.request_reason, indigency.remarks,
-         indigency.date_issued, indigency.transaction_number, indigency.date_created, indigency.date_updated, indigency.is_active,
-         indigency.use_signature, indigency.signature_id,
-         sig.signature_id, sig.official_name, sig.designation, sig.signature_path
-       FROM indigency
-       LEFT JOIN official_signature sig ON indigency.signature_id = sig.signature_id
+      `SELECT ${SELECT_FIELDS} ${FROM_JOIN}
        WHERE indigency.indigency_id = ?`,
       [id]
     );
-
     if (rows.length === 0)
       return res.status(404).json({ error: 'Record not found' });
     res.json(rows[0]);
@@ -80,29 +73,17 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// GET record by transaction number
+// ─── GET record by transaction number ────────────────────────────────────────
 router.get('/transaction/:transactionNumber', async (req, res) => {
   try {
     const { transactionNumber } = req.params;
     const [rows] = await pool.query(
-      `SELECT
-         indigency.indigency_id, indigency.resident_id, indigency.full_name, indigency.address, indigency.provincial_address,
-         indigency.dob, indigency.age, indigency.civil_status, indigency.contact_no, indigency.request_reason, indigency.remarks,
-         indigency.date_issued, indigency.transaction_number, indigency.date_created, indigency.date_updated, indigency.is_active,
-         indigency.use_signature, indigency.signature_id,
-         sig.signature_id, sig.official_name, sig.designation, sig.signature_path
-       FROM indigency
-       LEFT JOIN official_signature sig ON indigency.signature_id = sig.signature_id
+      `SELECT ${SELECT_FIELDS} ${FROM_JOIN}
        WHERE indigency.transaction_number = ? AND indigency.is_active = TRUE`,
       [transactionNumber]
     );
-
-    if (rows.length === 0) {
-      return res
-        .status(404)
-        .json({ error: 'Certificate not found with this transaction number' });
-    }
-
+    if (rows.length === 0)
+      return res.status(404).json({ error: 'Certificate not found with this transaction number' });
     res.json(rows[0]);
   } catch (err) {
     console.error(err);
@@ -110,248 +91,174 @@ router.get('/transaction/:transactionNumber', async (req, res) => {
   }
 });
 
-// CREATE new record
+// ─── Helper: extract & validate body ─────────────────────────────────────────
+function extractBody(body) {
+  const {
+    resident_id,
+    full_name,
+    address,
+    barangay,
+    provincial_address,
+    dob,
+    age,
+    civil_status,
+    contact_no,
+    source_of_income,
+    monthly_income,
+    request_reason,
+    remarks,
+    date_issued,
+    transaction_number,
+    control_no,
+    prepared_by_name,
+    prepared_by_position,
+    use_signature,
+    signature_id,
+  } = body;
+
+  return {
+    resident_id,
+    full_name,
+    address,
+    barangay: barangay || null,
+    provincial_address: provincial_address || null,
+    dob,
+    age,
+    civil_status,
+    contact_no: contact_no || null,
+    source_of_income: source_of_income || null,
+    monthly_income: monthly_income || null,
+    request_reason,
+    remarks: remarks || null,
+    date_issued,
+    transaction_number,
+    control_no: control_no || null,
+    prepared_by_name: prepared_by_name || null,
+    prepared_by_position: prepared_by_position || null,
+    use_signature: use_signature ? 1 : 0,
+    signature_id: use_signature && signature_id ? signature_id : null,
+  };
+}
+
+function validateRequired(fields) {
+  const { full_name, address, dob, age, civil_status, request_reason, date_issued } = fields;
+  return full_name && address && dob && Number.isFinite(Number(age)) && civil_status && request_reason && date_issued;
+}
+
+// ─── INSERT helper ────────────────────────────────────────────────────────────
+async function insertRecord(fields, transactionNum) {
+  const [result] = await pool.query(
+    `INSERT INTO indigency
+      (resident_id, full_name, address, barangay, provincial_address, dob, age,
+       civil_status, contact_no, source_of_income, monthly_income,
+       request_reason, remarks, date_issued, transaction_number, control_no,
+       prepared_by_name, prepared_by_position, use_signature, signature_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      fields.resident_id,
+      fields.full_name,
+      fields.address,
+      fields.barangay,
+      fields.provincial_address,
+      fields.dob,
+      Number(fields.age),
+      fields.civil_status,
+      fields.contact_no,
+      fields.source_of_income,
+      fields.monthly_income,
+      fields.request_reason,
+      fields.remarks,
+      fields.date_issued,
+      transactionNum,
+      fields.control_no,
+      fields.prepared_by_name,
+      fields.prepared_by_position,
+      fields.use_signature,
+      fields.signature_id,
+    ]
+  );
+  return result.insertId;
+}
+
+// ─── SELECT newly inserted/updated record ─────────────────────────────────────
+async function fetchById(id) {
+  const [rows] = await pool.query(
+    `SELECT ${SELECT_FIELDS} ${FROM_JOIN}
+     WHERE indigency.indigency_id = ?`,
+    [id]
+  );
+  return rows[0];
+}
+
+// ─── CREATE ───────────────────────────────────────────────────────────────────
 router.post('/', async (req, res) => {
   try {
-    const {
-      resident_id,
-      full_name,
-      address,
-      provincial_address,
-      dob,
-      age,
-      civil_status,
-      contact_no,
-      request_reason,
-      remarks,
-      date_issued,
-      transaction_number,
-      use_signature, // Added for e-signature
-      signature_id, // Added for e-signature
-    } = req.body;
+    const fields = extractBody(req.body);
 
-    if (
-      !resident_id ||
-      !full_name ||
-      !address ||
-      !dob ||
-      !Number.isFinite(Number(age)) ||
-      !civil_status ||
-      !request_reason ||
-      !date_issued
-    ) {
+    if (!fields.resident_id || !validateRequired(fields))
       return res.status(400).json({ error: 'Missing required fields' });
-    }
 
-    const finalTransactionNumber =
-      transaction_number || generateTransactionNumber();
+    let transactionNum = fields.transaction_number || generateTransactionNumber();
 
+    // Ensure unique transaction number
     const [existing] = await pool.query(
       'SELECT indigency_id FROM indigency WHERE transaction_number = ?',
-      [finalTransactionNumber]
+      [transactionNum]
     );
+    if (existing.length > 0) transactionNum = generateTransactionNumber();
 
-    if (existing.length > 0) {
-      const newTransactionNumber = generateTransactionNumber();
-      const [result] = await pool.query(
-        `INSERT INTO indigency
-          (resident_id, full_name, address, provincial_address, dob, age,
-           civil_status, contact_no, request_reason, remarks, date_issued, transaction_number, use_signature, signature_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          resident_id,
-          full_name,
-          address,
-          provincial_address || null,
-          dob,
-          Number(age),
-          civil_status,
-          contact_no || null,
-          request_reason,
-          remarks || null,
-          date_issued,
-          newTransactionNumber,
-          use_signature ? 1 : 0,
-          use_signature && signature_id ? signature_id : null,
-        ]
-      );
-
-      const [rows] = await pool.query(
-        `SELECT
-           indigency.indigency_id, indigency.resident_id, indigency.full_name, indigency.address, indigency.provincial_address,
-           indigency.dob, indigency.age, indigency.civil_status, indigency.contact_no, indigency.request_reason, indigency.remarks,
-           indigency.date_issued, indigency.transaction_number, indigency.date_created, indigency.date_updated, indigency.is_active,
-           indigency.use_signature, indigency.signature_id,
-           sig.signature_id, sig.official_name, sig.designation, sig.signature_path
-         FROM indigency
-         LEFT JOIN official_signature sig ON indigency.signature_id = sig.signature_id
-         WHERE indigency.indigency_id = ?`,
-        [result.insertId]
-      );
-
-      return res.status(201).json(rows[0]);
-    }
-
-    const [result] = await pool.query(
-      `INSERT INTO indigency
-        (resident_id, full_name, address, provincial_address, dob, age,
-         civil_status, contact_no, request_reason, remarks, date_issued, transaction_number, use_signature, signature_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        resident_id,
-        full_name,
-        address,
-        provincial_address || null,
-        dob,
-        Number(age),
-        civil_status,
-        contact_no || null,
-        request_reason,
-        remarks || null,
-        date_issued,
-        finalTransactionNumber,
-        use_signature ? 1 : 0,
-        use_signature && signature_id ? signature_id : null,
-      ]
-    );
-
-    const [rows] = await pool.query(
-      `SELECT
-         indigency.indigency_id, indigency.resident_id, indigency.full_name, indigency.address, indigency.provincial_address,
-         indigency.dob, indigency.age, indigency.civil_status, indigency.contact_no, indigency.request_reason, indigency.remarks,
-         indigency.date_issued, indigency.transaction_number, indigency.date_created, indigency.date_updated, indigency.is_active,
-         indigency.use_signature, indigency.signature_id,
-         sig.signature_id, sig.official_name, sig.designation, sig.signature_path
-       FROM indigency
-       LEFT JOIN official_signature sig ON indigency.signature_id = sig.signature_id
-       WHERE indigency.indigency_id = ?`,
-      [result.insertId]
-    );
-
-    res.status(201).json(rows[0]);
+    const insertId = await insertRecord(fields, transactionNum);
+    const record = await fetchById(insertId);
+    res.status(201).json(record);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to create record' });
   }
 });
 
-// UPDATE existing indigency record
-// When updating, we create a NEW record entry with a new transaction number
-// The old record remains in history (marked as inactive or kept active)
+// ─── UPDATE (creates new record, marks old as inactive) ───────────────────────
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      resident_id,
-      full_name,
-      address,
-      provincial_address,
-      dob,
-      age,
-      civil_status,
-      contact_no,
-      request_reason,
-      remarks,
-      date_issued,
-      transaction_number,
-      use_signature, // Added for e-signature
-      signature_id, // Added for e-signature
-    } = req.body;
+    const fields = extractBody(req.body);
 
-    if (
-      !full_name ||
-      !address ||
-      !dob ||
-      !Number.isFinite(Number(age)) ||
-      !civil_status ||
-      !request_reason ||
-      !date_issued
-    ) {
+    if (!validateRequired(fields))
       return res.status(400).json({ error: 'Missing required fields' });
-    }
 
-    // Get the existing record
     const [existing] = await pool.query(
-      `SELECT * FROM indigency WHERE indigency_id = ?`,
+      'SELECT * FROM indigency WHERE indigency_id = ?',
       [id]
     );
-
     if (existing.length === 0)
       return res.status(404).json({ error: 'Record not found' });
 
-    const oldRecord = existing[0];
-    
-    // Generate a NEW transaction number for the new entry
-    const newTransactionNumber = generateTransactionNumberForType('IND');
-
-    // Mark the old record as inactive (to preserve it in history)
+    // Mark old record inactive
     await pool.query(
-      `UPDATE indigency SET is_active = FALSE WHERE indigency_id = ?`,
+      'UPDATE indigency SET is_active = FALSE WHERE indigency_id = ?',
       [id]
     );
 
-    // Create a NEW record entry with the updated data and new transaction number
-    // This ensures the transaction log shows a new entry
-    const [result] = await pool.query(
-      `INSERT INTO indigency 
-        (resident_id, full_name, address, provincial_address, dob, age,
-         civil_status, contact_no, request_reason, remarks, date_issued, transaction_number, use_signature, signature_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        resident_id,
-        full_name,
-        address,
-        provincial_address || null,
-        dob,
-        Number(age),
-        civil_status,
-        contact_no || null,
-        request_reason,
-        remarks || null,
-        date_issued,
-        newTransactionNumber, // New transaction number for the new entry
-        use_signature ? 1 : 0,
-        use_signature && signature_id ? signature_id : null,
-      ]
-    );
-
-    // Get the newly created record
-    const [newRecord] = await pool.query(
-      `SELECT
-         indigency.indigency_id, indigency.resident_id, indigency.full_name, indigency.address, indigency.provincial_address,
-         indigency.dob, indigency.age, indigency.civil_status, indigency.contact_no, indigency.request_reason, indigency.remarks,
-         indigency.date_issued, indigency.transaction_number, indigency.date_created, indigency.date_updated, indigency.is_active,
-         indigency.use_signature, indigency.signature_id,
-         sig.signature_id, sig.official_name, sig.designation, sig.signature_path
-       FROM indigency
-       LEFT JOIN official_signature sig ON indigency.signature_id = sig.signature_id
-       WHERE indigency.indigency_id = ?`,
-      [result.insertId]
-    );
-
-    res.json(newRecord[0]);
+    // Insert new record with new transaction number
+    const newTransactionNumber = generateTransactionNumberForType('IND');
+    const insertId = await insertRecord(fields, newTransactionNumber);
+    const record = await fetchById(insertId);
+    res.json(record);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to update record' });
   }
 });
 
-// DELETE indigency record (soft delete)
+// ─── DELETE (soft delete) ─────────────────────────────────────────────────────
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-
     const [result] = await pool.query(
-      `UPDATE indigency
-       SET is_active = FALSE, date_updated = NOW()
-       WHERE indigency_id = ?`,
+      'UPDATE indigency SET is_active = FALSE, date_updated = NOW() WHERE indigency_id = ?',
       [id]
     );
-
-    if (result.affectedRows === 0) {
+    if (result.affectedRows === 0)
       return res.status(404).json({ error: 'Record not found' });
-    }
-
     res.json({ message: 'Record deleted successfully' });
   } catch (err) {
     console.error(err);

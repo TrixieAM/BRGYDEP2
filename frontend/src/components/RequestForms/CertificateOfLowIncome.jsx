@@ -10,10 +10,7 @@ import BagongPilipinas from '../../assets/BagongPilipinas.png';
 import WordName from '../../assets/WordName.png';
 import Monumento from '../../assets/Monumento.png';
 import { useCertificateManager } from '../../hooks/useCertificateManager';
-import {
-  getSignatures,
-  getSignatureImageUrl,
-} from '../../services/signatureService';
+import { getSignatures, getSignatureImageUrl } from '../../services/signatureService';
 
 // Import Material UI components
 import {
@@ -80,25 +77,25 @@ import { useMediaQuery } from '@mui/material';
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#41644A', // Darker green from palette
-      light: '#A0B2A6', // Lighter shade for hover/focus
-      dark: '#0D4715', // Even darker green for strong accents
+      main: '#41644A',
+      light: '#A0B2A6',
+      dark: '#0D4715',
     },
     secondary: {
-      main: '#E9762B', // Orange from palette for highlighting
+      main: '#E9762B',
     },
     success: {
-      main: '#41644A', // Darker green from palette
+      main: '#41644A',
       light: '#A0B2A6',
       dark: '#0D4715',
     },
     background: {
-      default: '#F1F0E9', // Off-white/light beige
+      default: '#F1F0E9',
       paper: '#FFFFFF',
     },
     text: {
-      primary: '#000000', // Black for main text
-      secondary: '#41644A', // Another shade for secondary text
+      primary: '#000000',
+      secondary: '#41644A',
     },
     error: {
       main: '#E9762B',
@@ -216,28 +213,24 @@ const theme = createTheme({
   },
 });
 
-// Add this function to check if a resident has a valid certificate
 function hasValidCertificate(residentId, records) {
   if (!residentId || !records || records.length === 0) return false;
 
-  // Business clearances are typically valid for 12 months (1 year)
-  const twelveMonthsAgo = new Date();
-  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
   return records.some((record) => {
     if (record.resident_id !== residentId) return false;
-
     const issueDate = new Date(record.date_issued);
-    return issueDate >= twelveMonthsAgo;
+    return issueDate >= sixMonthsAgo;
   });
 }
 
-export default function BusinessClearance() {
+export default function CertificateOfLowIncome() {
   const apiBase = 'http://localhost:5000';
   const navigate = useNavigate();
   const { getToken } = useAuth();
 
-  // Helper function to get auth headers
   const getAuthHeaders = () => {
     const token = getToken();
     return {
@@ -256,28 +249,27 @@ export default function BusinessClearance() {
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState(0.75); // Default zoom level
+  const [zoomLevel, setZoomLevel] = useState(0.75);
   const [signatures, setSignatures] = useState([]);
   const [selectedSignature, setSelectedSignature] = useState(null);
-
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-
-  // In the BusinessClearance component, add these state variables
   const [showValidCertDialog, setShowValidCertDialog] = useState(false);
   const [validCertInfo, setValidCertInfo] = useState(null);
 
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
   const { saveCertificate, getValidityPeriod, calculateExpirationDate } =
-    useCertificateManager('Business Clearance');
+    useCertificateManager('Certificate of Low Income');
 
   const [formData, setFormData] = useState({
     resident_id: '',
     full_name: '',
     address: '',
-    nature_of_business: '',
+    source_of_income: '',
+    income_amount: '',
+    civil_status: 'Single',
     date_issued: new Date().toISOString().split('T')[0],
     date_expired: '',
-    remarks:
-      'They are operating under the jurisdiction of our Brgy. 145, being issued under the requirement of the New Local Code under Republic Act 7160 for securing their permit.',
+    remarks: '',
     request_reason: '',
     transaction_number: '',
     control_no: generateControlNumber(),
@@ -287,166 +279,120 @@ export default function BusinessClearance() {
     signature_id: null,
   });
 
-  // Calculate expiration date when date_issued changes
   useEffect(() => {
     if (formData.date_issued) {
       const issuedDate = new Date(formData.date_issued);
       const expiredDate = new Date(issuedDate);
-      expiredDate.setFullYear(expiredDate.getFullYear() + 1);
-
-      // Format as YYYY-MM-DD
+      expiredDate.setMonth(expiredDate.getMonth() + 6);
       const formattedDate = expiredDate.toISOString().split('T')[0];
-
-      // Only update if the date has actually changed to avoid infinite loops
       if (formattedDate !== formData.date_expired) {
-        setFormData((prev) => ({
-          ...prev,
-          date_expired: formattedDate,
-        }));
+        setFormData((prev) => ({ ...prev, date_expired: formattedDate }));
       }
     }
   }, [formData.date_issued]);
 
-  // Helper function to format date consistently without timezone issues
-  function formatDateDisplay(dateString) {
-    if (!dateString) return '';
-
-    // Extract just the date part if it's a datetime string
-    const dateOnly = dateString.includes('T')
-      ? dateString.split('T')[0]
-      : dateString;
-
-    // Parse the date components
-    const [year, month, day] = dateOnly.split('-');
-
-    // Format as month name, day, year
-    const monthNames = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-
-    return `${monthNames[parseInt(month) - 1]} ${parseInt(day)}, ${year}`;
-  }
-
-  // Helper function to format date and time
-  function formatDateTimeDisplay(dateString) {
-    if (!dateString) return '';
-
-    // Create a new Date object from the string
-    const date = new Date(dateString);
-
-    // Format as month name, day, year, time
-    const monthNames = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-
-    const month = monthNames[date.getMonth()];
-    const day = date.getDate();
-    const year = date.getFullYear();
-
-    // Format time with AM/PM
-    let hours = date.getHours();
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12;
-    hours = hours ? hours : 12; // the hour '0' should be '12'
-
-    return `${month} ${day}, ${year} ${hours}:${minutes} ${ampm}`;
-  }
-
-  // Generate a unique transaction number
   function generateTransactionNumber() {
     const date = new Date();
     const year = date.getFullYear().toString().slice(-2);
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const day = date.getDate().toString().padStart(2, '0');
-    const random =
-      Math.floor(Math.random() * 900) +
-      (100) // 3-digit random number
-        .toString()
-        .padStart(3, '0');
-    return `BUS-${year}${month}${day}-${random}`;
+    const random = (Math.floor(Math.random() * 900) + 100).toString().padStart(3, '0');
+    return `CLI-${year}${month}${day}-${random}`;
   }
 
-  // Generate control number
   function generateControlNumber() {
     const year = new Date().getFullYear();
-    const random = Math.floor(Math.random() * 1000000)
-      .toString()
-      .padStart(6, '0');
-    return `${year}145-R${random}`;
+    const random = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+    return `${year}145-L${random}`;
   }
 
-  // Helper: parse date_issued into day / month / year
   function getIssuedParts(dateStr) {
     if (!dateStr) return { day: '___', month: '________', year: '____' };
     const d = new Date(dateStr + 'T00:00:00');
     const monthNames = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
     ];
-    return {
-      day: d.getDate(),
-      month: monthNames[d.getMonth()],
-      year: d.getFullYear(),
-    };
+    return { day: d.getDate(), month: monthNames[d.getMonth()], year: d.getFullYear() };
   }
 
-  // Store certificate data in localStorage for QR code verification
+  function formatDateDisplay(dateString) {
+    if (!dateString) return '';
+    const dateOnly = dateString.includes('T') ? dateString.split('T')[0] : dateString;
+    const [year, month, day] = dateOnly.split('-');
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    return `${monthNames[parseInt(month) - 1]} ${parseInt(day)}, ${year}`;
+  }
+
+  function formatDateTimeDisplay(dateString) {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    const month = monthNames[date.getMonth()];
+    const day = date.getDate();
+    const year = date.getFullYear();
+    let hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    return `${month} ${day}, ${year} ${hours}:${minutes} ${ampm}`;
+  }
+
   function storeCertificateData(certificateData) {
-    if (!certificateData.business_clearance_id) return;
-
-    // Get existing certificates from localStorage
-    const existingCertificates = JSON.parse(
-      localStorage.getItem('certificates') || '{}',
-    );
-
-    // Add or update the certificate
-    existingCertificates[certificateData.business_clearance_id] =
-      certificateData;
-
-    // Store back to localStorage
+    if (!certificateData.certificate_of_low_income_id) return;
+    const existingCertificates = JSON.parse(localStorage.getItem('certificates') || '{}');
+    existingCertificates[certificateData.certificate_of_low_income_id] = certificateData;
     localStorage.setItem('certificates', JSON.stringify(existingCertificates));
   }
 
   async function loadResidents() {
     try {
-      const res = await fetch(`${apiBase}/residents`, {
-        headers: getAuthHeaders(),
-      });
+      const res = await fetch(`${apiBase}/residents`, { headers: getAuthHeaders() });
       const data = await res.json();
       setResidents(data);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function loadRecords() {
+    try {
+      const res = await fetch(`${apiBase}/certificate-of-low-income`, { headers: getAuthHeaders() });
+      const data = await res.json();
+      setRecords(
+        Array.isArray(data)
+          ? data.map((r) => ({
+              certificate_of_low_income_id: r.certificate_of_low_income_id,
+              resident_id: r.resident_id,
+              full_name: r.full_name,
+              address: r.address,
+              source_of_income: r.source_of_income || '',
+              income_amount: r.income_amount || '',
+              civil_status: r.civil_status || 'Single',
+              date_issued: r.date_issued?.split('T')[0] || '',
+              date_expired: r.date_expired?.split('T')[0] || '',
+              remarks: r.remarks || '',
+              request_reason: r.request_reason || '',
+              date_created: r.date_created,
+              transaction_number: r.transaction_number || generateTransactionNumber(),
+              control_no: r.control_no || '',
+              prepared_by_name: r.prepared_by_name || '',
+              prepared_by_position: r.prepared_by_position || '',
+              use_signature: Boolean(r.use_signature),
+              signature_id: r.signature_id || null,
+              official_name: r.official_name || null,
+              designation: r.designation || null,
+              signature_path: r.signature_path || null,
+            }))
+          : [],
+      );
     } catch (e) {
       console.error(e);
     }
@@ -467,40 +413,6 @@ export default function BusinessClearance() {
     loadSignatures();
   }, []);
 
-  async function loadRecords() {
-    try {
-      const res = await fetch(`${apiBase}/business-clearance`, {
-        headers: getAuthHeaders(),
-      });
-      const data = await res.json();
-      setRecords(
-        Array.isArray(data)
-          ? data.map((r) => ({
-              business_clearance_id: r.business_clearance_id,
-              resident_id: r.resident_id,
-              full_name: r.full_name,
-              address: r.address,
-              nature_of_business: r.nature_of_business || '',
-              date_issued: r.date_issued?.split('T')[0] || '',
-              date_expired: r.date_expired?.split('T')[0] || '',
-              remarks: r.remarks || '',
-              request_reason: r.request_reason || '',
-              date_created: r.date_created,
-              transaction_number:
-                r.transaction_number || generateTransactionNumber(), // Generate if missing
-              use_signature: Boolean(r.use_signature), // Added for e-signature
-              signature_id: r.signature_id || null, // Added for e-signature
-              official_name: r.official_name || null, // Added for e-signature
-              designation: r.designation || null, // Added for e-signature
-              signature_path: r.signature_path || null, // Added for e-signature
-            }))
-          : [],
-      );
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
   const display = useMemo(() => {
     let data = null;
     if (editingId || isFormOpen) {
@@ -511,13 +423,7 @@ export default function BusinessClearance() {
       data = formData;
     }
 
-    // If signature is enabled, ensure signature data is available
-    if (
-      data &&
-      data.use_signature &&
-      data.signature_id &&
-      !data.signature_path
-    ) {
+    if (data && data.use_signature && data.signature_id && !data.signature_path) {
       const sig = signatures.find((s) => s.signature_id === data.signature_id);
       if (sig) {
         return {
@@ -528,22 +434,13 @@ export default function BusinessClearance() {
         };
       }
     }
-
     return data;
   }, [editingId, isFormOpen, selectedRecord, formData, signatures]);
 
-  // Generate QR code with URL for PDF download
   useEffect(() => {
     const generateQRCode = async () => {
-      if (display.business_clearance_id || display.full_name) {
-        // Store the certificate data in localStorage
+      if (display.certificate_of_low_income_id || display.full_name) {
         storeCertificateData(display);
-
-        // Create a URL that points to a verification page
-        const verificationUrl = `${
-          window.location.origin
-        }/verify-certificate?id=${display.business_clearance_id || 'draft'}`;
-
         const qrContent = `CERTIFICATE VERIFICATION:
         𝗧𝗿𝗮𝗻𝘀𝗮𝗰𝘁𝗶𝗼𝗻 𝗡𝗼: ${display.transaction_number || 'N/A'}
         Name: ${display.full_name}
@@ -552,21 +449,17 @@ export default function BusinessClearance() {
             ? formatDateTimeDisplay(display.date_created)
             : new Date().toLocaleString()
         }
-        Document Type: Business Clearance
+        Document Type: Certificate of Low Income
        
         Ⓒ BRRMS | BARANGAY 145
         CALOOCAN CITY
         ALL RIGHTS RESERVED
         `;
-
         try {
           const qrUrl = await QRCode.toDataURL(qrContent, {
             width: 140,
             margin: 1,
-            color: {
-              dark: '#000000',
-              light: '#FFFFFF',
-            },
+            color: { dark: '#000000', light: '#FFFFFF' },
             errorCorrectionLevel: 'L',
           });
           setQrCodeUrl(qrUrl);
@@ -577,7 +470,6 @@ export default function BusinessClearance() {
         setQrCodeUrl('');
       }
     };
-
     generateQRCode();
   }, [display]);
 
@@ -586,7 +478,9 @@ export default function BusinessClearance() {
       resident_id: data.resident_id || null,
       full_name: data.full_name,
       address: data.address,
-      nature_of_business: data.nature_of_business,
+      source_of_income: data.source_of_income,
+      income_amount: data.income_amount,
+      civil_status: data.civil_status,
       date_issued: data.date_issued,
       date_expired: data.date_expired,
       remarks: data.remarks,
@@ -596,83 +490,61 @@ export default function BusinessClearance() {
       prepared_by_name: data.prepared_by_name || '',
       prepared_by_position: data.prepared_by_position || '',
       use_signature: data.use_signature ? 1 : 0,
-      signature_id:
-        data.use_signature && data.signature_id ? data.signature_id : null,
+      signature_id: data.use_signature && data.signature_id ? data.signature_id : null,
     };
   }
 
   function validateFormData(data) {
     const required = [
-      'full_name',
-      'address',
-      'nature_of_business',
-      'date_issued',
-      'date_expired',
-      'request_reason',
+      'full_name', 'address', 'source_of_income', 'income_amount',
+      'date_issued', 'date_expired', 'request_reason',
     ];
     const missing = required.filter((k) => {
       const v = data[k];
-      return (
-        v === null ||
-        v === undefined ||
-        (typeof v === 'string' && v.trim() === '')
-      );
+      return v === null || v === undefined || (typeof v === 'string' && v.trim() === '');
     });
     return { valid: missing.length === 0, missing };
   }
 
   async function handleCreate() {
     try {
-      // Client-side validation to avoid 400 Bad Request from the server
       const validation = validateFormData(formData);
       if (!validation.valid) {
         alert(`Missing required fields: ${validation.missing.join(', ')}`);
         return;
       }
 
-      // Generate a transaction number for new certificates
       const transactionNumber = generateTransactionNumber();
-      const validityPeriod = getValidityPeriod('Business Clearance');
+      const validityPeriod = getValidityPeriod('Certificate of Low Income');
       const updatedFormData = {
         ...formData,
         transaction_number: transactionNumber,
-        date_created: new Date().toISOString(), // Add current timestamp
-        validity_period: validityPeriod, // Add validity period
+        date_created: new Date().toISOString(),
+        validity_period: validityPeriod,
       };
 
-      const res = await fetch(`${apiBase}/business-clearance`, {
+      const res = await fetch(`${apiBase}/certificate-of-low-income`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(toServerPayload(updatedFormData)),
       });
 
       if (!res.ok) {
-        // Try to get server error message to show to user
         let errMsg = `Create failed (status ${res.status})`;
         try {
           const body = await res.json();
           if (body && body.error) errMsg = body.error;
-        } catch (err) {
-          // ignore JSON parse errors
-        }
+        } catch (err) {}
         throw new Error(errMsg);
       }
 
       const created = await res.json();
-      const newRec = {
-        ...updatedFormData,
-        business_clearance_id: created.business_clearance_id,
-      };
+      const newRec = { ...updatedFormData, certificate_of_low_income_id: created.certificate_of_low_income_id };
 
       setRecords([newRec, ...records]);
       setSelectedRecord(newRec);
-
-      // Save to certificates table
       await saveCertificate(newRec, true);
-
-      // Store the new certificate data
       storeCertificateData(newRec);
-
       resetForm();
       setActiveTab('records');
     } catch (e) {
@@ -683,52 +555,32 @@ export default function BusinessClearance() {
 
   async function handleUpdate() {
     try {
-      const validityPeriod = getValidityPeriod('Business Clearance');
-      const updatedFormData = {
-        ...formData,
-        validity_period: validityPeriod, // Add validity period
-      };
+      const validityPeriod = getValidityPeriod('Certificate of Low Income');
+      const updatedFormData = { ...formData, validity_period: validityPeriod };
 
-      const res = await fetch(`${apiBase}/business-clearance/${editingId}`, {
+      const res = await fetch(`${apiBase}/certificate-of-low-income/${editingId}`, {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify(toServerPayload(updatedFormData)),
       });
       if (!res.ok) throw new Error('Update failed');
       const updatedData = await res.json();
-      // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
       const updated = {
         ...updatedData,
-        business_clearance_id: updatedData.business_clearance_id,
-        full_name: updatedData.full_name,
-        address: updatedData.address,
-        nature_of_business: updatedData.nature_of_business,
+        certificate_of_low_income_id: updatedData.certificate_of_low_income_id,
         date_issued: updatedData.date_issued?.split('T')[0] || '',
         date_expired: updatedData.date_expired?.split('T')[0] || '',
-        remarks: updatedData.remarks || '',
-        request_reason: updatedData.request_reason || '',
-        date_created: updatedData.date_created,
-        transaction_number: updatedData.transaction_number,
-        validity_period: validityPeriod,
         use_signature: Boolean(updatedData.use_signature),
         signature_id: updatedData.signature_id || null,
         official_name: updatedData.official_name || null,
         designation: updatedData.designation || null,
         signature_path: updatedData.signature_path || null,
       };
-      // Remove old record and add new one
-      setRecords([
-        updated,
-        ...records.filter((r) => r.business_clearance_id !== editingId),
-      ]);
+
+      setRecords([updated, ...records.filter((r) => r.certificate_of_low_income_id !== editingId)]);
       setSelectedRecord(updated);
-
-      // Save to certificates table
       await saveCertificate(updated, false);
-
-      // Store the updated certificate data
       storeCertificateData(updated);
-
       resetForm();
       setActiveTab('records');
     } catch (e) {
@@ -743,15 +595,11 @@ export default function BusinessClearance() {
       use_signature: Boolean(record.use_signature),
       signature_id: record.signature_id || null,
     });
-    setEditingId(record.business_clearance_id);
+    setEditingId(record.certificate_of_low_income_id);
     setIsFormOpen(true);
     setActiveTab('form');
-
-    // Set selected signature if available
     if (record.signature_id) {
-      const sig = signatures.find(
-        (s) => s.signature_id === record.signature_id,
-      );
+      const sig = signatures.find((s) => s.signature_id === record.signature_id);
       setSelectedSignature(sig || null);
     } else {
       setSelectedSignature(null);
@@ -759,21 +607,17 @@ export default function BusinessClearance() {
   }
 
   function handleView(record) {
-    setSelectedRecord(record); // Set selected record for display
+    setSelectedRecord(record);
     setFormData({
       ...record,
       use_signature: Boolean(record.use_signature),
       signature_id: record.signature_id || null,
-    }); // Also populate form data for QR generation/dialog
-    setEditingId(record.business_clearance_id); // To indicate viewing a specific record
-    setIsFormOpen(true); // Keep the form open with the record details
+    });
+    setEditingId(record.certificate_of_low_income_id);
+    setIsFormOpen(true);
     setActiveTab('form');
-
-    // Set selected signature if available
     if (record.signature_id) {
-      const sig = signatures.find(
-        (s) => s.signature_id === record.signature_id,
-      );
+      const sig = signatures.find((s) => s.signature_id === record.signature_id);
       setSelectedSignature(sig || null);
     } else {
       setSelectedSignature(null);
@@ -783,23 +627,16 @@ export default function BusinessClearance() {
   async function handleDelete(id) {
     if (!window.confirm('Delete this record?')) return;
     try {
-      const res = await fetch(`${apiBase}/business-clearance/${id}`, {
+      const res = await fetch(`${apiBase}/certificate-of-low-income/${id}`, {
         method: 'DELETE',
         headers: getAuthHeaders(),
       });
       if (!res.ok) throw new Error('Delete failed');
-      setRecords(records.filter((r) => r.business_clearance_id !== id));
-      if (selectedRecord?.business_clearance_id === id) setSelectedRecord(null);
-
-      // Remove from localStorage
-      const existingCertificates = JSON.parse(
-        localStorage.getItem('certificates') || '{}',
-      );
+      setRecords(records.filter((r) => r.certificate_of_low_income_id !== id));
+      if (selectedRecord?.certificate_of_low_income_id === id) setSelectedRecord(null);
+      const existingCertificates = JSON.parse(localStorage.getItem('certificates') || '{}');
       delete existingCertificates[id];
-      localStorage.setItem(
-        'certificates',
-        JSON.stringify(existingCertificates),
-      );
+      localStorage.setItem('certificates', JSON.stringify(existingCertificates));
     } catch (e) {
       console.error(e);
       alert('Failed to delete record');
@@ -810,18 +647,19 @@ export default function BusinessClearance() {
     const currentDate = new Date().toISOString().split('T')[0];
     const issuedDate = new Date(currentDate);
     const expiredDate = new Date(issuedDate);
-    expiredDate.setFullYear(expiredDate.getFullYear() + 1);
+    expiredDate.setMonth(expiredDate.getMonth() + 6);
     const formattedExpiredDate = expiredDate.toISOString().split('T')[0];
 
     setFormData({
       resident_id: '',
       full_name: '',
       address: '',
-      nature_of_business: '',
+      source_of_income: '',
+      income_amount: '',
+      civil_status: 'Single',
       date_issued: currentDate,
       date_expired: formattedExpiredDate,
-      remarks:
-        'They are operating under the jurisdiction of our Brgy. 145, being issued under the requirement of the New Local Code under Republic Act 7160 for securing their permit.',
+      remarks: '',
       request_reason: '',
       transaction_number: '',
       control_no: generateControlNumber(),
@@ -836,41 +674,28 @@ export default function BusinessClearance() {
     setSelectedSignature(null);
   }
 
-  // Modify the handleSubmit function
   function handleSubmit() {
-    // Validate required fields
-    if (
-      !formData.full_name ||
-      !formData.address ||
-      !formData.nature_of_business
-    ) {
+    if (!formData.full_name || !formData.address || !formData.source_of_income || !formData.income_amount) {
       alert('Please fill in all required fields');
       return;
     }
-
     if (!formData.date_issued) {
       alert('Please select the issued date');
       return;
     }
-
     if (formData.use_signature && !formData.signature_id) {
       alert('Please select a signature when e-signature is enabled');
       return;
     }
 
-    // Check if resident has a valid certificate (only for new records)
     if (!editingId && formData.resident_id) {
       const validCert = records.find((record) => {
         if (record.resident_id !== formData.resident_id) return false;
-
-        // Business clearances are typically valid for 12 months (1 year)
-        const twelveMonthsAgo = new Date();
-        twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
         const issueDate = new Date(record.date_issued);
-
-        return issueDate >= twelveMonthsAgo;
+        return issueDate >= sixMonthsAgo;
       });
-
       if (validCert) {
         setValidCertInfo(validCert);
         setShowValidCertDialog(true);
@@ -882,7 +707,6 @@ export default function BusinessClearance() {
     else handleCreate();
   }
 
-  // Add a new function to handle confirmation with valid certificate
   function confirmSaveWithValidCert() {
     setShowValidCertDialog(false);
     handleCreate();
@@ -892,60 +716,39 @@ export default function BusinessClearance() {
     () =>
       records.filter(
         (r) =>
-          r.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          r.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          r.nature_of_business.toLowerCase().includes(searchTerm.toLowerCase()),
+          r.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          r.address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          r.source_of_income?.toLowerCase().includes(searchTerm.toLowerCase()),
       ),
     [records, searchTerm],
   );
 
-  // Generate PDF function
   async function generatePDF() {
-    if (!display.business_clearance_id) {
+    if (!display.certificate_of_low_income_id) {
       alert('Please save the record first before downloading PDF');
       return;
     }
-
     setIsGeneratingPDF(true);
-
     try {
       const certificateElement = document.getElementById('certificate-preview');
-
-      // --- 1. Remove the zoom (scale) from the preview's parent while exporting ---
       const parentOfPreview = certificateElement.parentNode;
       const prevTransform = parentOfPreview.style.transform;
       const prevTransformOrigin = parentOfPreview.style.transformOrigin;
-
       parentOfPreview.style.transform = 'scale(1)';
       parentOfPreview.style.transformOrigin = 'top center';
-
-      // --- 2. Wait a short moment for layout to apply ---
       await new Promise((resolve) => setTimeout(resolve, 150));
-
-      // --- 3. Capture crisp certificate at high scale ---
       const canvas = await html2canvas(certificateElement, {
-        scale: 3, // High scale for better quality
+        scale: 3,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
       });
-
-      // --- 4. Restore zoom to preview ---
       parentOfPreview.style.transform = prevTransform;
       parentOfPreview.style.transformOrigin = prevTransformOrigin;
-
-      // --- 5. Output the PDF at 8.5x11 inches (US Letter) ---
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'in',
-        format: [8.5, 11],
-      });
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'in', format: [8.5, 11] });
       pdf.addImage(imgData, 'PNG', 0, 0, 8.5, 11);
-
-      const fileName = `Business_Clearance_${
-        display.business_clearance_id
-      }_${display.full_name.replace(/\s+/g, '_')}.pdf`;
+      const fileName = `Certificate_Low_Income_${display.certificate_of_low_income_id}_${display.full_name.replace(/\s+/g, '_')}.pdf`;
       pdf.save(fileName);
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -956,128 +759,43 @@ export default function BusinessClearance() {
   }
 
   function handlePrint() {
-    // Check if there's a certificate to print
-    if (!display.business_clearance_id) {
+    if (!display.certificate_of_low_income_id) {
       alert('Please save the record first before printing');
       return;
     }
-
-    // 1. Get the certificate element
     const certificateElement = document.getElementById('certificate-preview');
-    if (!certificateElement) {
-      alert('Certificate not found for printing.');
-      return;
-    }
-
-    // 2. Create a hidden iframe
+    if (!certificateElement) { alert('Certificate not found for printing.'); return; }
     const iframe = document.createElement('iframe');
     iframe.style.position = 'absolute';
-    iframe.style.left = '-9999px'; // Move it way off-screen
+    iframe.style.left = '-9999px';
     iframe.style.top = '0';
     iframe.style.width = '0';
     iframe.style.height = '0';
     document.body.appendChild(iframe);
-
-    // 3. Write the certificate content and styles into the iframe
     const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-    iframeDoc.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Print Certificate</title>
-          <style>
-            @page {
-              size: 8.5in 11in;
-              margin: 0;
-            }
-            body {
-              margin: 0;
-              padding: 0;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-              color-adjust: exact !important;
-            }
-            #certificate-preview {
-              width: 8.5in;
-              height: 11in;
-              position: relative;
-              overflow: hidden;
-              background: white;
-              box-sizing: border-box;
-            }
-            #certificate-preview * {
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-              color-adjust: exact !important;
-            }
-          </style>
-        </head>
-        <body>
-          ${certificateElement.outerHTML}
-        </body>
-      </html>
-    `);
+    iframeDoc.write(`<!DOCTYPE html><html><head><title>Print Certificate</title><style>@page{size:8.5in 11in;margin:0;}body{margin:0;padding:0;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}#certificate-preview{width:8.5in;height:11in;position:relative;overflow:hidden;background:white;box-sizing:border-box;}#certificate-preview *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}</style></head><body>${certificateElement.outerHTML}</body></html>`);
     iframeDoc.close();
-
-    // 4. Trigger the print dialog once the iframe content is loaded
     setTimeout(() => {
       const iframeWindow = iframe.contentWindow || iframe;
-      iframeWindow.focus(); // Required for some browsers
+      iframeWindow.focus();
       iframeWindow.print();
-
-      // 5. Clean up by removing the iframe after the print dialog
-      window.onafterprint = () => {
-        document.body.removeChild(iframe);
-      };
-      // Fallback cleanup in case onafterprint doesn't fire
-      setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
-      }, 1000);
-    }, 250); // A short delay to render
+      window.onafterprint = () => { document.body.removeChild(iframe); };
+      setTimeout(() => { if (document.body.contains(iframe)) document.body.removeChild(iframe); }, 1000);
+    }, 250);
   }
 
-  // Function to handle QR code click
-  const handleQrCodeClick = () => {
-    if (display.business_clearance_id) {
-      const verificationUrl = `${window.location.origin}/verify-certificate?id=${display.business_clearance_id}`;
-      window.open(verificationUrl, '_blank');
-    } else {
-      // Show a dialog with the certificate details (for unsaved draft)
-      setQrDialogOpen(true);
-    }
-  };
-
-  const handleZoomIn = () => {
-    setZoomLevel((prev) => Math.min(prev + 0.1, 2)); // Max zoom: 2x (200%)
-  };
-
-  const handleZoomOut = () => {
-    setZoomLevel((prev) => Math.max(prev - 0.1, 0.3)); // Min zoom: 0.3x (30%)
-  };
-
-  const handleResetZoom = () => {
-    setZoomLevel(0.75); // Reset to default
-  };
+  const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 0.1, 2));
+  const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 0.1, 0.3));
+  const handleResetZoom = () => setZoomLevel(0.75);
 
   useEffect(() => {
     const handleKeyPress = (e) => {
-      // Check if Ctrl/Cmd is pressed
       if (e.ctrlKey || e.metaKey) {
-        if (e.key === '=' || e.key === '+') {
-          e.preventDefault();
-          handleZoomIn();
-        } else if (e.key === '-') {
-          e.preventDefault();
-          handleZoomOut();
-        } else if (e.key === '0') {
-          e.preventDefault();
-          handleResetZoom();
-        }
+        if (e.key === '=' || e.key === '+') { e.preventDefault(); handleZoomIn(); }
+        else if (e.key === '-') { e.preventDefault(); handleZoomOut(); }
+        else if (e.key === '0') { e.preventDefault(); handleResetZoom(); }
       }
     };
-
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [zoomLevel]);
@@ -1093,7 +811,7 @@ export default function BusinessClearance() {
           bgcolor: 'background.default',
         }}
       >
-        {/* TOP HEADER */}
+        {/* ── TOP HEADER ── */}
         <Paper elevation={2} sx={{ zIndex: 10, borderRadius: 0 }}>
           <Box
             sx={{
@@ -1109,10 +827,10 @@ export default function BusinessClearance() {
               <Avatar src={Logo145} sx={{ width: 48, height: 48 }} />
               <Box>
                 <Typography variant="h5" fontWeight="bold">
-                  Business Clearance
+                  Certificate of Low Income
                 </Typography>
                 <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  Manage all records of the Business Clearance
+                  Manage all records of the Certificate of Low Income
                 </Typography>
               </Box>
             </Box>
@@ -1146,7 +864,7 @@ export default function BusinessClearance() {
             </Box>
           </Box>
 
-          {/* NAVIGATION TABS */}
+          {/* ── NAVIGATION TABS ── */}
           <Box
             sx={{
               bgcolor: 'background.paper',
@@ -1160,19 +878,11 @@ export default function BusinessClearance() {
                 onChange={(e, nv) => setActiveTab(nv)}
                 variant="fullWidth"
                 sx={{
-                  '& .MuiTabs-indicator': {
-                    height: 3,
-                    borderRadius: '3px 3px 0 0',
-                  },
+                  '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' },
                   minHeight: 48,
                 }}
               >
-                <Tab
-                  icon={<ArticleIcon />}
-                  label="Form"
-                  value="form"
-                  iconPosition="start"
-                />
+                <Tab icon={<ArticleIcon />} label="Form" value="form" iconPosition="start" />
                 <Tab
                   icon={<FolderIcon />}
                   label={`Records (${records.length})`}
@@ -1184,7 +894,7 @@ export default function BusinessClearance() {
           </Box>
         </Paper>
 
-        {/* MAIN CONTENT AREA */}
+        {/* ── MAIN CONTENT AREA ── */}
         <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           {/* LEFT: Certificate preview */}
           <Box
@@ -1213,11 +923,7 @@ export default function BusinessClearance() {
               >
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                   <Tooltip title="Zoom Out">
-                    <IconButton
-                      onClick={handleZoomOut}
-                      color="primary"
-                      size="small"
-                    >
+                    <IconButton onClick={handleZoomOut} color="primary" size="small">
                       <ZoomOutIcon />
                     </IconButton>
                   </Tooltip>
@@ -1237,20 +943,12 @@ export default function BusinessClearance() {
                     {Math.round(zoomLevel * 100)}%
                   </Typography>
                   <Tooltip title="Zoom In">
-                    <IconButton
-                      onClick={handleZoomIn}
-                      color="primary"
-                      size="small"
-                    >
+                    <IconButton onClick={handleZoomIn} color="primary" size="small">
                       <ZoomInIcon />
                     </IconButton>
                   </Tooltip>
                   <Tooltip title="Reset Zoom">
-                    <IconButton
-                      onClick={handleResetZoom}
-                      color="primary"
-                      size="small"
-                    >
+                    <IconButton onClick={handleResetZoom} color="primary" size="small">
                       <ResetIcon />
                     </IconButton>
                   </Tooltip>
@@ -1262,9 +960,7 @@ export default function BusinessClearance() {
                       variant="contained"
                       color="secondary"
                       onClick={generatePDF}
-                      disabled={
-                        !display.business_clearance_id || isGeneratingPDF
-                      }
+                      disabled={!display.certificate_of_low_income_id || isGeneratingPDF}
                       startIcon={<FileTextIcon />}
                       size="small"
                     >
@@ -1275,7 +971,7 @@ export default function BusinessClearance() {
                     <Button
                       variant="outlined"
                       onClick={handlePrint}
-                      disabled={!display.business_clearance_id}
+                      disabled={!display.certificate_of_low_income_id}
                       startIcon={<PrintIcon />}
                       size="small"
                     >
@@ -1351,64 +1047,26 @@ export default function BusinessClearance() {
                       <img
                         src={CaloocanLogo}
                         alt="Caloocan Logo"
-                        style={{
-                          width: '120px',
-                          height: '120px',
-                          objectFit: 'contain',
-                        }}
+                        style={{ width: '120px', height: '120px', objectFit: 'contain' }}
                       />
-                      <div
-                        style={{
-                          textAlign: 'center',
-                          flex: 1,
-                          padding: '0 20px',
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontFamily: 'Old English Text MT',
-                            fontSize: '16pt',
-                          }}
-                        >
+                      <div style={{ textAlign: 'center', flex: 1, padding: '0 20px' }}>
+                        <div style={{ fontFamily: 'Old English Text MT', fontSize: '16pt' }}>
                           Republic of the Philippines
                         </div>
-                        <div
-                          style={{
-                            fontFamily: '"Times New Roman"',
-                            fontSize: '16pt',
-                            marginTop: '2px',
-                          }}
-                        >
+                        <div style={{ fontFamily: '"Times New Roman"', fontSize: '16pt', marginTop: '2px' }}>
                           City of Caloocan
                         </div>
-                        <div
-                          style={{
-                            fontFamily: '"Times New Roman"',
-                            fontSize: '16pt',
-                            marginTop: '2px',
-                          }}
-                        >
+                        <div style={{ fontFamily: '"Times New Roman"', fontSize: '16pt', marginTop: '2px' }}>
                           Barangay 145, Zone 13, District 1
                         </div>
-                        <div
-                          style={{
-                            fontFamily: '"Times New Roman"',
-                            fontSize: '12pt',
-                            marginTop: '2px',
-                          }}
-                        >
-                          Reparo St. Cor. Gen. Tirona St. Bagong Barrio,
-                          Caloocan City
+                        <div style={{ fontFamily: '"Times New Roman"', fontSize: '12pt', marginTop: '2px' }}>
+                          Reparo St. Cor. Gen. Tirona St. Bagong Barrio, Caloocan City
                         </div>
                       </div>
                       <img
                         src={Logo145}
                         alt="Barangay 145 Logo"
-                        style={{
-                          width: '120px',
-                          height: '120px',
-                          objectFit: 'contain',
-                        }}
+                        style={{ width: '120px', height: '120px', objectFit: 'contain' }}
                       />
                     </div>
 
@@ -1436,7 +1094,7 @@ export default function BusinessClearance() {
                         margin: '40px 0 40px 0',
                       }}
                     >
-                      BARANGAY BUSINESS CLEARANCE
+                      CERTIFICATE OF LOW INCOME
                     </div>
 
                     {/* ── BODY ── */}
@@ -1454,51 +1112,39 @@ export default function BusinessClearance() {
                         TO WHOM IT MAY CONCERN:
                       </p>
 
-                      {/* Paragraph 1 */}
                       <p style={{ margin: '0 0 10px 0', textIndent: '50px' }}>
-                        Pursuant to Section 152 of Republic Act 7160 (Local
-                        Government Code), permission is hereby granted to{' '}
-                        <strong>
-                          {display.full_name || '____________________________'}
-                        </strong>{' '}
-                        to engage in business at{' '}
-                        <strong>
-                          {display.address || '(business address)'}
-                        </strong>
-                        , Barangay 145 District 1 Caloocan City.
+                        This is to certify that{' '}
+                        <strong>{display.full_name || '____________________________'}</strong>, of
+                        legal age, <strong>{display.civil_status || 'single'}</strong>, Filipino
+                        citizen, is a resident of{' '}
+                        <strong>{display.address || '(present address)'}</strong>, Barangay 145
+                        District 1 Caloocan City, is currently working as a{' '}
+                        <strong>{display.source_of_income || '(state the source of income)'}</strong>{' '}
+                        and is only earning{' '}
+                        <strong>{display.income_amount || '(state amount)'}</strong>.
                       </p>
 
-                      {/* Paragraph 2 */}
                       <p style={{ margin: '0 0 10px 0', textIndent: '50px' }}>
-                        This permit is granted on the premise that all existing
-                        laws, rules, and regulations shall be complied with and
-                        that the applicant shall not engage in activities
-                        prohibited by law or regulations.
+                        Upon validation by the undersigned, the applicant is financially unstable as
+                        his/her income is insufficient to meet his/her family's daily needs for
+                        subsistence.
                       </p>
 
-                      {/* Paragraph 3 */}
                       <p style={{ margin: '0 0 10px 0', textIndent: '50px' }}>
-                        This certification is issued upon the request of the
-                        above-mentioned individual for{' '}
+                        This certification is issued upon the request of the above-mentioned
+                        individual for{' '}
                         <strong>
-                          {display.request_reason ||
-                            '(state the purpose of the Certificate)'}
+                          {display.request_reason || '(state the purpose of the Certificate)'}
                         </strong>
                         .
                       </p>
 
-                      {/* Issued line */}
                       {(() => {
-                        const { day, month, year } = getIssuedParts(
-                          display.date_issued,
-                        );
+                        const { day, month, year } = getIssuedParts(display.date_issued);
                         return (
-                          <p
-                            style={{ margin: '0 0 10px 0', textIndent: '50px' }}
-                          >
-                            Issued this <strong>{day}</strong> of{' '}
-                            <strong>{month}</strong>, <strong>{year}</strong>,
-                            at Barangay <strong>145</strong>, Caloocan City.
+                          <p style={{ margin: '0 0 10px 0', textIndent: '50px' }}>
+                            Issued this <strong>{day}</strong> of <strong>{month}</strong>,{' '}
+                            <strong>{year}</strong>, at Barangay <strong>145</strong>, Caloocan City.
                           </p>
                         );
                       })()}
@@ -1514,28 +1160,12 @@ export default function BusinessClearance() {
                       }}
                     >
                       <div style={{ textAlign: 'center' }}>
-                        <div
-                          style={{
-                            width: '150px',
-                            height: '150px',
-                            border: '1.5px solid #000',
-                          }}
-                        />
-                        <div style={{ fontSize: '10pt', marginTop: '6px' }}>
-                          Applicant Photo
-                        </div>
+                        <div style={{ width: '150px', height: '150px', border: '1.5px solid #000' }} />
+                        <div style={{ fontSize: '10pt', marginTop: '6px' }}>Applicant Photo</div>
                       </div>
                       <div style={{ textAlign: 'center' }}>
-                        <div
-                          style={{
-                            width: '150px',
-                            height: '150px',
-                            border: '1.5px solid #000',
-                          }}
-                        />
-                        <div style={{ fontSize: '10pt', marginTop: '6px' }}>
-                          Applicant Thumbmark
-                        </div>
+                        <div style={{ width: '150px', height: '150px', border: '1.5px solid #000' }} />
+                        <div style={{ fontSize: '10pt', marginTop: '6px' }}>Applicant Thumbmark</div>
                       </div>
                     </div>
 
@@ -1548,13 +1178,7 @@ export default function BusinessClearance() {
                         marginTop: '10px',
                       }}
                     >
-                      <div
-                        style={{
-                          textAlign: 'center',
-                          width: '300px',
-                          marginTop: '10px',
-                        }}
-                      >
+                      <div style={{ textAlign: 'center', width: '300px', marginTop: '10px' }}>
                         {display.use_signature && display.signature_path ? (
                           <div
                             style={{
@@ -1568,14 +1192,8 @@ export default function BusinessClearance() {
                             <img
                               src={getSignatureImageUrl(display.signature_path)}
                               alt="Signature"
-                              style={{
-                                maxWidth: '200px',
-                                maxHeight: '65px',
-                                objectFit: 'contain',
-                              }}
-                              onError={(e) => {
-                                e.target.style.display = 'none';
-                              }}
+                              style={{ maxWidth: '200px', maxHeight: '65px', objectFit: 'contain' }}
+                              onError={(e) => { e.target.style.display = 'none'; }}
                             />
                           </div>
                         ) : null}
@@ -1590,12 +1208,7 @@ export default function BusinessClearance() {
                           <img
                             src={WordName}
                             alt="Arnold Dondonayos"
-                            style={{
-                              width: '240px',
-                              height: 'auto',
-                              maxHeight: '55px',
-                              objectFit: 'contain',
-                            }}
+                            style={{ width: '240px', height: 'auto', maxHeight: '55px', objectFit: 'contain' }}
                           />
                         </div>
                         <div
@@ -1618,15 +1231,11 @@ export default function BusinessClearance() {
                     </div>
 
                     {/* Barangay Seal & Control No. */}
-                    <div
-                      style={{ padding: '30px 70px 0 70px', fontSize: '11pt' }}
-                    >
+                    <div style={{ padding: '30px 70px 0 70px', fontSize: '11pt' }}>
                       <div>Barangay Seal</div>
                       <div style={{ marginTop: '4px' }}>
                         Control No.{' '}
-                        <span
-                          style={{ minWidth: '120px', display: 'inline-block' }}
-                        >
+                        <span style={{ minWidth: '120px', display: 'inline-block' }}>
                           {display.control_no || '145-0001'}
                         </span>
                       </div>
@@ -1640,34 +1249,23 @@ export default function BusinessClearance() {
                         }}
                       >
                         <li>
-                          This certification is not valid without the Official
-                          Barangay Dry Seal and the Barangay Chairman's
-                          Signature/Stamp.
+                          This certification is not valid without the Official Barangay Dry Seal and
+                          the Barangay Chairman's Signature/Stamp.
                         </li>
                         <li>
-                          Officials and applicants who submit false
-                          certifications or documents shall be held liable for
-                          administrative/criminal liabilities.
+                          Officials and applicants who submit false certifications or documents shall
+                          be held liable for administrative/criminal liabilities.
                         </li>
                       </ul>
                       <div
-                        style={{
-                          fontSize: '10pt',
-                          marginTop: '50px',
-                          fontFamily: '"Times New Roman"',
-                        }}
+                        style={{ fontSize: '10pt', marginTop: '50px', fontFamily: '"Times New Roman"' }}
                       >
                         <div>
                           Prepared by:{' '}
-                          <strong>
-                            {display.prepared_by_name || 'Roselyn Anore'}
-                          </strong>
+                          <strong>{display.prepared_by_name || 'Roselyn Anore'}</strong>
                         </div>
                         <div style={{ marginLeft: '80px' }}>
-                          <strong>
-                            {display.prepared_by_position ||
-                              'Barangay Secretary'}
-                          </strong>
+                          <strong>{display.prepared_by_position || 'Barangay Secretary'}</strong>
                         </div>
                       </div>
                       <div
@@ -1680,9 +1278,7 @@ export default function BusinessClearance() {
                         }}
                       >
                         This certification is{' '}
-                        <strong>
-                          valid for six (6) months from the date of issuance.
-                        </strong>
+                        <strong>valid for six (6) months from the date of issuance.</strong>
                       </div>
                       <div
                         style={{
@@ -1690,10 +1286,7 @@ export default function BusinessClearance() {
                           textAlign: 'right',
                           paddingRight: '10px',
                           height: '110px',
-                          visibility:
-                            qrCodeUrl && display.use_signature
-                              ? 'visible'
-                              : 'hidden',
+                          visibility: qrCodeUrl && display.use_signature ? 'visible' : 'hidden',
                         }}
                       >
                         <img
@@ -1726,43 +1319,31 @@ export default function BusinessClearance() {
                       </div>
                     </div>
                   </div>
-                  {/* end zIndex wrapper */}
                 </div>
               </Box>
             </Box>
 
             <style>
               {`
-        @media print {
-          body * {
-            visibility: hidden;
-          }
-          #certificate-preview, #certificate-preview * {
-            visibility: visible;
-          }
-          #certificate-preview {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 8.5in;
-            height: 13in;
-            transform: none !important;
-          }
-          @page {
-            size: portrait;
-            margin: 0;
-          }
-          #certificate-preview * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            color-adjust: exact !important;
-          }
-        }
-      `}
+                @media print {
+                  body * { visibility: hidden; }
+                  #certificate-preview, #certificate-preview * { visibility: visible; }
+                  #certificate-preview {
+                    position: absolute; left: 0; top: 0;
+                    width: 8.5in; height: 13in; transform: none !important;
+                  }
+                  @page { size: portrait; margin: 0; }
+                  #certificate-preview * {
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                    color-adjust: exact !important;
+                  }
+                }
+              `}
             </style>
           </Box>
 
-          {/* RIGHT: FORM/RECORDS PANEL */}
+          {/* ── RIGHT: FORM / RECORDS PANEL ── */}
           <Box
             sx={{
               width: { xs: '100%', md: '50%', lg: '40%' },
@@ -1774,32 +1355,16 @@ export default function BusinessClearance() {
               overflow: 'hidden',
             }}
           >
-            {/* FORM */}
+            {/* FORM TAB */}
             {activeTab === 'form' && (
-              <Box
-                sx={{
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  overflow: 'hidden',
-                }}
-              >
-                <Paper
-                  elevation={0}
-                  sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}
-                >
+              <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <Paper elevation={0} sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}>
                   <Typography
                     variant="h6"
-                    sx={{
-                      fontWeight: 600,
-                      mb: 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                    }}
+                    sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}
                   >
                     <ArticleIcon color="primary" />
-                    {editingId ? 'Edit Certificate' : 'New Business Clearance'}
+                    {editingId ? 'Edit Certificate' : 'New Certificate of Low Income'}
                   </Typography>
                   {selectedRecord && !editingId && (
                     <Typography variant="body2" color="text.secondary">
@@ -1813,32 +1378,16 @@ export default function BusinessClearance() {
                     <Autocomplete
                       options={residents}
                       getOptionLabel={(option) => option.full_name || ''}
-                      value={
-                        residents.find(
-                          (r) => r.full_name === formData.full_name,
-                        ) || null
-                      }
+                      value={residents.find((r) => r.full_name === formData.full_name) || null}
                       onChange={(e, nv) => {
                         if (nv) {
-                          setFormData({
-                            ...formData,
-                            resident_id: nv.resident_id,
-                            full_name: nv.full_name,
-                            address: nv.address || '',
-                          });
+                          setFormData({ ...formData, resident_id: nv.resident_id, full_name: nv.full_name, address: nv.address || '' });
                         } else {
                           setFormData({ ...formData, full_name: '' });
                         }
                       }}
                       renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label="Full Name"
-                          variant="outlined"
-                          fullWidth
-                          size="small"
-                          required
-                        />
+                        <TextField {...params} label="Full Name" variant="outlined" fullWidth size="small" required />
                       )}
                     />
 
@@ -1850,24 +1399,43 @@ export default function BusinessClearance() {
                       multiline
                       rows={2}
                       value={formData.address}
-                      onChange={(e) =>
-                        setFormData({ ...formData, address: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                      required
+                    />
+
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Civil Status</InputLabel>
+                      <Select
+                        value={formData.civil_status}
+                        label="Civil Status"
+                        onChange={(e) => setFormData({ ...formData, civil_status: e.target.value })}
+                      >
+                        <MenuItem value="Single">Single</MenuItem>
+                        <MenuItem value="Married">Married</MenuItem>
+                        <MenuItem value="Widowed">Widowed</MenuItem>
+                        <MenuItem value="Separated">Separated</MenuItem>
+                      </Select>
+                    </FormControl>
+
+                    <TextField
+                      label="Source of Income"
+                      variant="outlined"
+                      fullWidth
+                      size="small"
+                      placeholder="e.g., Laborer, Vendor, etc."
+                      value={formData.source_of_income}
+                      onChange={(e) => setFormData({ ...formData, source_of_income: e.target.value })}
                       required
                     />
 
                     <TextField
-                      label="Nature of Business"
+                      label="Income Amount"
                       variant="outlined"
                       fullWidth
                       size="small"
-                      value={formData.nature_of_business}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          nature_of_business: e.target.value,
-                        })
-                      }
+                      placeholder="e.g., ₱5,000 per month"
+                      value={formData.income_amount}
+                      onChange={(e) => setFormData({ ...formData, income_amount: e.target.value })}
                       required
                     />
 
@@ -1881,12 +1449,7 @@ export default function BusinessClearance() {
                           size="small"
                           InputLabelProps={{ shrink: true }}
                           value={formData.date_issued}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              date_issued: e.target.value,
-                            })
-                          }
+                          onChange={(e) => setFormData({ ...formData, date_issued: e.target.value })}
                           required
                         />
                       </Grid>
@@ -1899,18 +1462,10 @@ export default function BusinessClearance() {
                           size="small"
                           InputLabelProps={{ shrink: true }}
                           value={formData.date_expired}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              date_expired: e.target.value,
-                            })
-                          }
+                          onChange={(e) => setFormData({ ...formData, date_expired: e.target.value })}
                           required
-                          InputProps={{
-                            readOnly: true,
-                            style: { backgroundColor: '#f5f5f5' },
-                          }}
-                          helperText="Automatically set to 1 year from issue date"
+                          InputProps={{ readOnly: true, style: { backgroundColor: '#f5f5f5' } }}
+                          helperText="Automatically set to 6 months from issue date"
                         />
                       </Grid>
                     </Grid>
@@ -1923,10 +1478,7 @@ export default function BusinessClearance() {
                       multiline
                       rows={2}
                       value={formData.remarks}
-                      onChange={(e) =>
-                        setFormData({ ...formData, remarks: e.target.value })
-                      }
-                      required
+                      onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
                     />
 
                     <TextField
@@ -1936,14 +1488,9 @@ export default function BusinessClearance() {
                       size="small"
                       multiline
                       rows={2}
-                      placeholder="Business registration, License application, etc."
+                      placeholder="Scholarship, Livelihood program, etc."
                       value={formData.request_reason}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          request_reason: e.target.value,
-                        })
-                      }
+                      onChange={(e) => setFormData({ ...formData, request_reason: e.target.value })}
                       required
                     />
 
@@ -1958,14 +1505,9 @@ export default function BusinessClearance() {
                             setFormData({
                               ...formData,
                               use_signature: checked,
-                              signature_id:
-                                checked && selectedSignature
-                                  ? selectedSignature.signature_id
-                                  : null,
+                              signature_id: checked && selectedSignature ? selectedSignature.signature_id : null,
                             });
-                            if (!checked) {
-                              setSelectedSignature(null);
-                            }
+                            if (!checked) setSelectedSignature(null);
                           }}
                           color="primary"
                         />
@@ -1976,28 +1518,14 @@ export default function BusinessClearance() {
                     {formData.use_signature && (
                       <Autocomplete
                         options={signatures}
-                        getOptionLabel={(opt) =>
-                          `${opt.official_name} - ${opt.designation}`
-                        }
+                        getOptionLabel={(opt) => `${opt.official_name} - ${opt.designation}`}
                         value={selectedSignature}
                         onChange={(e, newValue) => {
                           setSelectedSignature(newValue);
-                          setFormData({
-                            ...formData,
-                            signature_id: newValue
-                              ? newValue.signature_id
-                              : null,
-                          });
+                          setFormData({ ...formData, signature_id: newValue ? newValue.signature_id : null });
                         }}
                         renderInput={(params) => (
-                          <TextField
-                            {...params}
-                            label="Select Signature"
-                            variant="outlined"
-                            fullWidth
-                            size="small"
-                            required
-                          />
+                          <TextField {...params} label="Select Signature" variant="outlined" fullWidth size="small" required />
                         )}
                       />
                     )}
@@ -2010,13 +1538,8 @@ export default function BusinessClearance() {
                       fullWidth
                       size="small"
                       value={formData.control_no}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          control_no: e.target.value,
-                        })
-                      }
-                      helperText="Format: YYYY145-R000000 (auto-generated)"
+                      onChange={(e) => setFormData({ ...formData, control_no: e.target.value })}
+                      helperText="Format: YYYY145-L000000 (auto-generated)"
                     />
 
                     <TextField
@@ -2025,12 +1548,7 @@ export default function BusinessClearance() {
                       fullWidth
                       size="small"
                       value={formData.prepared_by_name}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          prepared_by_name: e.target.value,
-                        })
-                      }
+                      onChange={(e) => setFormData({ ...formData, prepared_by_name: e.target.value })}
                       placeholder="e.g., Roselyn Anore"
                     />
 
@@ -2040,12 +1558,7 @@ export default function BusinessClearance() {
                       fullWidth
                       size="small"
                       value={formData.prepared_by_position}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          prepared_by_position: e.target.value,
-                        })
-                      }
+                      onChange={(e) => setFormData({ ...formData, prepared_by_position: e.target.value })}
                       placeholder="e.g., Barangay Secretary"
                     />
 
@@ -2077,29 +1590,13 @@ export default function BusinessClearance() {
               </Box>
             )}
 
-            {/* RECORDS */}
+            {/* RECORDS TAB */}
             {activeTab === 'records' && (
-              <Box
-                sx={{
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  overflow: 'hidden',
-                }}
-              >
-                <Paper
-                  elevation={0}
-                  sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}
-                >
+              <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <Paper elevation={0} sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}>
                   <Typography
                     variant="h6"
-                    sx={{
-                      fontWeight: 600,
-                      mb: 2,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                    }}
+                    sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}
                   >
                     <FolderIcon color="primary" />
                     Certificate Records
@@ -2107,7 +1604,7 @@ export default function BusinessClearance() {
                   <TextField
                     fullWidth
                     size="small"
-                    placeholder="Search by name, address, or nature of business"
+                    placeholder="Search by name, address, or source of income"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     InputProps={{
@@ -2122,13 +1619,7 @@ export default function BusinessClearance() {
 
                 <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
                   {filteredRecords.length === 0 ? (
-                    <Paper
-                      sx={{
-                        p: 4,
-                        textAlign: 'center',
-                        color: 'text.secondary',
-                      }}
-                    >
+                    <Paper sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>
                       <FolderIcon sx={{ fontSize: 48, mb: 2, opacity: 0.3 }} />
                       <Typography variant="h6" gutterBottom>
                         {searchTerm ? 'No records found' : 'No records yet'}
@@ -2143,7 +1634,7 @@ export default function BusinessClearance() {
                     <Stack spacing={2}>
                       {filteredRecords.map((record) => (
                         <Card
-                          key={record.business_clearance_id}
+                          key={record.certificate_of_low_income_id}
                           sx={{
                             cursor: 'pointer',
                             transition: 'all 0.2s ease',
@@ -2162,50 +1653,22 @@ export default function BusinessClearance() {
                               <Box sx={{ flex: 1 }}>
                                 <Typography
                                   variant="subtitle1"
-                                  sx={{
-                                    fontWeight: 600,
-                                    mb: 0.5,
-                                    color: '#000000',
-                                  }}
+                                  sx={{ fontWeight: 600, mb: 0.5, color: '#000000' }}
                                 >
                                   {record.full_name}
                                 </Typography>
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                  sx={{ mb: 1 }}
-                                >
+                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                                   {record.address}
                                 </Typography>
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                  sx={{ mb: 1 }}
-                                >
-                                  Nature of Business:{' '}
-                                  {record.nature_of_business}
+                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                  Source of Income: {record.source_of_income}
                                 </Typography>
-                                <Box
-                                  sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    mb: 1,
-                                    gap: 1,
-                                  }}
-                                >
-                                  <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                  >
-                                    Issued:{' '}
-                                    {formatDateDisplay(record.date_issued)}
+                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1 }}>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Issued: {formatDateDisplay(record.date_issued)}
                                   </Typography>
-                                  <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                  >
-                                    Expires:{' '}
-                                    {formatDateDisplay(record.date_expired)}
+                                  <Typography variant="caption" color="text.secondary">
+                                    Expires: {formatDateDisplay(record.date_expired)}
                                   </Typography>
                                 </Box>
                                 {record.use_signature && (
@@ -2240,9 +1703,7 @@ export default function BusinessClearance() {
                                 <Tooltip title="Delete">
                                   <IconButton
                                     size="small"
-                                    onClick={() =>
-                                      handleDelete(record.business_clearance_id)
-                                    }
+                                    onClick={() => handleDelete(record.certificate_of_low_income_id)}
                                     color="error"
                                   >
                                     <DeleteIcon />
@@ -2266,11 +1727,7 @@ export default function BusinessClearance() {
           <Fab
             color="primary"
             aria-label="add"
-            sx={{
-              position: 'absolute',
-              bottom: 16,
-              right: 16,
-            }}
+            sx={{ position: 'absolute', bottom: 16, right: 16 }}
             onClick={() => {
               resetForm();
               setIsFormOpen(true);
@@ -2281,149 +1738,8 @@ export default function BusinessClearance() {
           </Fab>
         )}
       </Box>
-      {/* QR Code Details Dialog */}
-      <Dialog
-        open={qrDialogOpen}
-        onClose={() => setQrDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white' }}>
-          Certificate Details
-        </DialogTitle>
-        <DialogContent dividers>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Certificate ID:
-              </Typography>
-              <Typography
-                variant="body1"
-                sx={{ fontWeight: 600, color: 'text.primary' }}
-              >
-                {display.business_clearance_id || 'Draft (Not yet saved)'}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Transaction Number:
-              </Typography>
-              <Typography
-                variant="body1"
-                sx={{ fontWeight: 600, color: 'text.primary' }}
-              >
-                {display.transaction_number || 'N/A'}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Full Name:
-              </Typography>
-              <Typography
-                variant="body1"
-                sx={{ fontWeight: 600, color: 'text.primary' }}
-              >
-                {display.full_name}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Address:
-              </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {display.address}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Nature of Business:
-              </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {display.nature_of_business}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Date Issued:
-              </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {formatDateDisplay(display.date_issued)}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Date Expired:
-              </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {formatDateDisplay(display.date_expired)}
-              </Typography>
-            </Grid>
-            <Grid item xs={12}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Remarks:
-              </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {display.remarks}
-              </Typography>
-            </Grid>
-            <Grid item xs={12}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Request Reason:
-              </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {display.request_reason}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Date Created:
-              </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {display.date_created
-                  ? formatDateTimeDisplay(display.date_created)
-                  : 'N/A'}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                E-Signature:
-              </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {display.use_signature ? 'Yes' : 'No'}
-              </Typography>
-            </Grid>
-            {display.use_signature && (
-              <Grid item xs={12} md={6}>
-                <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                  Signed By:
-                </Typography>
-                <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                  {display.official_name} - {display.designation}
-                </Typography>
-              </Grid>
-            )}
-          </Grid>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setQrDialogOpen(false)} color="primary">
-            Close
-          </Button>
-          {display.business_clearance_id && (
-            <Button
-              onClick={() => {
-                const verificationUrl = `${window.location.origin}/verify-certificate?id=${display.business_clearance_id}`;
-                window.open(verificationUrl, '_blank');
-                setQrDialogOpen(false);
-              }}
-              variant="contained"
-              color="primary"
-            >
-              Go to Verification Page
-            </Button>
-          )}
-        </DialogActions>
-      </Dialog>
-      // Add the dialog at the end of the component, before the closing tags
+
+      {/* Valid Certificate Dialog */}
       <Dialog
         open={showValidCertDialog}
         onClose={() => setShowValidCertDialog(false)}
@@ -2436,9 +1752,9 @@ export default function BusinessClearance() {
         </DialogTitle>
         <DialogContent sx={{ p: 3 }}>
           <Typography>
-            This resident already has a valid Business Clearance issued on{' '}
-            {validCertInfo && formatDateDisplay(validCertInfo.date_issued)}.
-            Business clearances are valid for 12 months (1 year).
+            This resident already has a valid Certificate of Low Income issued on{' '}
+            {validCertInfo && formatDateDisplay(validCertInfo.date_issued)}. Certificates are valid
+            for 6 months.
           </Typography>
           <Typography sx={{ mt: 2 }}>
             Are you sure you want to create a new certificate for this resident?

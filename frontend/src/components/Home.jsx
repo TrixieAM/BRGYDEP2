@@ -85,7 +85,7 @@ import { Pause, PlayArrow } from '@mui/icons-material';
 
 const BarangayDashboard = () => {
   const theme = useTheme();
-  const { getToken, user } = useAuth();
+  const { getToken, user, logout } = useAuth();
   const navigate = useNavigate();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [activeTab, setActiveTab] = useState(0);
@@ -670,18 +670,24 @@ const BarangayDashboard = () => {
           fetch(`${apiBase}/dashboard/officials`, { headers }),
         ]);
 
+        if ([statsRes, announcementsRes, settingsRes, eventsRes, activitiesRes, officialsRes].some((response) => response.status === 401)) {
+          logout();
+          return;
+        }
+
         // Parse responses
-        const statsData = await statsRes.json();
-        const announcementsData = await announcementsRes.json();
-        const settingsData = await settingsRes.json();
-        const eventsData = await eventsRes.json();
-        const activitiesData = await activitiesRes.json();
-        const officialsData = await officialsRes.json();
+        const statsData = await statsRes.json().catch(() => ({}));
+        const announcementsData = await announcementsRes.json().catch(() => ([]));
+        const settingsData = await settingsRes.json().catch(() => ({}));
+        const eventsData = await eventsRes.json().catch(() => ([]));
+        const activitiesData = await activitiesRes.json().catch(() => ([]));
+        const officialsData = await officialsRes.json().catch(() => ([]));
+        const statsPayload = statsData || {};
 
         // Update state
-        setStats(statsData);
-        setAnnouncements(announcementsData);
-        setDemographics(statsData.demographics || demographics);
+        setStats(statsPayload);
+        setAnnouncements(Array.isArray(announcementsData) ? announcementsData : []);
+        setDemographics(statsPayload.demographics || demographics);
 
         // Parse mission & vision from content (assuming it's stored as JSON or separated)
         if (settingsData.missionVision?.content) {
@@ -725,12 +731,12 @@ const BarangayDashboard = () => {
         }
 
         // Update officials
-        if (officialsData && officialsData.length > 0) {
+        if (Array.isArray(officialsData) && officialsData.length > 0) {
           setAbout(prev => ({ ...prev, officials: officialsData }));
         }
 
         // Format events
-        const formattedEvents = eventsData.map(event => ({
+        const formattedEvents = (Array.isArray(eventsData) ? eventsData : []).map(event => ({
           id: event.event_id,
           title: event.event_name || event.title,
           date: new Date(event.event_date || event.date).toLocaleDateString('en-US', {
@@ -744,7 +750,7 @@ const BarangayDashboard = () => {
         setUpcomingEvents(formattedEvents);
 
         // Format recent activities
-        const formattedActivities = activitiesData.map((activity, index) => ({
+        const formattedActivities = (Array.isArray(activitiesData) ? activitiesData : []).map((activity, index) => ({
           id: activity.id || index + 1,
           action: activity.action || 'Activity',
           detail: activity.detail || 'No details',
@@ -880,9 +886,14 @@ const BarangayDashboard = () => {
         const headers = getAuthHeaders();
 
         const response = await fetch(`${apiBase}/dashboard/calendar-events?month=${month}&year=${year}`, { headers });
-        const data = await response.json();
+        if (response.status === 401) {
+          logout();
+          return;
+        }
 
-        setCalendarEvents(data);
+        const data = await response.json().catch(() => ([]));
+
+        setCalendarEvents(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error('Error fetching calendar events:', error);
       }

@@ -80,8 +80,11 @@ router.post('/', async (req, res) => {
       remarks,
       request_reason,
       transaction_number,
-      use_signature, // Added for e-signature
-      signature_id, // Added for e-signature
+      control_no,
+      prepared_by_name,
+      prepared_by_position,
+      use_signature,
+      signature_id,
     } = req.body;
 
     if (!full_name || !address || !nature_of_business || !date_issued || !date_expired || !request_reason) {
@@ -93,8 +96,8 @@ router.post('/', async (req, res) => {
 
     const [result] = await pool.query(
       `INSERT INTO business_clearance 
-        (resident_id, full_name, address, nature_of_business, date_issued, date_expired, remarks, request_reason, transaction_number, use_signature, signature_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (resident_id, full_name, address, nature_of_business, date_issued, date_expired, remarks, request_reason, transaction_number, control_no, prepared_by_name, prepared_by_position, use_signature, signature_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         resident_id,
         full_name,
@@ -105,6 +108,9 @@ router.post('/', async (req, res) => {
         remarks || null,
         request_reason,
         finalTransactionNumber,
+        control_no || null,
+        prepared_by_name || null,
+        prepared_by_position || null,
         use_signature ? 1 : 0,
         use_signature && signature_id ? signature_id : null,
       ]
@@ -142,8 +148,11 @@ router.put('/:id', async (req, res) => {
       remarks,
       request_reason,
       transaction_number,
-      use_signature, // Added for e-signature
-      signature_id, // Added for e-signature
+      control_no,
+      prepared_by_name,
+      prepared_by_position,
+      use_signature,
+      signature_id,
     } = req.body;
 
     // Get the existing record
@@ -170,8 +179,8 @@ router.put('/:id', async (req, res) => {
     // This ensures the transaction log shows a new entry
     const [result] = await pool.query(
       `INSERT INTO business_clearance 
-        (resident_id, full_name, address, nature_of_business, date_issued, date_expired, remarks, request_reason, transaction_number, use_signature, signature_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (resident_id, full_name, address, nature_of_business, date_issued, date_expired, remarks, request_reason, transaction_number, control_no, prepared_by_name, prepared_by_position, use_signature, signature_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         resident_id,
         full_name,
@@ -181,7 +190,10 @@ router.put('/:id', async (req, res) => {
         date_expired,
         remarks || null,
         request_reason,
-        newTransactionNumber, // New transaction number for the new entry
+        newTransactionNumber,
+        control_no || null,
+        prepared_by_name || null,
+        prepared_by_position || null,
         use_signature ? 1 : 0,
         use_signature && signature_id ? signature_id : null,
       ]

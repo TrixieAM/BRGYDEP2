@@ -55,6 +55,8 @@ import SoloParentForm from './components/RequestForms/SoloParentForm';
 import BarangayClearanceCRUD from './components/RequestForms/BarangayClearanceCRUD';
 import BusinessClearance from './components/RequestForms/BusinessClearance';
 import CertificateOfResidency from './components/RequestForms/CertificateOfResidency';
+import CertificateOfLowIncome from './components/RequestForms/CertificateOfLowIncome';
+import CertificateOfGoodMoral from './components/RequestForms/CertificateOfGoodMoral';
 import PermitToTravel from './components/RequestForms/PermitToTravel';
 import CashAssistance from './components/RequestForms/CashAssistance';
 import Cohabitation from './components/RequestForms/Cohabitation';
@@ -576,6 +578,24 @@ function AppContent() {
               element={
                 <ProtectedRoute requiredPermission="access_certificate_residency">
                   <CertificateOfResidency />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/certificate-low-income"
+              element={
+                <ProtectedRoute requiredPermission="access_certificate_low_income">
+                  <CertificateOfLowIncome />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/certificate-good-moral"
+              element={
+                <ProtectedRoute requiredPermission="access_certificate_good_moral">
+                  <CertificateOfGoodMoral />
                 </ProtectedRoute>
               }
             />

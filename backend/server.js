@@ -2,9 +2,71 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
+const fs = require('fs');
+const mysql = require('mysql2/promise');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Database pool for migrations
+const migrationPool = mysql.createPool({
+  host: 'localhost',
+  user: 'root',
+  password: '',
+  database: 'brgy145',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+});
+
+// Run migrations on startup
+async function runMigrations() {
+  try {
+    console.log('🚀 Running database migrations...\n');
+
+    const migrations = [
+      'migrations/certificate-of-residency-fields.sql',
+      'migrations/indigency-fields.sql',
+      'migrations/business-clearance-fields.sql',
+      'migrations/certificate-of-low-income.sql',
+      'migrations/certificate-of-good-moral.sql',
+    ];
+
+    for (const migration of migrations) {
+      const filePath = path.join(__dirname, migration);
+      console.log(`📝 Running: ${migration}`);
+
+      if (!fs.existsSync(filePath)) {
+        console.warn(`⚠️  File not found: ${filePath}`);
+        continue;
+      }
+
+      const sql = fs.readFileSync(filePath, 'utf8');
+      const statements = sql
+        .split(';')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+
+      for (const statement of statements) {
+        try {
+          await migrationPool.query(statement);
+        } catch (err) {
+          console.error(`❌ Error executing statement: ${err.message}`);
+        }
+      }
+    }
+
+    console.log('\n✅ Migrations completed!\n');
+  } catch (error) {
+    console.error('❌ Migration failed:', error);
+  }
+}
+
+// Run migrations before starting server
+(async () => {
+  await runMigrations();
+})();
 
 // Middleware
 app.use(cors());
@@ -30,6 +92,8 @@ const bhertCertPositiveRoutes = require('./routes/bhert-certificate-positive.rou
 const bhertCertNormalRoutes = require('./routes/bhert-certificate-normal.routes');
 const certificateOfActionRoutes = require('./routes/certificate-of-action.routes');
 const certificateOfCohabitationRoutes = require('./routes/certificate-of-cohabitation.routes');
+const certificateOfLowIncomeRoutes = require('./routes/certificate-of-low-income.routes');
+const certificateOfGoodMoralRoutes = require('./routes/certificate-of-good-moral.routes');
 const certificatesRoutes = require('./routes/certificates.routes');
 const requestRecordsRoutes = require('./routes/request-records.routes');
 const oathJobRoutes = require('./routes/oath-job.routes');
@@ -71,6 +135,8 @@ app.use('/bhert-certificate-positive', bhertCertPositiveRoutes);
 app.use('/bhert-certificate-normal', bhertCertNormalRoutes);
 app.use('/certificate-of-action', certificateOfActionRoutes);
 app.use('/certificate-of-cohabitation', certificateOfCohabitationRoutes);
+app.use('/certificate-of-low-income', certificateOfLowIncomeRoutes);
+app.use('/certificate-of-good-moral', certificateOfGoodMoralRoutes);
 app.use('/certificates', certificatesRoutes);
 app.use('/request-records', requestRecordsRoutes);
 app.use('/oath-job', oathJobRoutes);
