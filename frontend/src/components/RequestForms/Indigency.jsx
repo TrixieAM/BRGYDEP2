@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -66,6 +66,8 @@ import {
   Folder as FolderIcon,
   Article as ArticleIcon,
   CheckCircle as CheckCircleIcon,
+  PhotoCamera as PhotoCameraIcon,
+  ContentPaste as ContentPasteIcon,
 } from '@mui/icons-material';
 import { useMediaQuery } from '@mui/material';
 
@@ -153,12 +155,8 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiOutlinedInput-notchedOutline': { borderColor: '#000000' },
-          '&:hover .MuiOutlinedInput-notchedOutline': {
-            borderColor: '#41644A',
-          },
-          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-            borderColor: '#41644A',
-          },
+          '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#41644A' },
+          '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#41644A' },
         },
       },
     },
@@ -167,12 +165,8 @@ const theme = createTheme({
         root: {
           '& .MuiOutlinedInput-root': {
             '& .MuiOutlinedInput-notchedOutline': { borderColor: '#000000' },
-            '&:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: '#41644A',
-            },
-            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: '#41644A',
-            },
+            '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#41644A' },
+            '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#41644A' },
           },
         },
       },
@@ -211,6 +205,20 @@ export default function Indigency() {
   const [showValidCertDialog, setShowValidCertDialog] = useState(false);
   const [validCertInfo, setValidCertInfo] = useState(null);
 
+  // ── Camera state ────────────────────────────────────────────────────────────
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const [cameraDevices, setCameraDevices] = useState([]);
+  const [selectedCameraId, setSelectedCameraId] = useState('');
+  const [capturedPreview, setCapturedPreview] = useState('');
+
+  // ── Paste state ─────────────────────────────────────────────────────────────
+  const [isPasteZoneActive, setIsPasteZoneActive] = useState(false);
+
+  const videoRef = useRef(null);
+  const cameraStreamRef = useRef(null);
+  const applicantPhotoInputRef = useRef(null);
+
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { saveCertificate, getValidityPeriod } =
     useCertificateManager('Barangay Indigency');
@@ -228,7 +236,7 @@ export default function Indigency() {
     resident_id: '',
     full_name: '',
     address: '',
-    barangay: '',
+    barangay: '145',
     provincial_address: '',
     dob: '',
     age: '',
@@ -245,35 +253,18 @@ export default function Indigency() {
     prepared_by_position: '',
     use_signature: false,
     signature_id: null,
+    applicant_photo: '',
   });
 
-  const civilStatusOptions = [
-    'Single',
-    'Married',
-    'Widowed',
-    'Divorced',
-    'Separated',
-  ];
+  const civilStatusOptions = ['Single', 'Married', 'Widowed', 'Divorced', 'Separated'];
 
   function formatDateDisplay(dateString) {
     if (!dateString) return '';
-    const dateOnly = dateString.includes('T')
-      ? dateString.split('T')[0]
-      : dateString;
+    const dateOnly = dateString.includes('T') ? dateString.split('T')[0] : dateString;
     const [year, month, day] = dateOnly.split('-');
     const monthNames = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
     ];
     return `${monthNames[parseInt(month) - 1]} ${parseInt(day)}, ${year}`;
   }
@@ -282,18 +273,8 @@ export default function Indigency() {
     if (!dateString) return '';
     const date = new Date(dateString);
     const monthNames = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
     ];
     const month = monthNames[date.getMonth()];
     const day = date.getDate();
@@ -309,18 +290,11 @@ export default function Indigency() {
   function calculateAge(dateString) {
     if (!dateString) return '';
     const [year, month, day] = dateString.split('-');
-    const birthDate = new Date(
-      parseInt(year),
-      parseInt(month) - 1,
-      parseInt(day),
-    );
+    const birthDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (
-      monthDiff < 0 ||
-      (monthDiff === 0 && today.getDate() < birthDate.getDate())
-    ) {
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
       age--;
     }
     return age.toString();
@@ -336,30 +310,163 @@ export default function Indigency() {
   }
 
   function generateControlNumber() {
-    const random = Math.floor(Math.random() * 10000)
-      .toString()
-      .padStart(4, '0');
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
     return `2026145-${random}`;
   }
 
   function storeCertificateData(certificateData) {
     if (!certificateData.indigency_id) return;
-    const existingCertificates = JSON.parse(
-      localStorage.getItem('certificates') || '{}',
-    );
+    const existingCertificates = JSON.parse(localStorage.getItem('certificates') || '{}');
     existingCertificates[certificateData.indigency_id] = certificateData;
     localStorage.setItem('certificates', JSON.stringify(existingCertificates));
   }
 
+  // ── Camera helpers ──────────────────────────────────────────────────────────
+
+  function stopCameraStream() {
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }
+
+  async function loadCameraDevices() {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter((device) => device.kind === 'videoinput');
+    setCameraDevices(videoDevices);
+    if (!selectedCameraId && videoDevices[0]?.deviceId) {
+      setSelectedCameraId(videoDevices[0].deviceId);
+    }
+  }
+
+  async function startCamera(deviceId = selectedCameraId) {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('This browser does not support camera capture.');
+      return;
+    }
+    try {
+      setCameraError('');
+      stopCameraStream();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: deviceId ? { deviceId: { exact: deviceId } } : true,
+        audio: false,
+      });
+      cameraStreamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      await loadCameraDevices();
+    } catch (error) {
+      console.error(error);
+      setCameraError('Unable to access the camera. Allow camera permission or choose another device.');
+    }
+  }
+
+  function openCameraCapture() {
+    setCapturedPreview('');
+    setIsCameraOpen(true);
+  }
+
+  useEffect(() => {
+    if (isCameraOpen) {
+      startCamera(selectedCameraId);
+      return undefined;
+    }
+    stopCameraStream();
+    return undefined;
+  }, [isCameraOpen]);
+
+  function closeCameraCapture() {
+    stopCameraStream();
+    setCapturedPreview('');
+    setIsCameraOpen(false);
+    setCameraError('');
+  }
+
+  function captureApplicantPhoto() {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const capturedPhoto = canvas.toDataURL('image/jpeg', 0.92);
+    stopCameraStream();
+    setCapturedPreview(capturedPhoto);
+  }
+
+  function confirmApplicantPhoto() {
+    setFormData((prev) => ({ ...prev, applicant_photo: capturedPreview }));
+    setCapturedPreview('');
+    setIsCameraOpen(false);
+  }
+
+  function retakePhoto() {
+    setCapturedPreview('');
+    startCamera(selectedCameraId);
+  }
+
+  function handleApplicantPhotoUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload a valid image file (PNG, JPG, etc).');
+      e.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setCapturedPreview('');
+      setFormData((prev) => ({ ...prev, applicant_photo: reader.result }));
+      setIsCameraOpen(false);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }
+
+  // ── Paste handler ────────────────────────────────────────────────────────────
+  function handlePasteImage(e) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (!file) continue;
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setFormData((prev) => ({ ...prev, applicant_photo: reader.result }));
+          setIsPasteZoneActive(false);
+        };
+        reader.readAsDataURL(file);
+        e.preventDefault();
+        return;
+      }
+    }
+    alert('No image found in clipboard. Copy an image first, then paste.');
+  }
+
+  // ── Global Ctrl+V listener (only when paste zone is active) ──────────────────
+  useEffect(() => {
+    if (!isPasteZoneActive) return;
+    const handler = (e) => handlePasteImage(e);
+    window.addEventListener('paste', handler);
+    return () => window.removeEventListener('paste', handler);
+  }, [isPasteZoneActive]);
+
+  // ── Data loading ────────────────────────────────────────────────────────────
+
   async function loadResidents() {
     try {
-      const res = await fetch(`${apiBase}/residents`, {
-        headers: getAuthHeaders(),
-      });
+      const res = await fetch(`${apiBase}/residents`, { headers: getAuthHeaders() });
       const data = await res.json();
-      setResidents(
-        data.map((r) => ({ ...r, dob: r.dob ? r.dob.split('T')[0] : '' })),
-      );
+      setResidents(data.map((r) => ({ ...r, dob: r.dob ? r.dob.split('T')[0] : '' })));
     } catch (e) {
       console.error(e);
     }
@@ -382,40 +489,42 @@ export default function Indigency() {
 
   async function loadRecords() {
     try {
-      const res = await fetch(`${apiBase}/indigency`, {
-        headers: getAuthHeaders(),
-      });
+      const res = await fetch(`${apiBase}/indigency`, { headers: getAuthHeaders() });
       const data = await res.json();
       setRecords(
         Array.isArray(data)
-          ? data.map((r) => ({
-              indigency_id: r.indigency_id,
-              resident_id: r.resident_id,
-              full_name: r.full_name,
-              address: r.address,
-              barangay: r.barangay || '',
-              provincial_address: r.provincial_address || '',
-              dob: r.dob?.split('T')[0] || '',
-              age: String(r.age ?? ''),
-              civil_status: r.civil_status,
-              contact_no: r.contact_no || '',
-              source_of_income: r.source_of_income || '',
-              monthly_income: r.monthly_income || '',
-              request_reason: r.request_reason,
-              remarks: r.remarks || '',
-              date_issued: r.date_issued?.split('T')[0] || '',
-              date_created: r.date_created,
-              transaction_number:
-                r.transaction_number || generateTransactionNumber(),
-              control_no: r.control_no || '',
-              prepared_by_name: r.prepared_by_name || '',
-              prepared_by_position: r.prepared_by_position || '',
-              use_signature: Boolean(r.use_signature),
-              signature_id: r.signature_id || null,
-              official_name: r.official_name || null,
-              designation: r.designation || null,
-              signature_path: r.signature_path || null,
-            }))
+          ? data.map((r) => {
+              const storedCertificates = JSON.parse(localStorage.getItem('certificates') || '{}');
+              const storedCertificate = storedCertificates[r.indigency_id] || {};
+              return {
+                indigency_id: r.indigency_id,
+                resident_id: r.resident_id,
+                full_name: r.full_name,
+                address: r.address,
+                barangay: r.barangay || '',
+                provincial_address: r.provincial_address || '',
+                dob: r.dob?.split('T')[0] || '',
+                age: String(r.age ?? ''),
+                civil_status: r.civil_status,
+                contact_no: r.contact_no || '',
+                source_of_income: r.source_of_income || '',
+                monthly_income: r.monthly_income || '',
+                request_reason: r.request_reason,
+                remarks: r.remarks || '',
+                date_issued: r.date_issued?.split('T')[0] || '',
+                date_created: r.date_created,
+                transaction_number: r.transaction_number || generateTransactionNumber(),
+                control_no: r.control_no || '',
+                prepared_by_name: r.prepared_by_name || '',
+                prepared_by_position: r.prepared_by_position || '',
+                use_signature: Boolean(r.use_signature),
+                signature_id: r.signature_id || null,
+                official_name: r.official_name || null,
+                designation: r.designation || null,
+                signature_path: r.signature_path || null,
+                applicant_photo: storedCertificate.applicant_photo || '',
+              };
+            })
           : [],
       );
     } catch (e) {
@@ -434,12 +543,7 @@ export default function Indigency() {
 
   const display = useMemo(() => {
     let data = editingId || isFormOpen ? formData : selectedRecord || formData;
-    if (
-      data &&
-      data.use_signature &&
-      data.signature_id &&
-      !data.signature_path
-    ) {
+    if (data && data.use_signature && data.signature_id && !data.signature_path) {
       const sig = signatures.find((s) => s.signature_id === data.signature_id);
       if (sig) {
         return {
@@ -504,8 +608,7 @@ export default function Indigency() {
       prepared_by_name: data.prepared_by_name || null,
       prepared_by_position: data.prepared_by_position || null,
       use_signature: data.use_signature ? 1 : 0,
-      signature_id:
-        data.use_signature && data.signature_id ? data.signature_id : null,
+      signature_id: data.use_signature && data.signature_id ? data.signature_id : null,
     };
   }
 
@@ -550,11 +653,12 @@ export default function Indigency() {
       });
       if (!res.ok) throw new Error('Update failed');
       const updatedData = await res.json();
-      const updatedRec = { ...updatedData, validity_period: validityPeriod };
-      setRecords([
-        updatedRec,
-        ...records.filter((r) => r.indigency_id !== editingId),
-      ]);
+      const updatedRec = {
+        ...updatedData,
+        validity_period: validityPeriod,
+        applicant_photo: formData.applicant_photo || '',
+      };
+      setRecords([updatedRec, ...records.filter((r) => r.indigency_id !== editingId)]);
       setSelectedRecord(updatedRec);
       await saveCertificate(updatedRec, false);
       storeCertificateData(updatedRec);
@@ -576,9 +680,7 @@ export default function Indigency() {
     setIsFormOpen(true);
     setActiveTab('form');
     if (record.signature_id) {
-      setSelectedSignature(
-        signatures.find((s) => s.signature_id === record.signature_id) || null,
-      );
+      setSelectedSignature(signatures.find((s) => s.signature_id === record.signature_id) || null);
     } else {
       setSelectedSignature(null);
     }
@@ -594,14 +696,9 @@ export default function Indigency() {
       if (!res.ok) throw new Error('Delete failed');
       setRecords(records.filter((r) => r.indigency_id !== id));
       if (selectedRecord?.indigency_id === id) setSelectedRecord(null);
-      const existingCertificates = JSON.parse(
-        localStorage.getItem('certificates') || '{}',
-      );
+      const existingCertificates = JSON.parse(localStorage.getItem('certificates') || '{}');
       delete existingCertificates[id];
-      localStorage.setItem(
-        'certificates',
-        JSON.stringify(existingCertificates),
-      );
+      localStorage.setItem('certificates', JSON.stringify(existingCertificates));
     } catch (e) {
       console.error(e);
       alert('Failed to delete record');
@@ -619,9 +716,7 @@ export default function Indigency() {
     setIsFormOpen(true);
     setActiveTab('form');
     if (record.signature_id) {
-      setSelectedSignature(
-        signatures.find((s) => s.signature_id === record.signature_id) || null,
-      );
+      setSelectedSignature(signatures.find((s) => s.signature_id === record.signature_id) || null);
     } else {
       setSelectedSignature(null);
     }
@@ -632,7 +727,7 @@ export default function Indigency() {
       resident_id: '',
       full_name: '',
       address: '',
-      barangay: '',
+      barangay: '145',
       provincial_address: '',
       dob: '',
       age: '',
@@ -649,11 +744,13 @@ export default function Indigency() {
       prepared_by_position: '',
       use_signature: false,
       signature_id: null,
+      applicant_photo: '',
     });
     setEditingId(null);
     setIsFormOpen(false);
     setSelectedRecord(null);
     setSelectedSignature(null);
+    setIsPasteZoneActive(false);
   }
 
   function handleSubmit() {
@@ -725,11 +822,7 @@ export default function Indigency() {
       parentOfPreview.style.transform = prevTransform;
       parentOfPreview.style.transformOrigin = prevTransformOrigin;
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'in',
-        format: [8.5, 11],
-      });
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'in', format: [8.5, 11] });
       pdf.addImage(imgData, 'PNG', 0, 0, 8.5, 11);
       pdf.save(
         `Indigency_Certificate_${display.indigency_id}_${display.full_name.replace(/\s+/g, '_')}.pdf`,
@@ -753,8 +846,7 @@ export default function Indigency() {
       return;
     }
     const iframe = document.createElement('iframe');
-    iframe.style.cssText =
-      'position:absolute;left:-9999px;top:0;width:0;height:0;';
+    iframe.style.cssText = 'position:absolute;left:-9999px;top:0;width:0;height:0;';
     document.body.appendChild(iframe);
     const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
     iframeDoc.write(`<!DOCTYPE html><html><head><title>Print Certificate</title>
@@ -769,9 +861,7 @@ export default function Indigency() {
       const iframeWindow = iframe.contentWindow || iframe;
       iframeWindow.focus();
       iframeWindow.print();
-      window.onafterprint = () => {
-        document.body.removeChild(iframe);
-      };
+      window.onafterprint = () => { document.body.removeChild(iframe); };
       setTimeout(() => {
         if (document.body.contains(iframe)) document.body.removeChild(iframe);
       }, 1000);
@@ -785,45 +875,23 @@ export default function Indigency() {
   useEffect(() => {
     const handleKeyPress = (e) => {
       if (e.ctrlKey || e.metaKey) {
-        if (e.key === '=' || e.key === '+') {
-          e.preventDefault();
-          handleZoomIn();
-        } else if (e.key === '-') {
-          e.preventDefault();
-          handleZoomOut();
-        } else if (e.key === '0') {
-          e.preventDefault();
-          handleResetZoom();
-        }
+        if (e.key === '=' || e.key === '+') { e.preventDefault(); handleZoomIn(); }
+        else if (e.key === '-') { e.preventDefault(); handleZoomOut(); }
+        else if (e.key === '0') { e.preventDefault(); handleResetZoom(); }
       }
     };
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [zoomLevel]);
 
-  // ── Helper: parse date_issued into day / month / year ──────────────────────
   function getIssuedParts(dateStr) {
     if (!dateStr) return { day: '___', month: '________', year: '____' };
     const d = new Date(dateStr + 'T00:00:00');
     const monthNames = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
     ];
-    return {
-      day: d.getDate(),
-      month: monthNames[d.getMonth()],
-      year: d.getFullYear(),
-    };
+    return { day: d.getDate(), month: monthNames[d.getMonth()], year: d.getFullYear() };
   }
 
   return (
@@ -865,22 +933,14 @@ export default function Indigency() {
                 <Chip
                   icon={<FolderIcon />}
                   label="Total Records"
-                  sx={{
-                    bgcolor: 'rgba(255,255,255,0.2)',
-                    color: 'white',
-                    fontWeight: 600,
-                  }}
+                  sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', fontWeight: 600 }}
                 />
               </Badge>
               <Button
                 variant="contained"
                 color="secondary"
                 startIcon={<AddIcon />}
-                onClick={() => {
-                  resetForm();
-                  setIsFormOpen(true);
-                  setActiveTab('form');
-                }}
+                onClick={() => { resetForm(); setIsFormOpen(true); setActiveTab('form'); }}
                 sx={{ borderRadius: 20, px: 3 }}
               >
                 New Certificate
@@ -889,32 +949,18 @@ export default function Indigency() {
           </Box>
 
           {/* NAVIGATION TABS */}
-          <Box
-            sx={{
-              bgcolor: 'background.paper',
-              borderBottom: 1,
-              borderColor: 'divider',
-            }}
-          >
+          <Box sx={{ bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
             <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
               <Tabs
                 value={activeTab}
                 onChange={(e, nv) => setActiveTab(nv)}
                 variant="fullWidth"
                 sx={{
-                  '& .MuiTabs-indicator': {
-                    height: 3,
-                    borderRadius: '3px 3px 0 0',
-                  },
+                  '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' },
                   minHeight: 48,
                 }}
               >
-                <Tab
-                  icon={<ArticleIcon />}
-                  label="Form"
-                  value="form"
-                  iconPosition="start"
-                />
+                <Tab icon={<ArticleIcon />} label="Form" value="form" iconPosition="start" />
                 <Tab
                   icon={<FolderIcon />}
                   label={`Records (${records.length})`}
@@ -955,11 +1001,7 @@ export default function Indigency() {
               >
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                   <Tooltip title="Zoom Out">
-                    <IconButton
-                      onClick={handleZoomOut}
-                      color="primary"
-                      size="small"
-                    >
+                    <IconButton onClick={handleZoomOut} color="primary" size="small">
                       <ZoomOutIcon />
                     </IconButton>
                   </Tooltip>
@@ -979,20 +1021,12 @@ export default function Indigency() {
                     {Math.round(zoomLevel * 100)}%
                   </Typography>
                   <Tooltip title="Zoom In">
-                    <IconButton
-                      onClick={handleZoomIn}
-                      color="primary"
-                      size="small"
-                    >
+                    <IconButton onClick={handleZoomIn} color="primary" size="small">
                       <ZoomInIcon />
                     </IconButton>
                   </Tooltip>
                   <Tooltip title="Reset Zoom">
-                    <IconButton
-                      onClick={handleResetZoom}
-                      color="primary"
-                      size="small"
-                    >
+                    <IconButton onClick={handleResetZoom} color="primary" size="small">
                       <ResetIcon />
                     </IconButton>
                   </Tooltip>
@@ -1036,12 +1070,7 @@ export default function Indigency() {
                 p: 1,
               }}
             >
-              <Box
-                sx={{
-                  transform: `scale(${zoomLevel})`,
-                  transformOrigin: 'top center',
-                }}
-              >
+              <Box sx={{ transform: `scale(${zoomLevel})`, transformOrigin: 'top center' }}>
                 <div
                   id="certificate-preview"
                   style={{
@@ -1070,7 +1099,7 @@ export default function Indigency() {
                       width: '120%',
                       objectFit: 'cover',
                       objectPosition: 'center top',
-                      opacity: 0.5,
+                      opacity: 0.7,
                       zIndex: 0,
                       transform: 'scale(0.8)',
                       transformOrigin: 'top right',
@@ -1090,64 +1119,26 @@ export default function Indigency() {
                       <img
                         src={CaloocanLogo}
                         alt="Caloocan Logo"
-                        style={{
-                          width: '120px',
-                          height: '120px',
-                          objectFit: 'contain',
-                        }}
+                        style={{ width: '120px', height: '120px', objectFit: 'contain' }}
                       />
-                      <div
-                        style={{
-                          textAlign: 'center',
-                          flex: 1,
-                          padding: '0 20px',
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontFamily: 'Old English Text MT',
-                            fontSize: '16pt',
-                          }}
-                        >
+                      <div style={{ textAlign: 'center', flex: 1, padding: '0 20px' }}>
+                        <div style={{ fontFamily: 'Old English Text MT', fontSize: '16pt' }}>
                           Republic of the Philippines
                         </div>
-                        <div
-                          style={{
-                            fontFamily: '"Times New Roman"',
-                            fontSize: '16pt',
-                            marginTop: '2px',
-                          }}
-                        >
+                        <div style={{ fontFamily: '"Times New Roman"', fontSize: '16pt', marginTop: '2px' }}>
                           City of Caloocan
                         </div>
-                        <div
-                          style={{
-                            fontFamily: '"Times New Roman"',
-                            fontSize: '16pt',
-                            marginTop: '2px',
-                          }}
-                        >
+                        <div style={{ fontFamily: '"Times New Roman"', fontSize: '16pt', marginTop: '2px' }}>
                           Barangay 145, Zone 13, District 1
                         </div>
-                        <div
-                          style={{
-                            fontFamily: '"Times New Roman"',
-                            fontSize: '12pt',
-                            marginTop: '2px',
-                          }}
-                        >
-                          Reparo St. Cor. Gen. Tirona St. Bagong Barrio,
-                          Caloocan City
+                        <div style={{ fontFamily: '"Times New Roman"', fontSize: '12pt', marginTop: '2px' }}>
+                          Reparo St. Cor. Gen. Tirona St. Bagong Barrio, Caloocan City
                         </div>
                       </div>
                       <img
                         src={Logo145}
                         alt="Barangay 145 Logo"
-                        style={{
-                          width: '120px',
-                          height: '120px',
-                          objectFit: 'contain',
-                        }}
+                        style={{ width: '120px', height: '120px', objectFit: 'contain' }}
                       />
                     </div>
 
@@ -1193,67 +1184,39 @@ export default function Indigency() {
                         TO WHOM IT MAY CONCERN:
                       </p>
 
-                      {/* Paragraph 1 */}
                       <p style={{ margin: '0 0 10px 0', textIndent: '50px' }}>
                         This is to certify that{' '}
-                        <strong>
-                          {display.full_name || '_______________'}
-                        </strong>
-                        , <strong>{display.age || '__'}</strong> years old,{' '}
-                        <strong>{display.civil_status || '______'}</strong>, and
-                        a resident of{' '}
-                        <strong>{display.address || '_______________'}</strong>,
-                        Caloocan City, belongs to the indigent family's barangay
-                        of{' '}
-                        <strong>{display.barangay || '_______________'}</strong>
-                        .
+                        <strong>{display.full_name || '_______________'}</strong>,{' '}
+                        <strong>{display.age || '__'}</strong> years old,{' '}
+                        <strong>{display.civil_status || '______'}</strong>, and a resident of{' '}
+                        <strong>{display.address || '_______________'}</strong>, Caloocan City,
+                        belongs to the indigent family's barangay of{' '}
+                        <strong>{display.barangay || '145'}</strong>.
                       </p>
 
                       {/* Paragraph 2 - HIDDEN */}
-                      <p
-                        style={{
-                          margin: '0 0 10px 0',
-                          textIndent: '50px',
-                          display: 'none',
-                        }}
-                      >
-                        This certification is issued upon the request of the
-                        above-mentioned individual is currently working as a{' '}
-                        <strong>
-                          {display.source_of_income || '_______________'}
-                        </strong>{' '}
-                        and is only earning{' '}
-                        <strong>
-                          {display.monthly_income || '_______________'}
-                        </strong>{' '}
-                        per month.
+                      <p style={{ margin: '0 0 10px 0', textIndent: '50px', display: 'none' }}>
+                        This certification is issued upon the request of the above-mentioned
+                        individual is currently working as a{' '}
+                        <strong>{display.source_of_income || '_______________'}</strong> and is only
+                        earning <strong>{display.monthly_income || '_______________'}</strong> per
+                        month.
                       </p>
 
-                      {/* Paragraph 3 */}
                       <p style={{ margin: '0 0 10px 0', textIndent: '50px' }}>
-                        This certification is issued upon the request of the
-                        above-mentioned individual for{' '}
-                        <strong>
-                          {display.request_reason || '_______________'}
-                        </strong>{' '}
-                        and is valid for six (6) months from the date of its
-                        issuance.
+                        This certification is issued upon the request of the above-mentioned
+                        individual for{' '}
+                        <strong>{display.request_reason || '_______________'}</strong> and is valid
+                        for six (6) months from the date of its issuance.
                       </p>
 
-                      {/* Issued line */}
                       {(() => {
-                        const { day, month, year } = getIssuedParts(
-                          display.date_issued,
-                        );
+                        const { day, month, year } = getIssuedParts(display.date_issued);
                         return (
-                          <p
-                            style={{ margin: '0 0 6px 0', textIndent: '50px' }}
-                          >
-                            Issued this <strong>{day}</strong> day of{' '}
-                            <strong>{month}</strong>, <strong>{year}</strong>,
-                            at Barangay{' '}
-                            <strong>{display.barangay || '_______'}</strong>,
-                            Caloocan City.
+                          <p style={{ margin: '0 0 6px 0', textIndent: '50px' }}>
+                            Issued this <strong>{day}</strong> day of <strong>{month}</strong>,{' '}
+                            <strong>{year}</strong>, at Barangay{' '}
+                            <strong>{display.barangay || '145'}</strong>, Caloocan City.
                           </p>
                         );
                       })()}
@@ -1274,21 +1237,30 @@ export default function Indigency() {
                             width: '150px',
                             height: '150px',
                             border: '1.5px solid #000',
+                            overflow: 'hidden',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: '#fff',
                           }}
-                        />
-                        <div style={{ fontSize: '10pt', marginTop: '6px' }}>
+                        >
+                          {display.applicant_photo ? (
+                            <img
+                              src={display.applicant_photo}
+                              alt="Applicant Photo"
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                          ) : null}
+                        </div>
+                        <div style={{ fontSize: '10pt', marginTop: '6px', fontWeight: 'bold' }}>
                           Applicant Photo
                         </div>
                       </div>
                       <div style={{ textAlign: 'center' }}>
                         <div
-                          style={{
-                            width: '150px',
-                            height: '150px',
-                            border: '1.5px solid #000',
-                          }}
+                          style={{ width: '150px', height: '150px', border: '1.5px solid #000' }}
                         />
-                        <div style={{ fontSize: '10pt', marginTop: '6px' }}>
+                        <div style={{ fontSize: '10pt', marginTop: '6px', fontWeight: 'bold' }}>
                           Applicant Thumbmark
                         </div>
                       </div>
@@ -1303,13 +1275,7 @@ export default function Indigency() {
                         marginTop: '10px',
                       }}
                     >
-                      <div
-                        style={{
-                          textAlign: 'center',
-                          width: '300px',
-                          marginTop: '50px',
-                        }}
-                      >
+                      <div style={{ textAlign: 'center', width: '300px', marginTop: '50px' }}>
                         {display.use_signature && display.signature_path ? (
                           <div
                             style={{
@@ -1323,14 +1289,8 @@ export default function Indigency() {
                             <img
                               src={getSignatureImageUrl(display.signature_path)}
                               alt="Signature"
-                              style={{
-                                maxWidth: '200px',
-                                maxHeight: '65px',
-                                objectFit: 'contain',
-                              }}
-                              onError={(e) => {
-                                e.target.style.display = 'none';
-                              }}
+                              style={{ maxWidth: '200px', maxHeight: '65px', objectFit: 'contain' }}
+                              onError={(e) => { e.target.style.display = 'none'; }}
                             />
                           </div>
                         ) : null}
@@ -1373,56 +1333,53 @@ export default function Indigency() {
                     </div>
 
                     {/* Barangay Seal & Control No. */}
-                    <div
-                      style={{ padding: '30px 70px 0 70px', fontSize: '11pt' }}
-                    >
+                    <div style={{ padding: '30px 70px 0 70px', fontSize: '11pt' }}>
                       <div>Barangay Seal</div>
                       <div style={{ marginTop: '4px' }}>
                         Control No.{' '}
-                        <span
-                          style={{ minWidth: '120px', display: 'inline-block' }}
-                        >
-                          {display.control_no ||
-                            '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0'}
+                        <span style={{ minWidth: '120px', display: 'inline-block' }}>
+                          {display.control_no || '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0'}
                         </span>
                       </div>
                       <ul
                         style={{
                           marginTop: '8px',
                           paddingLeft: '20px',
-                          fontSize: '9pt',
+                          fontSize: '10pt',
                           lineHeight: '1.6',
-                          listStyleType: 'disc',
+                          listStyleType: 'none',
+                          padding: 0,
                         }}
                       >
-                        <li>
-                          This certification is not valid without the Official
-                          Barangay Dry Seal and the Barangay Chairman's
-                          Signature/Stamp.
+                        <li style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '4px' }}>
+                          <span style={{ marginRight: '8px' }}>➤</span>
+                          <span>
+                            This certification is not valid without the Official Barangay Dry Seal
+                            and the Barangay Chairman's Signature/Stamp.
+                          </span>
                         </li>
-                        <li>
-                          Officials and applicants who submit false
-                          certifications or documents shall be held liable for
-                          administrative/criminal liabilities.
+                        <li style={{ display: 'flex', alignItems: 'flex-start' }}>
+                          <span style={{ marginRight: '8px' }}>➤</span>
+                          <span>
+                            Officials and applicants who submit false certifications or documents
+                            shall be held liable for administrative/criminal liabilities.
+                          </span>
                         </li>
                       </ul>
                       <div
                         style={{
-                          fontSize: '10pt',
+                          fontSize: '11pt',
                           marginTop: '50px',
                           fontFamily: '"Times New Roman"',
                         }}
                       >
                         <div>
                           Prepared by:{' '}
-                          <strong>
-                            {display.prepared_by_name || 'Roselyn Anore'}
-                          </strong>
+                          <strong>{display.prepared_by_name || 'Roselyn Anore'}</strong>
                         </div>
                         <div style={{ marginLeft: '80px' }}>
                           <strong>
-                            {display.prepared_by_position ||
-                              'Barangay Secretary'}
+                            {display.prepared_by_position || 'Barangay Secretary'}
                           </strong>
                         </div>
                       </div>
@@ -1436,9 +1393,7 @@ export default function Indigency() {
                         }}
                       >
                         This certification is{' '}
-                        <strong>
-                          valid for six (6) months from the date of issuance.
-                        </strong>
+                        <strong>valid for six (6) months from the date of issuance.</strong>
                       </div>
                       <div
                         style={{
@@ -1446,10 +1401,7 @@ export default function Indigency() {
                           textAlign: 'right',
                           paddingRight: '10px',
                           height: '110px',
-                          visibility:
-                            qrCodeUrl && display.use_signature
-                              ? 'visible'
-                              : 'hidden',
+                          visibility: qrCodeUrl && display.use_signature ? 'visible' : 'hidden',
                         }}
                       >
                         <img
@@ -1482,7 +1434,6 @@ export default function Indigency() {
                       </div>
                     </div>
                   </div>
-                  {/* end zIndex wrapper */}
                 </div>
               </Box>
             </Box>
@@ -1512,32 +1463,14 @@ export default function Indigency() {
           >
             {/* ── FORM ── */}
             {activeTab === 'form' && (
-              <Box
-                sx={{
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  overflow: 'hidden',
-                }}
-              >
-                <Paper
-                  elevation={0}
-                  sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}
-                >
+              <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <Paper elevation={0} sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}>
                   <Typography
                     variant="h6"
-                    sx={{
-                      fontWeight: 600,
-                      mb: 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                    }}
+                    sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}
                   >
                     <ArticleIcon color="primary" />
-                    {editingId
-                      ? 'Edit Certificate'
-                      : 'New Certificate of Indigency'}
+                    {editingId ? 'Edit Certificate' : 'New Certificate of Indigency'}
                   </Typography>
                   {selectedRecord && !editingId && (
                     <Typography variant="body2" color="text.secondary">
@@ -1552,11 +1485,7 @@ export default function Indigency() {
                     <Autocomplete
                       options={residents}
                       getOptionLabel={(option) => option.full_name || ''}
-                      value={
-                        residents.find(
-                          (r) => r.full_name === formData.full_name,
-                        ) || null
-                      }
+                      value={residents.find((r) => r.full_name === formData.full_name) || null}
                       onChange={(e, nv) => {
                         if (nv) {
                           setFormData({
@@ -1595,9 +1524,7 @@ export default function Indigency() {
                       multiline
                       rows={2}
                       value={formData.address}
-                      onChange={(e) =>
-                        setFormData({ ...formData, address: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                       required
                     />
 
@@ -1607,11 +1534,9 @@ export default function Indigency() {
                       variant="outlined"
                       fullWidth
                       size="small"
-                      placeholder="e.g. 145"
+                      placeholder="145"
                       value={formData.barangay}
-                      onChange={(e) =>
-                        setFormData({ ...formData, barangay: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, barangay: e.target.value })}
                       required
                     />
 
@@ -1638,9 +1563,7 @@ export default function Indigency() {
                           size="small"
                           value={formData.age}
                           InputProps={{ readOnly: true }}
-                          sx={{
-                            '& .MuiOutlinedInput-root': { bgcolor: 'grey.100' },
-                          }}
+                          sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'grey.100' } }}
                         />
                       </Grid>
                     </Grid>
@@ -1651,12 +1574,7 @@ export default function Indigency() {
                       <Select
                         value={formData.civil_status}
                         label="Civil Status"
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            civil_status: e.target.value,
-                          })
-                        }
+                        onChange={(e) => setFormData({ ...formData, civil_status: e.target.value })}
                       >
                         {civilStatusOptions.map((status) => (
                           <MenuItem key={status} value={status}>
@@ -1674,9 +1592,7 @@ export default function Indigency() {
                       size="small"
                       placeholder="09XXXXXXXXX"
                       value={formData.contact_no}
-                      onChange={(e) =>
-                        setFormData({ ...formData, contact_no: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, contact_no: e.target.value })}
                     />
 
                     {/* Provincial Address */}
@@ -1687,10 +1603,7 @@ export default function Indigency() {
                       size="small"
                       value={formData.provincial_address}
                       onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          provincial_address: e.target.value,
-                        })
+                        setFormData({ ...formData, provincial_address: e.target.value })
                       }
                     />
 
@@ -1705,10 +1618,7 @@ export default function Indigency() {
                           placeholder="e.g. Vendor, Driver"
                           value={formData.source_of_income}
                           onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              source_of_income: e.target.value,
-                            })
+                            setFormData({ ...formData, source_of_income: e.target.value })
                           }
                         />
                       </Grid>
@@ -1721,10 +1631,7 @@ export default function Indigency() {
                           placeholder="e.g. ₱5,000"
                           value={formData.monthly_income}
                           onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              monthly_income: e.target.value,
-                            })
+                            setFormData({ ...formData, monthly_income: e.target.value })
                           }
                         />
                       </Grid>
@@ -1741,10 +1648,7 @@ export default function Indigency() {
                       placeholder="Job application, School enrollment, etc."
                       value={formData.request_reason}
                       onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          request_reason: e.target.value,
-                        })
+                        setFormData({ ...formData, request_reason: e.target.value })
                       }
                       required
                     />
@@ -1758,10 +1662,120 @@ export default function Indigency() {
                       multiline
                       rows={2}
                       value={formData.remarks}
-                      onChange={(e) =>
-                        setFormData({ ...formData, remarks: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
                     />
+
+                    {/* ── Applicant Photo ── */}
+                    <Box
+                      sx={{
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 2,
+                        p: 2,
+                        bgcolor: 'background.paper',
+                      }}
+                    >
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                        Applicant Photo
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                        Capture from camera, upload a file, or paste an image from your clipboard.
+                      </Typography>
+
+                      {/* Buttons row */}
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
+                        <Button
+                          variant="outlined"
+                          startIcon={<PhotoCameraIcon />}
+                          onClick={openCameraCapture}
+                          size="small"
+                        >
+                          Open Camera
+                        </Button>
+                        <Button
+                          variant="contained"
+                          color="secondary"
+                          size="small"
+                          onClick={() => applicantPhotoInputRef.current?.click()}
+                        >
+                          Upload Photo
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          color={isPasteZoneActive ? 'success' : 'primary'}
+                          startIcon={<ContentPasteIcon />}
+                          size="small"
+                          onClick={() => setIsPasteZoneActive((prev) => !prev)}
+                        >
+                          {isPasteZoneActive ? 'Waiting for paste…' : 'Paste Photo'}
+                        </Button>
+                      </Box>
+
+                      {/* Paste zone — shown when active */}
+                      {isPasteZoneActive && (
+                        <Box
+                          onPaste={handlePasteImage}
+                          tabIndex={0}
+                          sx={{
+                            border: '2px dashed',
+                            borderColor: 'success.main',
+                            borderRadius: 2,
+                            p: 3,
+                            mb: 1.5,
+                            textAlign: 'center',
+                            bgcolor: 'rgba(65,100,74,0.06)',
+                            cursor: 'pointer',
+                            outline: 'none',
+                            '&:focus': { boxShadow: '0 0 0 3px rgba(65,100,74,0.25)' },
+                          }}
+                          ref={(el) => el && el.focus()}
+                        >
+                          <ContentPasteIcon sx={{ fontSize: 36, color: 'success.main', mb: 1 }} />
+                          <Typography variant="body2" color="success.main" fontWeight={600}>
+                            Press <strong>Ctrl+V</strong> (or <strong>⌘V</strong>) to paste
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Copy any image first, then paste it here
+                          </Typography>
+                        </Box>
+                      )}
+
+                      <input
+                        ref={applicantPhotoInputRef}
+                        type="file"
+                        accept="image/*"
+                        hidden
+                        onChange={handleApplicantPhotoUpload}
+                      />
+
+                      {formData.applicant_photo ? (
+                        <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <Box
+                            component="img"
+                            src={formData.applicant_photo}
+                            alt="Applicant preview"
+                            sx={{
+                              width: 144,
+                              height: 144,
+                              objectFit: 'cover',
+                              borderRadius: 2,
+                              border: '1px solid',
+                              borderColor: 'divider',
+                            }}
+                          />
+                          <Button
+                            variant="text"
+                            color="error"
+                            onClick={() => {
+                              setFormData({ ...formData, applicant_photo: '' });
+                              setIsPasteZoneActive(false);
+                            }}
+                          >
+                            Remove Photo
+                          </Button>
+                        </Box>
+                      ) : null}
+                    </Box>
 
                     {/* Date Issued */}
                     <TextField
@@ -1772,12 +1786,7 @@ export default function Indigency() {
                       size="small"
                       InputLabelProps={{ shrink: true }}
                       value={formData.date_issued}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          date_issued: e.target.value,
-                        })
-                      }
+                      onChange={(e) => setFormData({ ...formData, date_issued: e.target.value })}
                       required
                     />
 
@@ -1789,9 +1798,7 @@ export default function Indigency() {
                       size="small"
                       value={formData.control_no}
                       InputProps={{ readOnly: true }}
-                      sx={{
-                        '& .MuiOutlinedInput-root': { bgcolor: 'grey.100' },
-                      }}
+                      sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'grey.100' } }}
                     />
 
                     {/* Prepared By */}
@@ -1805,10 +1812,7 @@ export default function Indigency() {
                           placeholder="e.g. Roselyn Anore"
                           value={formData.prepared_by_name}
                           onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              prepared_by_name: e.target.value,
-                            })
+                            setFormData({ ...formData, prepared_by_name: e.target.value })
                           }
                         />
                       </Grid>
@@ -1821,10 +1825,7 @@ export default function Indigency() {
                           placeholder="e.g. Barangay Secretary"
                           value={formData.prepared_by_position}
                           onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              prepared_by_position: e.target.value,
-                            })
+                            setFormData({ ...formData, prepared_by_position: e.target.value })
                           }
                         />
                       </Grid>
@@ -1858,17 +1859,13 @@ export default function Indigency() {
                     {formData.use_signature && (
                       <Autocomplete
                         options={signatures}
-                        getOptionLabel={(opt) =>
-                          `${opt.official_name} - ${opt.designation}`
-                        }
+                        getOptionLabel={(opt) => `${opt.official_name} - ${opt.designation}`}
                         value={selectedSignature}
                         onChange={(e, newValue) => {
                           setSelectedSignature(newValue);
                           setFormData({
                             ...formData,
-                            signature_id: newValue
-                              ? newValue.signature_id
-                              : null,
+                            signature_id: newValue ? newValue.signature_id : null,
                           });
                         }}
                         renderInput={(params) => (
@@ -1915,27 +1912,11 @@ export default function Indigency() {
 
             {/* ── RECORDS ── */}
             {activeTab === 'records' && (
-              <Box
-                sx={{
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  overflow: 'hidden',
-                }}
-              >
-                <Paper
-                  elevation={0}
-                  sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}
-                >
+              <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <Paper elevation={0} sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}>
                   <Typography
                     variant="h6"
-                    sx={{
-                      fontWeight: 600,
-                      mb: 2,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                    }}
+                    sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}
                   >
                     <FolderIcon color="primary" /> Certificate Records
                   </Typography>
@@ -1957,13 +1938,7 @@ export default function Indigency() {
 
                 <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
                   {filteredRecords.length === 0 ? (
-                    <Paper
-                      sx={{
-                        p: 4,
-                        textAlign: 'center',
-                        color: 'text.secondary',
-                      }}
-                    >
+                    <Paper sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>
                       <FolderIcon sx={{ fontSize: 48, mb: 2, opacity: 0.3 }} />
                       <Typography variant="h6" gutterBottom>
                         {searchTerm ? 'No records found' : 'No records yet'}
@@ -1997,29 +1972,14 @@ export default function Indigency() {
                               <Box sx={{ flex: 1 }}>
                                 <Typography
                                   variant="subtitle1"
-                                  sx={{
-                                    fontWeight: 600,
-                                    mb: 0.5,
-                                    color: '#000000',
-                                  }}
+                                  sx={{ fontWeight: 600, mb: 0.5, color: '#000000' }}
                                 >
                                   {record.full_name}
                                 </Typography>
-                                <Typography
-                                  variant="body2"
-                                  color="text.secondary"
-                                  sx={{ mb: 1 }}
-                                >
+                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                                   {record.address}
                                 </Typography>
-                                <Box
-                                  sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    mb: 1,
-                                    gap: 1,
-                                  }}
-                                >
+                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1 }}>
                                   <Chip
                                     label={record.civil_status}
                                     size="small"
@@ -2027,19 +1987,12 @@ export default function Indigency() {
                                     variant="outlined"
                                   />
                                   {record.contact_no && (
-                                    <Typography
-                                      variant="caption"
-                                      color="text.secondary"
-                                    >
+                                    <Typography variant="caption" color="text.secondary">
                                       {record.contact_no}
                                     </Typography>
                                   )}
-                                  <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                  >
-                                    Issued:{' '}
-                                    {formatDateDisplay(record.date_issued)}
+                                  <Typography variant="caption" color="text.secondary">
+                                    Issued: {formatDateDisplay(record.date_issued)}
                                   </Typography>
                                 </Box>
                                 {record.use_signature && (
@@ -2074,9 +2027,7 @@ export default function Indigency() {
                                 <Tooltip title="Delete">
                                   <IconButton
                                     size="small"
-                                    onClick={() =>
-                                      handleDelete(record.indigency_id)
-                                    }
+                                    onClick={() => handleDelete(record.indigency_id)}
                                     color="error"
                                   >
                                     <DeleteIcon />
@@ -2101,157 +2052,248 @@ export default function Indigency() {
             color="primary"
             aria-label="add"
             sx={{ position: 'absolute', bottom: 16, right: 16 }}
-            onClick={() => {
-              resetForm();
-              setIsFormOpen(true);
-              setActiveTab('form');
-            }}
+            onClick={() => { resetForm(); setIsFormOpen(true); setActiveTab('form'); }}
           >
             <AddIcon />
           </Fab>
         )}
       </Box>
 
-      {/* QR Code Details Dialog */}
+      {/* ── CAMERA CAPTURE DIALOG ── */}
       <Dialog
-        open={qrDialogOpen}
-        onClose={() => setQrDialogOpen(false)}
-        maxWidth="md"
+        open={isCameraOpen}
+        onClose={closeCameraCapture}
         fullWidth
+        maxWidth="sm"
+        PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden' } }}
       >
+        <DialogTitle
+          sx={{
+            bgcolor: 'primary.main',
+            color: 'white',
+            py: 2,
+            px: 3,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PhotoCameraIcon />
+            <Typography variant="h6" fontWeight={700}>
+              {capturedPreview ? 'Use this photo?' : 'Capture Applicant Photo'}
+            </Typography>
+          </Box>
+          <IconButton size="small" onClick={closeCameraCapture} sx={{ color: 'white' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ p: 0, bgcolor: '#000', position: 'relative', lineHeight: 0 }}>
+          <Box sx={{ display: capturedPreview ? 'none' : 'block' }}>
+            {cameraError ? (
+              <Box
+                sx={{
+                  p: 4,
+                  textAlign: 'center',
+                  bgcolor: '#1a1a1a',
+                  minHeight: 280,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 1,
+                }}
+              >
+                <PhotoCameraIcon sx={{ fontSize: 48, color: '#555' }} />
+                <Typography color="error" variant="body2" sx={{ maxWidth: 320 }}>
+                  {cameraError}
+                </Typography>
+              </Box>
+            ) : (
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{
+                  width: '100%',
+                  display: 'block',
+                  maxHeight: '420px',
+                  objectFit: 'cover',
+                }}
+              />
+            )}
+          </Box>
+
+          {capturedPreview && (
+            <Box
+              component="img"
+              src={capturedPreview}
+              alt="Captured photo preview"
+              sx={{ width: '100%', display: 'block', maxHeight: '420px', objectFit: 'cover' }}
+            />
+          )}
+        </DialogContent>
+
+        {!capturedPreview && cameraDevices.length > 1 && (
+          <Box sx={{ px: 2, pt: 2, pb: 1, bgcolor: 'background.paper' }}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Camera</InputLabel>
+              <Select
+                value={selectedCameraId}
+                label="Camera"
+                onChange={(e) => {
+                  const nextId = e.target.value;
+                  setSelectedCameraId(nextId);
+                  startCamera(nextId);
+                }}
+              >
+                {cameraDevices.map((device, index) => (
+                  <MenuItem key={device.deviceId} value={device.deviceId}>
+                    {device.label || `Camera ${index + 1}`}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+        )}
+
+        <DialogActions sx={{ p: 2, gap: 1, bgcolor: 'background.paper' }}>
+          {capturedPreview ? (
+            <>
+              <Button
+                onClick={retakePhoto}
+                variant="outlined"
+                color="primary"
+                startIcon={<ResetIcon />}
+                sx={{ flex: 1 }}
+              >
+                Retake
+              </Button>
+              <Button
+                onClick={confirmApplicantPhoto}
+                variant="contained"
+                color="primary"
+                startIcon={<CheckCircleIcon />}
+                sx={{ flex: 1 }}
+              >
+                Use Photo
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={closeCameraCapture} variant="outlined" color="primary">
+                Cancel
+              </Button>
+              {cameraError && (
+                <Button
+                  onClick={() => startCamera(selectedCameraId)}
+                  variant="outlined"
+                  color="primary"
+                >
+                  Retry Camera
+                </Button>
+              )}
+              <Button
+                onClick={captureApplicantPhoto}
+                variant="contained"
+                color="primary"
+                startIcon={<PhotoCameraIcon />}
+                disabled={!!cameraError}
+                sx={{ flex: 1 }}
+              >
+                Capture
+              </Button>
+            </>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      {/* ── QR Code Details Dialog ── */}
+      <Dialog open={qrDialogOpen} onClose={() => setQrDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white' }}>
           Certificate Details
         </DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Certificate ID:
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Certificate ID:</Typography>
               <Typography variant="body1" sx={{ fontWeight: 600 }}>
                 {display.indigency_id || 'Draft'}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Transaction Number:
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Transaction Number:</Typography>
               <Typography variant="body1" sx={{ fontWeight: 600 }}>
                 {display.transaction_number || 'N/A'}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Full Name:
-              </Typography>
-              <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                {display.full_name}
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Full Name:</Typography>
+              <Typography variant="body1" sx={{ fontWeight: 600 }}>{display.full_name}</Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Address:
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Address:</Typography>
               <Typography variant="body1">{display.address}</Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Barangay:
-              </Typography>
-              <Typography variant="body1">
-                {display.barangay || 'N/A'}
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Barangay:</Typography>
+              <Typography variant="body1">{display.barangay || 'N/A'}</Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Date of Birth:
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Date of Birth:</Typography>
               <Typography variant="body1">
                 {display.dob ? formatDateDisplay(display.dob) : 'N/A'}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Age:
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Age:</Typography>
               <Typography variant="body1">{display.age}</Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Civil Status:
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Civil Status:</Typography>
               <Typography variant="body1">{display.civil_status}</Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Source of Income:
-              </Typography>
-              <Typography variant="body1">
-                {display.source_of_income || 'N/A'}
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Source of Income:</Typography>
+              <Typography variant="body1">{display.source_of_income || 'N/A'}</Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Monthly Income:
-              </Typography>
-              <Typography variant="body1">
-                {display.monthly_income || 'N/A'}
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Monthly Income:</Typography>
+              <Typography variant="body1">{display.monthly_income || 'N/A'}</Typography>
             </Grid>
             <Grid item xs={12}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Request Reason:
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Request Reason:</Typography>
               <Typography variant="body1">{display.request_reason}</Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Control No.:
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Control No.:</Typography>
+              <Typography variant="body1">{display.control_no || 'N/A'}</Typography>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Date Issued:</Typography>
+              <Typography variant="body1">{formatDateDisplay(display.date_issued)}</Typography>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Date Created:</Typography>
               <Typography variant="body1">
-                {display.control_no || 'N/A'}
+                {display.date_created ? formatDateTimeDisplay(display.date_created) : 'N/A'}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Date Issued:
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Prepared By:</Typography>
               <Typography variant="body1">
-                {formatDateDisplay(display.date_issued)}
+                {display.prepared_by_name || 'N/A'} — {display.prepared_by_position || 'N/A'}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Date Created:
-              </Typography>
-              <Typography variant="body1">
-                {display.date_created
-                  ? formatDateTimeDisplay(display.date_created)
-                  : 'N/A'}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Prepared By:
-              </Typography>
-              <Typography variant="body1">
-                {display.prepared_by_name || 'N/A'} —{' '}
-                {display.prepared_by_position || 'N/A'}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                E-Signature:
-              </Typography>
-              <Typography variant="body1">
-                {display.use_signature ? 'Yes' : 'No'}
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>E-Signature:</Typography>
+              <Typography variant="body1">{display.use_signature ? 'Yes' : 'No'}</Typography>
             </Grid>
             {display.use_signature && (
               <Grid item xs={12} md={6}>
-                <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                  Signed By:
-                </Typography>
+                <Typography variant="body2" sx={{ color: 'grey.600' }}>Signed By:</Typography>
                 <Typography variant="body1">
                   {display.official_name} — {display.designation}
                 </Typography>
@@ -2260,13 +2302,11 @@ export default function Indigency() {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setQrDialogOpen(false)} color="primary">
-            Close
-          </Button>
+          <Button onClick={() => setQrDialogOpen(false)} color="primary">Close</Button>
         </DialogActions>
       </Dialog>
 
-      {/* Valid Certificate Warning Dialog */}
+      {/* ── Valid Certificate Warning Dialog ── */}
       <Dialog
         open={showValidCertDialog}
         onClose={() => setShowValidCertDialog(false)}
@@ -2280,8 +2320,8 @@ export default function Indigency() {
         <DialogContent sx={{ p: 3 }}>
           <Typography>
             This resident already has a valid Certificate of Indigency issued on{' '}
-            {validCertInfo && formatDateDisplay(validCertInfo.date_issued)}.
-            Certificates are valid for 6 months.
+            {validCertInfo && formatDateDisplay(validCertInfo.date_issued)}. Certificates are valid
+            for 6 months.
           </Typography>
           <Typography sx={{ mt: 2 }}>
             Are you sure you want to create a new certificate for this resident?
@@ -2321,9 +2361,7 @@ function CertificateVerification() {
     const urlParams = new URLSearchParams(window.location.search);
     const certificateId = urlParams.get('id');
     if (certificateId) {
-      const certificates = JSON.parse(
-        localStorage.getItem('certificates') || '{}',
-      );
+      const certificates = JSON.parse(localStorage.getItem('certificates') || '{}');
       const cert = certificates[certificateId];
       if (cert) setCertificate(cert);
       else setError('Certificate not found');
@@ -2362,23 +2400,11 @@ function CertificateVerification() {
 
   function formatDateDisplay(dateString) {
     if (!dateString) return '';
-    const dateOnly = dateString.includes('T')
-      ? dateString.split('T')[0]
-      : dateString;
+    const dateOnly = dateString.includes('T') ? dateString.split('T')[0] : dateString;
     const [year, month, day] = dateOnly.split('-');
     const monthNames = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
     ];
     return `${monthNames[parseInt(month) - 1]} ${parseInt(day)}, ${year}`;
   }
@@ -2387,18 +2413,8 @@ function CertificateVerification() {
     if (!dateString) return '';
     const date = new Date(dateString);
     const monthNames = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
     ];
     const month = monthNames[date.getMonth()];
     const day = date.getDate();
@@ -2414,24 +2430,10 @@ function CertificateVerification() {
     if (!dateStr) return { day: '___', month: '________', year: '____' };
     const d = new Date(dateStr + 'T00:00:00');
     const monthNames = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
     ];
-    return {
-      day: d.getDate(),
-      month: monthNames[d.getMonth()],
-      year: d.getFullYear(),
-    };
+    return { day: d.getDate(), month: monthNames[d.getMonth()], year: d.getFullYear() };
   }
 
   async function generatePDF() {
@@ -2446,11 +2448,7 @@ function CertificateVerification() {
         backgroundColor: '#ffffff',
       });
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'in',
-        format: [8.5, 11],
-      });
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'in', format: [8.5, 11] });
       pdf.addImage(imgData, 'PNG', 0, 0, 8.5, 11);
       pdf.save(
         `Indigency_Certificate_${certificate.indigency_id}_${certificate.full_name.replace(/\s+/g, '_')}.pdf`,
@@ -2475,16 +2473,9 @@ function CertificateVerification() {
   useEffect(() => {
     const handleKeyPress = (e) => {
       if (e.ctrlKey || e.metaKey) {
-        if (e.key === '=' || e.key === '+') {
-          e.preventDefault();
-          handleZoomIn();
-        } else if (e.key === '-') {
-          e.preventDefault();
-          handleZoomOut();
-        } else if (e.key === '0') {
-          e.preventDefault();
-          handleResetZoom();
-        }
+        if (e.key === '=' || e.key === '+') { e.preventDefault(); handleZoomIn(); }
+        else if (e.key === '-') { e.preventDefault(); handleZoomOut(); }
+        else if (e.key === '0') { e.preventDefault(); handleResetZoom(); }
       }
     };
     window.addEventListener('keydown', handleKeyPress);
@@ -2493,28 +2484,14 @@ function CertificateVerification() {
 
   if (loading)
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          height: '100vh',
-        }}
-      >
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <Typography>Loading certificate...</Typography>
       </Box>
     );
 
   if (error)
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          height: '100vh',
-        }}
-      >
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <Typography color="error">{error}</Typography>
       </Box>
     );
@@ -2535,10 +2512,7 @@ function CertificateVerification() {
               boxShadow: 1,
             }}
           >
-            <Typography
-              variant="h4"
-              sx={{ fontWeight: 600, color: 'primary.main' }}
-            >
+            <Typography variant="h4" sx={{ fontWeight: 600, color: 'primary.main' }}>
               Certificate Verification
             </Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>
@@ -2566,42 +2540,22 @@ function CertificateVerification() {
 
           {/* Certificate Details Panel */}
           <Paper sx={{ p: 4, mb: 2, borderRadius: 3, boxShadow: 1 }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              Certificate Details
-            </Typography>
+            <Typography variant="h6" sx={{ mb: 2 }}>Certificate Details</Typography>
             <Grid container spacing={2}>
               {[
                 { label: 'Certificate ID', value: certificate.indigency_id },
-                {
-                  label: 'Transaction Number',
-                  value: certificate.transaction_number,
-                },
+                { label: 'Transaction Number', value: certificate.transaction_number },
                 { label: 'Full Name', value: certificate.full_name },
                 { label: 'Address', value: certificate.address },
                 { label: 'Barangay', value: certificate.barangay || 'N/A' },
-                {
-                  label: 'Date of Birth',
-                  value: formatDateDisplay(certificate.dob),
-                },
+                { label: 'Date of Birth', value: formatDateDisplay(certificate.dob) },
                 { label: 'Age', value: certificate.age },
                 { label: 'Civil Status', value: certificate.civil_status },
-                {
-                  label: 'Source of Income',
-                  value: certificate.source_of_income || 'N/A',
-                },
-                {
-                  label: 'Monthly Income',
-                  value: certificate.monthly_income || 'N/A',
-                },
+                { label: 'Source of Income', value: certificate.source_of_income || 'N/A' },
+                { label: 'Monthly Income', value: certificate.monthly_income || 'N/A' },
                 { label: 'Request Reason', value: certificate.request_reason },
-                {
-                  label: 'Control No.',
-                  value: certificate.control_no || 'N/A',
-                },
-                {
-                  label: 'Date Issued',
-                  value: formatDateDisplay(certificate.date_issued),
-                },
+                { label: 'Control No.', value: certificate.control_no || 'N/A' },
+                { label: 'Date Issued', value: formatDateDisplay(certificate.date_issued) },
                 {
                   label: 'Date Created',
                   value: certificate.date_created
@@ -2612,25 +2566,16 @@ function CertificateVerification() {
                   label: 'Prepared By',
                   value: `${certificate.prepared_by_name || 'N/A'} — ${certificate.prepared_by_position || 'N/A'}`,
                 },
-                {
-                  label: 'E-Signature',
-                  value: certificate.use_signature ? 'Yes' : 'No',
-                },
+                { label: 'E-Signature', value: certificate.use_signature ? 'Yes' : 'No' },
               ].map(({ label, value }) => (
                 <Grid item xs={12} md={6} key={label}>
-                  <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                    {label}:
-                  </Typography>
-                  <Typography variant="body1" sx={{ color: 'text.primary' }}>
-                    {value}
-                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'grey.600' }}>{label}:</Typography>
+                  <Typography variant="body1" sx={{ color: 'text.primary' }}>{value}</Typography>
                 </Grid>
               ))}
               {certificate.use_signature && (
                 <Grid item xs={12} md={6}>
-                  <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                    Signed By:
-                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'grey.600' }}>Signed By:</Typography>
                   <Typography variant="body1">
                     {certificate.official_name} — {certificate.designation}
                   </Typography>
@@ -2694,12 +2639,7 @@ function CertificateVerification() {
               padding: '20px 0',
             }}
           >
-            <div
-              style={{
-                transform: `scale(${zoomLevel})`,
-                transformOrigin: 'top center',
-              }}
-            >
+            <div style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'top center' }}>
               <div
                 id="certificate-preview"
                 style={{
@@ -2747,35 +2687,13 @@ function CertificateVerification() {
                     <img
                       src={CaloocanLogo}
                       alt="Caloocan Logo"
-                      style={{
-                        width: '90px',
-                        height: '90px',
-                        objectFit: 'contain',
-                      }}
+                      style={{ width: '90px', height: '90px', objectFit: 'contain' }}
                     />
-                    <div
-                      style={{
-                        textAlign: 'center',
-                        flex: 1,
-                        padding: '0 20px',
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontFamily:
-                            ' "Old English Text MT", ',
-                          fontSize: '15pt',
-                        }}
-                      >
+                    <div style={{ textAlign: 'center', flex: 1, padding: '0 20px' }}>
+                      <div style={{ fontFamily: '"Old English Text MT"', fontSize: '15pt' }}>
                         Republic of the Philippines
                       </div>
-                      <div
-                        style={{
-                          fontFamily: '"Times New Roman"',
-                          fontSize: '14pt',
-                          marginTop: '2px',
-                        }}
-                      >
+                      <div style={{ fontFamily: '"Times New Roman"', fontSize: '14pt', marginTop: '2px' }}>
                         City of Caloocan
                       </div>
                       <div
@@ -2788,37 +2706,19 @@ function CertificateVerification() {
                       >
                         Barangay 145, Zone 13, District 1
                       </div>
-                      <div
-                        style={{
-                          fontFamily: '"Times New Roman"',
-                          fontSize: '10pt',
-                          marginTop: '2px',
-                        }}
-                      >
-                        Reparo St. Cor. Gen. Tirona St. Bagong Barrio, Caloocan
-                        City
+                      <div style={{ fontFamily: '"Times New Roman"', fontSize: '10pt', marginTop: '2px' }}>
+                        Reparo St. Cor. Gen. Tirona St. Bagong Barrio, Caloocan City
                       </div>
                     </div>
                     <img
                       src={Logo145}
                       alt="Barangay 145 Logo"
-                      style={{
-                        width: '90px',
-                        height: '90px',
-                        objectFit: 'contain',
-                      }}
+                      style={{ width: '90px', height: '90px', objectFit: 'contain' }}
                     />
                   </div>
 
-                  <div
-                    style={{ borderTop: '3px solid #000', margin: '0 50px' }}
-                  />
-                  <div
-                    style={{
-                      borderTop: '1px solid #000',
-                      margin: '3px 50px 0 50px',
-                    }}
-                  />
+                  <div style={{ borderTop: '3px solid #000', margin: '0 50px' }} />
+                  <div style={{ borderTop: '1px solid #000', margin: '3px 50px 0 50px' }} />
                   <div
                     style={{
                       textAlign: 'center',
@@ -2830,18 +2730,8 @@ function CertificateVerification() {
                   >
                     OFFICE OF THE SANGGUNIANG BARANGAY
                   </div>
-                  <div
-                    style={{
-                      borderTop: '1px solid #000',
-                      margin: '8px 50px 0 50px',
-                    }}
-                  />
-                  <div
-                    style={{
-                      borderTop: '3px solid #000',
-                      margin: '3px 50px 0 50px',
-                    }}
-                  />
+                  <div style={{ borderTop: '1px solid #000', margin: '8px 50px 0 50px' }} />
+                  <div style={{ borderTop: '3px solid #000', margin: '3px 50px 0 50px' }} />
                   <div
                     style={{
                       textAlign: 'center',
@@ -2866,74 +2756,38 @@ function CertificateVerification() {
                       textAlign: 'justify',
                     }}
                   >
-                    <p style={{ fontWeight: 'bold', margin: '0 0 10px 0' }}>
-                      TO WHOM IT MAY CONCERN:
-                    </p>
+                    <p style={{ fontWeight: 'bold', margin: '0 0 10px 0' }}>TO WHOM IT MAY CONCERN:</p>
                     <p style={{ margin: '0 0 10px 0', textIndent: '50px' }}>
                       This is to certify that{' '}
-                      <strong>
-                        {certificate.full_name || '_______________'}
-                      </strong>
-                      , <strong>{certificate.age || '__'}</strong> years old,{' '}
-                      <strong>{certificate.civil_status || '______'}</strong>,
-                      and a resident of{' '}
-                      <strong>
-                        {certificate.address || '_______________'}
-                      </strong>
-                      , Caloocan City, belongs to the indigent family's barangay
-                      of{' '}
-                      <strong>
-                        {certificate.barangay || '_______________'}
-                      </strong>
-                      .
+                      <strong>{certificate.full_name || '_______________'}</strong>,{' '}
+                      <strong>{certificate.age || '__'}</strong> years old,{' '}
+                      <strong>{certificate.civil_status || '______'}</strong>, and a resident of{' '}
+                      <strong>{certificate.address || '_______________'}</strong>, Caloocan City,
+                      belongs to the indigent family's barangay of{' '}
+                      <strong>{certificate.barangay || '_______________'}</strong>.
                     </p>
                     <p style={{ margin: '0 0 10px 0', textIndent: '50px' }}>
                       The above-mentioned individual is currently working as a{' '}
-                      <strong>
-                        {certificate.source_of_income || '_______________'}
-                      </strong>{' '}
-                      and is only earning{' '}
-                      <strong>
-                        {certificate.monthly_income || '_______________'}
-                      </strong>{' '}
-                      per month.
+                      <strong>{certificate.source_of_income || '_______________'}</strong> and is
+                      only earning{' '}
+                      <strong>{certificate.monthly_income || '_______________'}</strong> per month.
                     </p>
                     <p style={{ margin: '0 0 10px 0', textIndent: '50px' }}>
-                      This certification is issued upon the request of the
-                      above-mentioned individual for{' '}
-                      <strong>
-                        {certificate.request_reason || '_______________'}
-                      </strong>{' '}
-                      and is valid for six (6) months from the date of its
-                      issuance.
+                      This certification is issued upon the request of the above-mentioned
+                      individual for{' '}
+                      <strong>{certificate.request_reason || '_______________'}</strong> and is
+                      valid for six (6) months from the date of its issuance.
                     </p>
                     {(() => {
-                      const { day, month, year } = getIssuedParts(
-                        certificate.date_issued,
-                      );
+                      const { day, month, year } = getIssuedParts(certificate.date_issued);
                       return (
                         <p style={{ margin: '0 0 6px 0', textIndent: '50px' }}>
-                          Issued this <strong>{day}</strong> day of{' '}
-                          <strong>{month}</strong>, <strong>{year}</strong>, at
-                          Barangay{' '}
-                          <strong>{certificate.barangay || '_______'}</strong>,
-                          Caloocan City.
+                          Issued this <strong>{day}</strong> day of <strong>{month}</strong>,{' '}
+                          <strong>{year}</strong>, at Barangay{' '}
+                          <strong>{certificate.barangay || '_______'}</strong>, Caloocan City.
                         </p>
                       );
                     })()}
-                  </div>
-
-                  {/* Signed */}
-                  <div
-                    style={{
-                      textAlign: 'right',
-                      padding: '10px 120px 0 0',
-                      fontFamily: '"Times New Roman"',
-                      fontSize: '12pt',
-                      fontWeight: 'bold',
-                    }}
-                  >
-                    Signed:
                   </div>
 
                   {/* Photo & Thumbmark */}
@@ -2948,24 +2802,29 @@ function CertificateVerification() {
                     <div style={{ textAlign: 'center' }}>
                       <div
                         style={{
-                          width: '120px',
-                          height: '140px',
+                          width: '2in',
+                          height: '2in',
                           border: '1.5px solid #000',
+                          overflow: 'hidden',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: '#fff',
                         }}
-                      />
-                      <div style={{ fontSize: '10pt', marginTop: '6px' }}>
-                        Applicant Photo
+                      >
+                        {certificate.applicant_photo ? (
+                          <img
+                            src={certificate.applicant_photo}
+                            alt="Applicant Photo"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        ) : null}
                       </div>
+                      <div style={{ fontSize: '10pt', marginTop: '6px' }}>Applicant Photo</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
-                      <div
-                        style={{
-                          width: '120px',
-                          height: '140px',
-                          border: '1.5px solid #000',
-                        }}
-                      />
-                      <div style={{ fontSize: '10pt', marginTop: '6px' }}>
+                      <div style={{ width: '120px', height: '140px', border: '1.5px solid #000' }} />
+                      <div style={{ fontSize: '10pt', marginTop: '6px', fontWeight: 'bold' }}>
                         Applicant Thumbmark
                       </div>
                     </div>
@@ -2981,8 +2840,7 @@ function CertificateVerification() {
                     }}
                   >
                     <div style={{ textAlign: 'center', width: '300px' }}>
-                      {certificate.use_signature &&
-                      certificate.signature_path ? (
+                      {certificate.use_signature && certificate.signature_path ? (
                         <div
                           style={{
                             height: '70px',
@@ -2993,18 +2851,10 @@ function CertificateVerification() {
                           }}
                         >
                           <img
-                            src={getSignatureImageUrl(
-                              certificate.signature_path,
-                            )}
+                            src={getSignatureImageUrl(certificate.signature_path)}
                             alt="Signature"
-                            style={{
-                              maxWidth: '200px',
-                              maxHeight: '65px',
-                              objectFit: 'contain',
-                            }}
-                            onError={(e) => {
-                              e.target.style.display = 'none';
-                            }}
+                            style={{ maxWidth: '200px', maxHeight: '65px', objectFit: 'contain' }}
+                            onError={(e) => { e.target.style.display = 'none'; }}
                           />
                         </div>
                       ) : null}
@@ -3028,11 +2878,7 @@ function CertificateVerification() {
                         />
                       </div>
                       <div
-                        style={{
-                          borderTop: '2px solid #000',
-                          width: '90%',
-                          margin: '0 auto 4px auto',
-                        }}
+                        style={{ borderTop: '2px solid #000', width: '90%', margin: '0 auto 4px auto' }}
                       />
                       <div
                         style={{
@@ -3057,14 +2903,7 @@ function CertificateVerification() {
                               padding: '3px',
                             }}
                           />
-                          <div
-                            style={{
-                              fontSize: '7pt',
-                              color: '#666',
-                              marginTop: '3px',
-                              fontWeight: 'normal',
-                            }}
-                          >
+                          <div style={{ fontSize: '7pt', color: '#666', marginTop: '3px' }}>
                             {certificate.date_created
                               ? formatDateTimeDisplay(certificate.date_created)
                               : new Date().toLocaleString()}
@@ -3075,17 +2914,12 @@ function CertificateVerification() {
                   </div>
 
                   {/* Footer */}
-                  <div
-                    style={{ padding: '10px 70px 0 70px', fontSize: '11pt' }}
-                  >
+                  <div style={{ padding: '10px 70px 0 70px', fontSize: '11pt' }}>
                     <div style={{ fontWeight: 'bold' }}>Barangay Seal</div>
                     <div style={{ fontWeight: 'bold', marginTop: '4px' }}>
                       Control No.{' '}
-                      <span
-                        style={{ minWidth: '120px', display: 'inline-block' }}
-                      >
-                        {certificate.control_no ||
-                          '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0'}
+                      <span style={{ minWidth: '120px', display: 'inline-block' }}>
+                        {certificate.control_no || '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0'}
                       </span>
                     </div>
                     <ul
@@ -3098,33 +2932,22 @@ function CertificateVerification() {
                       }}
                     >
                       <li>
-                        This certification is not valid without the Official
-                        Barangay Dry Seal and the Barangay Chairman's
-                        Signature/Stamp.
+                        This certification is not valid without the Official Barangay Dry Seal and
+                        the Barangay Chairman's Signature/Stamp.
                       </li>
                       <li>
-                        Officials and applicants who submit false certifications
-                        or documents shall be held liable for
-                        administrative/criminal liabilities.
+                        Officials and applicants who submit false certifications or documents shall
+                        be held liable for administrative/criminal liabilities.
                       </li>
                     </ul>
-                    <div
-                      style={{
-                        fontSize: '10pt',
-                        marginTop: '8px',
-                        fontFamily: '"Times New Roman"',
-                      }}
-                    >
+                    <div style={{ fontSize: '10pt', marginTop: '8px', fontFamily: '"Times New Roman"' }}>
                       <div>
                         Prepared by:{' '}
-                        <strong>
-                          {certificate.prepared_by_name || 'Roselyn Anore'}
-                        </strong>
+                        <strong>{certificate.prepared_by_name || 'Roselyn Anore'}</strong>
                       </div>
                       <div style={{ marginLeft: '80px' }}>
                         <strong>
-                          {certificate.prepared_by_position ||
-                            'Barangay Secretary'}
+                          {certificate.prepared_by_position || 'Barangay Secretary'}
                         </strong>
                       </div>
                     </div>
@@ -3137,8 +2960,7 @@ function CertificateVerification() {
                         fontStyle: 'italic',
                       }}
                     >
-                      This certification is valid for six (6) months from the
-                      date of issuance.
+                      This certification is valid for six (6) months from the date of issuance.
                     </div>
                   </div>
                 </div>

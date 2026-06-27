@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -12,7 +12,6 @@ import Monumento from '../../assets/Monumento.png';
 import { useCertificateManager } from '../../hooks/useCertificateManager';
 import { getSignatures, getSignatureImageUrl } from '../../services/signatureService';
 
-// Import Material UI components
 import {
   Container,
   Paper,
@@ -70,32 +69,33 @@ import {
   Dashboard as DashboardIcon,
   Article as ArticleIcon,
   CheckCircle as CheckCircleIcon,
+  PhotoCamera as PhotoCameraIcon,
+  ContentPaste as ContentPasteIcon,
 } from '@mui/icons-material';
 import { useMediaQuery } from '@mui/material';
 
-// Define the custom theme (mirrored from BarangayClearance)
 const theme = createTheme({
   palette: {
     primary: {
-      main: '#41644A', // Darker green from palette
-      light: '#A0B2A6', // Lighter shade for hover/focus
-      dark: '#0D4715', // Even darker green for strong accents
+      main: '#41644A',
+      light: '#A0B2A6',
+      dark: '#0D4715',
     },
     secondary: {
-      main: '#E9762B', // Orange from palette for highlighting
+      main: '#E9762B',
     },
     success: {
-      main: '#41644A', // Darker green from palette
+      main: '#41644A',
       light: '#A0B2A6',
       dark: '#0D4715',
     },
     background: {
-      default: '#F1F0E9', // Off-white/light beige
+      default: '#F1F0E9',
       paper: '#FFFFFF',
     },
     text: {
-      primary: '#000000', // Black for main text
-      secondary: '#41644A', // Another shade for secondary text
+      primary: '#000000',
+      secondary: '#41644A',
     },
     error: {
       main: '#E9762B',
@@ -213,33 +213,27 @@ const theme = createTheme({
   },
 });
 
-// Add this function to check if a resident has a valid certificate
 function hasValidCertificate(residentId, records) {
   if (!residentId || !records || records.length === 0) return false;
-  
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-  
-  return records.some(record => {
+  return records.some((record) => {
     if (record.resident_id !== residentId) return false;
-    
     const issueDate = new Date(record.date_issued);
     return issueDate >= sixMonthsAgo;
   });
 }
-
 
 export default function CertificateOfResidency() {
   const apiBase = 'http://localhost:5000';
   const navigate = useNavigate();
   const { getToken } = useAuth();
 
-  // Helper function to get auth headers
   const getAuthHeaders = () => {
     const token = getToken();
     return {
       'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` })
+      ...(token && { Authorization: `Bearer ${token}` }),
     };
   };
 
@@ -253,21 +247,31 @@ export default function CertificateOfResidency() {
   const [qrCodeUrl, setQrCodeUrl] = useState('');
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState(0.75); // Default zoom level
+  const [zoomLevel, setZoomLevel] = useState(0.75);
   const [signatures, setSignatures] = useState([]);
   const [selectedSignature, setSelectedSignature] = useState(null);
+  const [showValidCertDialog, setShowValidCertDialog] = useState(false);
+  const [validCertInfo, setValidCertInfo] = useState(null);
+
+  // ── Camera state ────────────────────────────────────────────────────────────
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const [cameraDevices, setCameraDevices] = useState([]);
+  const [selectedCameraId, setSelectedCameraId] = useState('');
+  const [capturedPreview, setCapturedPreview] = useState('');
+
+  // ── Paste state ─────────────────────────────────────────────────────────────
+  const [isPasteZoneActive, setIsPasteZoneActive] = useState(false);
+
+  const videoRef = useRef(null);
+  const cameraStreamRef = useRef(null);
+  const applicantPhotoInputRef = useRef(null);
 
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const { saveCertificate, getValidityPeriod, calculateExpirationDate } =
+    useCertificateManager('Certificate of Residency');
 
-  // In the CertificateOfResidency component, add these state variables
-const [showValidCertDialog, setShowValidCertDialog] = useState(false);
-const [validCertInfo, setValidCertInfo] = useState(null);
-
-  const { 
-    saveCertificate, 
-    getValidityPeriod,
-    calculateExpirationDate 
-  } = useCertificateManager('Certificate of Residency');
+  const civilStatusOptions = ['Single', 'Married', 'Widowed', 'Divorced', 'Separated'];
 
   const [formData, setFormData] = useState({
     resident_id: '',
@@ -288,155 +292,227 @@ const [validCertInfo, setValidCertInfo] = useState(null);
     prepared_by_position: '',
     use_signature: false,
     signature_id: null,
+    applicant_photo: '',
   });
 
-  const civilStatusOptions = [
-    'Single',
-    'Married',
-    'Widowed',
-    'Divorced',
-    'Separated',
-  ];
-
-  // Helper function to format date consistently without timezone issues
+  // ── Date helpers ────────────────────────────────────────────────────────────
   function formatDateDisplay(dateString) {
     if (!dateString) return '';
-
-    // Extract just the date part if it's a datetime string
-    const dateOnly = dateString.includes('T')
-      ? dateString.split('T')[0]
-      : dateString;
-
-    // Parse the date components
+    const dateOnly = dateString.includes('T') ? dateString.split('T')[0] : dateString;
     const [year, month, day] = dateOnly.split('-');
-
-    // Format as month name, day, year
     const monthNames = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
     ];
-
     return `${monthNames[parseInt(month) - 1]} ${parseInt(day)}, ${year}`;
   }
 
-  // Helper function to format date and time
   function formatDateTimeDisplay(dateString) {
     if (!dateString) return '';
-
-    // Create a new Date object from the string
     const date = new Date(dateString);
-
-    // Format as month name, day, year, time
     const monthNames = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
     ];
-
     const month = monthNames[date.getMonth()];
     const day = date.getDate();
     const year = date.getFullYear();
-
-    // Format time with AM/PM
     let hours = date.getHours();
     const minutes = date.getMinutes().toString().padStart(2, '0');
     const ampm = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12;
-    hours = hours ? hours : 12; // the hour '0' should be '12'
-
+    hours = hours ? hours : 12;
     return `${month} ${day}, ${year} ${hours}:${minutes} ${ampm}`;
   }
 
-  // Helper function to calculate age from date string
   function calculateAge(dateString) {
     if (!dateString) return '';
-
     const [year, month, day] = dateString.split('-');
-    const birthDate = new Date(
-      parseInt(year),
-      parseInt(month) - 1,
-      parseInt(day)
-    );
+    const birthDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
     const today = new Date();
-
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
-
-    if (
-      monthDiff < 0 ||
-      (monthDiff === 0 && today.getDate() < birthDate.getDate())
-    ) {
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
       age--;
     }
-
     return age.toString();
   }
 
-  // Generate a unique transaction number
   function generateTransactionNumber() {
     const date = new Date();
     const year = date.getFullYear().toString().slice(-2);
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const day = date.getDate().toString().padStart(2, '0');
-    const random =
-      Math.floor(Math.random() * 900) +
-      (100) // 3-digit random number
-        .toString()
-        .padStart(3, '0');
+    const random = (Math.floor(Math.random() * 900) + 100).toString().padStart(3, '0');
     return `COR-${year}${month}${day}-${random}`;
   }
 
-  // Generate control number
   function generateControlNumber() {
     const year = new Date().getFullYear();
-    const random = Math.floor(Math.random() * 1000000)
-      .toString()
-      .padStart(6, '0');
+    const random = Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
     return `${year}145-R${random}`;
   }
 
-  // Store certificate data in localStorage for QR code verification
+  function getIssuedParts(dateStr) {
+    if (!dateStr) return { day: '___', month: '________', year: '____' };
+    const d = new Date(dateStr + 'T00:00:00');
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    return { day: d.getDate(), month: monthNames[d.getMonth()], year: d.getFullYear() };
+  }
+
   function storeCertificateData(certificateData) {
     if (!certificateData.certificate_of_residency_id) return;
-
-    // Get existing certificates from localStorage
-    const existingCertificates = JSON.parse(
-      localStorage.getItem('certificates') || '{}'
-    );
-
-    // Add or update the certificate
+    const existingCertificates = JSON.parse(localStorage.getItem('certificates') || '{}');
     existingCertificates[certificateData.certificate_of_residency_id] = certificateData;
-
-    // Store back to localStorage
     localStorage.setItem('certificates', JSON.stringify(existingCertificates));
   }
 
+  // ── Camera helpers ──────────────────────────────────────────────────────────
+  function stopCameraStream() {
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }
+
+  async function loadCameraDevices() {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter((device) => device.kind === 'videoinput');
+    setCameraDevices(videoDevices);
+    if (!selectedCameraId && videoDevices[0]?.deviceId) {
+      setSelectedCameraId(videoDevices[0].deviceId);
+    }
+  }
+
+  async function startCamera(deviceId = selectedCameraId) {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('This browser does not support camera capture.');
+      return;
+    }
+    try {
+      setCameraError('');
+      stopCameraStream();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: deviceId ? { deviceId: { exact: deviceId } } : true,
+        audio: false,
+      });
+      cameraStreamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      await loadCameraDevices();
+    } catch (error) {
+      console.error(error);
+      setCameraError('Unable to access the camera. Allow camera permission or choose another device.');
+    }
+  }
+
+  function openCameraCapture() {
+    setCapturedPreview('');
+    setIsCameraOpen(true);
+  }
+
+  useEffect(() => {
+    if (isCameraOpen) {
+      startCamera(selectedCameraId);
+      return undefined;
+    }
+    stopCameraStream();
+    return undefined;
+  }, [isCameraOpen]);
+
+  function closeCameraCapture() {
+    stopCameraStream();
+    setCapturedPreview('');
+    setIsCameraOpen(false);
+    setCameraError('');
+  }
+
+  function captureApplicantPhoto() {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const capturedPhoto = canvas.toDataURL('image/jpeg', 0.92);
+    stopCameraStream();
+    setCapturedPreview(capturedPhoto);
+  }
+
+  function confirmApplicantPhoto() {
+    setFormData((prev) => ({ ...prev, applicant_photo: capturedPreview }));
+    setCapturedPreview('');
+    setIsCameraOpen(false);
+  }
+
+  function retakePhoto() {
+    setCapturedPreview('');
+    startCamera(selectedCameraId);
+  }
+
+  function handleApplicantPhotoUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload a valid image file (PNG, JPG, etc).');
+      e.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setCapturedPreview('');
+      setFormData((prev) => ({ ...prev, applicant_photo: reader.result }));
+      setIsCameraOpen(false);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }
+
+  // ── Paste handler ────────────────────────────────────────────────────────────
+  function handlePasteImage(e) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (!file) continue;
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setFormData((prev) => ({ ...prev, applicant_photo: reader.result }));
+          setIsPasteZoneActive(false);
+        };
+        reader.readAsDataURL(file);
+        e.preventDefault();
+        return;
+      }
+    }
+    alert('No image found in clipboard. Copy an image first, then paste.');
+  }
+
+  // ── Global Ctrl+V listener (only when paste zone is active) ──────────────────
+  useEffect(() => {
+    if (!isPasteZoneActive) return;
+    const handler = (e) => handlePasteImage(e);
+    window.addEventListener('paste', handler);
+    return () => window.removeEventListener('paste', handler);
+  }, [isPasteZoneActive]);
+
+  // ── Data loading ────────────────────────────────────────────────────────────
   async function loadResidents() {
     try {
-      const res = await fetch(`${apiBase}/residents`, {
-        headers: getAuthHeaders()
-      });
+      const res = await fetch(`${apiBase}/residents`, { headers: getAuthHeaders() });
       const data = await res.json();
-      // Format dates properly when loading residents - extract only YYYY-MM-DD
       const formattedResidents = data.map((resident) => ({
         ...resident,
         dob: resident.dob ? resident.dob.split('T')[0] : '',
@@ -464,35 +540,37 @@ const [validCertInfo, setValidCertInfo] = useState(null);
 
   async function loadRecords() {
     try {
-      const res = await fetch(`${apiBase}/certificate-of-residency`, {
-        headers: getAuthHeaders()
-      });
+      const res = await fetch(`${apiBase}/certificate-of-residency`, { headers: getAuthHeaders() });
       const data = await res.json();
       setRecords(
         Array.isArray(data)
-          ? data.map((r) => ({
-              certificate_of_residency_id: r.certificate_of_residency_id,
-              resident_id: r.resident_id,
-              full_name: r.full_name,
-              address: r.address,
-              dob: r.dob?.split('T')[0] || '',
-              age: String(r.age ?? ''),
-              provincial_address: r.provincial_address || '',
-              contact_no: r.contact_no || '',
-              civil_status: r.civil_status,
-              remarks: r.remarks,
-              request_reason: r.request_reason,
-              date_issued: r.date_issued?.split('T')[0] || '',
-              date_created: r.date_created,
-              transaction_number:
-                r.transaction_number || generateTransactionNumber(), // Generate if missing
-              use_signature: Boolean(r.use_signature), // Added for e-signature
-              signature_id: r.signature_id || null, // Added for e-signature
-              official_name: r.official_name || null, // Added for e-signature
-              designation: r.designation || null, // Added for e-signature
-              signature_path: r.signature_path || null, // Added for e-signature
-            }))
-          : []
+          ? data.map((r) => {
+              const storedCertificates = JSON.parse(localStorage.getItem('certificates') || '{}');
+              const storedCertificate = storedCertificates[r.certificate_of_residency_id] || {};
+              return {
+                certificate_of_residency_id: r.certificate_of_residency_id,
+                resident_id: r.resident_id,
+                full_name: r.full_name,
+                address: r.address,
+                dob: r.dob?.split('T')[0] || '',
+                age: String(r.age ?? ''),
+                provincial_address: r.provincial_address || '',
+                contact_no: r.contact_no || '',
+                civil_status: r.civil_status,
+                remarks: r.remarks,
+                request_reason: r.request_reason,
+                date_issued: r.date_issued?.split('T')[0] || '',
+                date_created: r.date_created,
+                transaction_number: r.transaction_number || generateTransactionNumber(),
+                use_signature: Boolean(r.use_signature),
+                signature_id: r.signature_id || null,
+                official_name: r.official_name || null,
+                designation: r.designation || null,
+                signature_path: r.signature_path || null,
+                applicant_photo: storedCertificate.applicant_photo || '',
+              };
+            })
+          : [],
       );
     } catch (e) {
       console.error(e);
@@ -509,22 +587,8 @@ const [validCertInfo, setValidCertInfo] = useState(null);
   }
 
   const display = useMemo(() => {
-    let data = null;
-    if (editingId || isFormOpen) {
-      data = formData;
-    } else if (selectedRecord) {
-      data = selectedRecord;
-    } else {
-      data = formData;
-    }
-
-    // If signature is enabled, ensure signature data is available
-    if (
-      data &&
-      data.use_signature &&
-      data.signature_id &&
-      !data.signature_path
-    ) {
+    let data = editingId || isFormOpen ? formData : selectedRecord || formData;
+    if (data && data.use_signature && data.signature_id && !data.signature_path) {
       const sig = signatures.find((s) => s.signature_id === data.signature_id);
       if (sig) {
         return {
@@ -535,45 +599,26 @@ const [validCertInfo, setValidCertInfo] = useState(null);
         };
       }
     }
-
     return data;
   }, [editingId, isFormOpen, selectedRecord, formData, signatures]);
 
-  // Generate QR code with URL for PDF download
   useEffect(() => {
     const generateQRCode = async () => {
       if (display.certificate_of_residency_id || display.full_name) {
-        // Store the certificate data in localStorage
         storeCertificateData(display);
-
-        // Create a URL that points to a verification page
-        const verificationUrl = `${
-          window.location.origin
-        }/verify-certificate?id=${display.certificate_of_residency_id || 'draft'}`;
-
         const qrContent = `CERTIFICATE VERIFICATION:
-        𝗧𝗿𝗮𝗻𝘀𝗮𝗰𝘁𝗶𝗼𝗻 𝗡𝗼: ${display.transaction_number || 'N/A'}
+        Transaction No: ${display.transaction_number || 'N/A'}
         Name: ${display.full_name}
-        Date Issued: ${
-          display.date_created
-            ? formatDateTimeDisplay(display.date_created)
-            : new Date().toLocaleString()
-        }
+        Date Issued: ${display.date_created ? formatDateTimeDisplay(display.date_created) : new Date().toLocaleString()}
         Document Type: Certificate of Residency
-       
         Ⓒ BRRMS | BARANGAY 145
         CALOOCAN CITY
-        ALL RIGHTS RESERVED
-        `;
-
+        ALL RIGHTS RESERVED`;
         try {
           const qrUrl = await QRCode.toDataURL(qrContent, {
             width: 140,
             margin: 1,
-            color: {
-              dark: '#000000',
-              light: '#FFFFFF',
-            },
+            color: { dark: '#000000', light: '#FFFFFF' },
             errorCorrectionLevel: 'L',
           });
           setQrCodeUrl(qrUrl);
@@ -584,7 +629,6 @@ const [validCertInfo, setValidCertInfo] = useState(null);
         setQrCodeUrl('');
       }
     };
-
     generateQRCode();
   }, [display]);
 
@@ -612,16 +656,14 @@ const [validCertInfo, setValidCertInfo] = useState(null);
 
   async function handleCreate() {
     try {
-      // Generate a transaction number for new certificates
       const transactionNumber = generateTransactionNumber();
       const validityPeriod = getValidityPeriod('Certificate of Residency');
       const updatedFormData = {
         ...formData,
         transaction_number: transactionNumber,
-        date_created: new Date().toISOString(), // Add current timestamp
-        validity_period: validityPeriod, // Add validity period
+        date_created: new Date().toISOString(),
+        validity_period: validityPeriod,
       };
-
       const res = await fetch(`${apiBase}/certificate-of-residency`, {
         method: 'POST',
         headers: getAuthHeaders(),
@@ -629,17 +671,14 @@ const [validCertInfo, setValidCertInfo] = useState(null);
       });
       if (!res.ok) throw new Error('Create failed');
       const created = await res.json();
-      const newRec = { ...updatedFormData, certificate_of_residency_id: created.certificate_of_residency_id };
-
+      const newRec = {
+        ...updatedFormData,
+        certificate_of_residency_id: created.certificate_of_residency_id,
+      };
       setRecords([newRec, ...records]);
       setSelectedRecord(newRec);
-
-      // Save to certificates table
       await saveCertificate(newRec, true);
-
-      // Store the new certificate data
       storeCertificateData(newRec);
-
       resetForm();
       setActiveTab('records');
     } catch (e) {
@@ -651,11 +690,7 @@ const [validCertInfo, setValidCertInfo] = useState(null);
   async function handleUpdate() {
     try {
       const validityPeriod = getValidityPeriod('Certificate of Residency');
-      const updatedFormData = {
-        ...formData,
-        validity_period: validityPeriod, // Add validity period
-      };
-
+      const updatedFormData = { ...formData, validity_period: validityPeriod };
       const res = await fetch(`${apiBase}/certificate-of-residency/${editingId}`, {
         method: 'PUT',
         headers: getAuthHeaders(),
@@ -663,8 +698,7 @@ const [validCertInfo, setValidCertInfo] = useState(null);
       });
       if (!res.ok) throw new Error('Update failed');
       const updatedData = await res.json();
-      // The backend creates a NEW record, so we need to add it to records and remove/replace the old one
-      const updated = { 
+      const updated = {
         ...updatedData,
         certificate_of_residency_id: updatedData.certificate_of_residency_id,
         full_name: updatedData.full_name,
@@ -685,17 +719,12 @@ const [validCertInfo, setValidCertInfo] = useState(null);
         official_name: updatedData.official_name || null,
         designation: updatedData.designation || null,
         signature_path: updatedData.signature_path || null,
+        applicant_photo: formData.applicant_photo || '',
       };
-      // Remove old record and add new one
       setRecords([updated, ...records.filter((r) => r.certificate_of_residency_id !== editingId)]);
       setSelectedRecord(updated);
-
-      // Save to certificates table
       await saveCertificate(updated, false);
-
-      // Store the updated certificate data
       storeCertificateData(updated);
-
       resetForm();
       setActiveTab('records');
     } catch (e) {
@@ -705,7 +734,7 @@ const [validCertInfo, setValidCertInfo] = useState(null);
   }
 
   function handleEdit(record) {
-    setFormData({ 
+    setFormData({
       ...record,
       use_signature: Boolean(record.use_signature),
       signature_id: record.signature_id || null,
@@ -713,31 +742,25 @@ const [validCertInfo, setValidCertInfo] = useState(null);
     setEditingId(record.certificate_of_residency_id);
     setIsFormOpen(true);
     setActiveTab('form');
-    
-    // Set selected signature if available
     if (record.signature_id) {
-      const sig = signatures.find((s) => s.signature_id === record.signature_id);
-      setSelectedSignature(sig || null);
+      setSelectedSignature(signatures.find((s) => s.signature_id === record.signature_id) || null);
     } else {
       setSelectedSignature(null);
     }
   }
 
   function handleView(record) {
-    setSelectedRecord(record); // Set selected record for display
-    setFormData({ 
+    setSelectedRecord(record);
+    setFormData({
       ...record,
       use_signature: Boolean(record.use_signature),
       signature_id: record.signature_id || null,
-    }); // Also populate form data for QR generation/dialog
-    setEditingId(record.certificate_of_residency_id); // To indicate viewing a specific record
-    setIsFormOpen(true); // Keep the form open with the record details
+    });
+    setEditingId(record.certificate_of_residency_id);
+    setIsFormOpen(true);
     setActiveTab('form');
-    
-    // Set selected signature if available
     if (record.signature_id) {
-      const sig = signatures.find((s) => s.signature_id === record.signature_id);
-      setSelectedSignature(sig || null);
+      setSelectedSignature(signatures.find((s) => s.signature_id === record.signature_id) || null);
     } else {
       setSelectedSignature(null);
     }
@@ -753,16 +776,9 @@ const [validCertInfo, setValidCertInfo] = useState(null);
       if (!res.ok) throw new Error('Delete failed');
       setRecords(records.filter((r) => r.certificate_of_residency_id !== id));
       if (selectedRecord?.certificate_of_residency_id === id) setSelectedRecord(null);
-
-      // Remove from localStorage
-      const existingCertificates = JSON.parse(
-        localStorage.getItem('certificates') || '{}'
-      );
+      const existingCertificates = JSON.parse(localStorage.getItem('certificates') || '{}');
       delete existingCertificates[id];
-      localStorage.setItem(
-        'certificates',
-        JSON.stringify(existingCertificates)
-      );
+      localStorage.setItem('certificates', JSON.stringify(existingCertificates));
     } catch (e) {
       console.error(e);
       alert('Failed to delete record');
@@ -789,6 +805,7 @@ const [validCertInfo, setValidCertInfo] = useState(null);
       prepared_by_position: '',
       use_signature: false,
       signature_id: null,
+      applicant_photo: '',
     });
     setEditingId(null);
     setIsFormOpen(false);
@@ -796,52 +813,41 @@ const [validCertInfo, setValidCertInfo] = useState(null);
     setSelectedSignature(null);
   }
 
- // Modify the handleSubmit function
-function handleSubmit() {
-  // Validate required fields
-  if (!formData.full_name || !formData.address || !formData.request_reason) {
-    alert('Please fill in all required fields');
-    return;
-  }
-  
-  if (!formData.date_issued) {
-    alert('Please select the issued date');
-    return;
-  }
-  
-  if (formData.use_signature && !formData.signature_id) {
-    alert('Please select a signature when e-signature is enabled');
-    return;
-  }
-  
-  // Check if resident has a valid certificate (only for new records)
-  if (!editingId && formData.resident_id) {
-    const validCert = records.find(record => {
-      if (record.resident_id !== formData.resident_id) return false;
-      
-      const sixMonthsAgo = new Date();
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-      const issueDate = new Date(record.date_issued);
-      
-      return issueDate >= sixMonthsAgo;
-    });
-    
-    if (validCert) {
-      setValidCertInfo(validCert);
-      setShowValidCertDialog(true);
+  function handleSubmit() {
+    if (!formData.full_name || !formData.address || !formData.request_reason) {
+      alert('Please fill in all required fields');
       return;
     }
+    if (!formData.date_issued) {
+      alert('Please select the issued date');
+      return;
+    }
+    if (formData.use_signature && !formData.signature_id) {
+      alert('Please select a signature when e-signature is enabled');
+      return;
+    }
+    if (!editingId && formData.resident_id) {
+      const validCert = records.find((record) => {
+        if (record.resident_id !== formData.resident_id) return false;
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        const issueDate = new Date(record.date_issued);
+        return issueDate >= sixMonthsAgo;
+      });
+      if (validCert) {
+        setValidCertInfo(validCert);
+        setShowValidCertDialog(true);
+        return;
+      }
+    }
+    if (editingId) handleUpdate();
+    else handleCreate();
   }
-  
-  if (editingId) handleUpdate();
-  else handleCreate();
-}
 
-// Add a new function to handle confirmation with valid certificate
-function confirmSaveWithValidCert() {
-  setShowValidCertDialog(false);
-  handleCreate();
-}
+  function confirmSaveWithValidCert() {
+    setShowValidCertDialog(false);
+    handleCreate();
+  }
 
   const filteredRecords = useMemo(
     () =>
@@ -849,57 +855,39 @@ function confirmSaveWithValidCert() {
         (r) =>
           r.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           r.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (r.contact_no || '').includes(searchTerm)
+          (r.contact_no || '').includes(searchTerm),
       ),
-    [records, searchTerm]
+    [records, searchTerm],
   );
 
-  // Generate PDF function
   async function generatePDF() {
     if (!display.certificate_of_residency_id) {
       alert('Please save the record first before downloading PDF');
       return;
     }
-
     setIsGeneratingPDF(true);
-
     try {
       const certificateElement = document.getElementById('certificate-preview');
-
-      // --- 1. Remove the zoom (scale) from the preview's parent while exporting ---
       const parentOfPreview = certificateElement.parentNode;
       const prevTransform = parentOfPreview.style.transform;
       const prevTransformOrigin = parentOfPreview.style.transformOrigin;
-
       parentOfPreview.style.transform = 'scale(1)';
       parentOfPreview.style.transformOrigin = 'top center';
-
-      // --- 2. Wait a short moment for layout to apply ---
       await new Promise((resolve) => setTimeout(resolve, 150));
-
-      // --- 3. Capture crisp certificate at high scale ---
       const canvas = await html2canvas(certificateElement, {
-        scale: 3, // High scale for better quality
+        scale: 3,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
       });
-
-      // --- 4. Restore zoom to preview ---
       parentOfPreview.style.transform = prevTransform;
       parentOfPreview.style.transformOrigin = prevTransformOrigin;
-
-      // --- 5. Output the PDF at 8.5x11 inches (US Letter) ---
       const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'in',
-        format: [8.5, 11],
-      });
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'in', format: [8.5, 11] });
       pdf.addImage(imgData, 'PNG', 0, 0, 8.5, 11);
-
-      const fileName = `Certificate_of_Residency_${display.certificate_of_residency_id}_${display.full_name.replace(/\s+/g, '_')}.pdf`;
-      pdf.save(fileName);
+      pdf.save(
+        `Certificate_of_Residency_${display.certificate_of_residency_id}_${display.full_name.replace(/\s+/g, '_')}.pdf`,
+      );
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Failed to generate PDF. Please try again.');
@@ -909,170 +897,86 @@ function confirmSaveWithValidCert() {
   }
 
   function handlePrint() {
-    // Check if there's a certificate to print
     if (!display.certificate_of_residency_id) {
       alert('Please save the record first before printing');
       return;
     }
-
-    // 1. Get the certificate element
     const certificateElement = document.getElementById('certificate-preview');
     if (!certificateElement) {
       alert('Certificate not found for printing.');
       return;
     }
-
-    // 2. Create a hidden iframe
     const iframe = document.createElement('iframe');
-    iframe.style.position = 'absolute';
-    iframe.style.left = '-9999px'; // Move it way off-screen
-    iframe.style.top = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
+    iframe.style.cssText = 'position:absolute;left:-9999px;top:0;width:0;height:0;';
     document.body.appendChild(iframe);
-
-    // 3. Write the certificate content and styles into the iframe
     const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-    iframeDoc.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Print Certificate</title>
-          <style>
-            @page {
-              size: 8.5in 11in;
-              margin: 0;
-            }
-            body {
-              margin: 0;
-              padding: 0;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-              color-adjust: exact !important;
-            }
-            #certificate-preview {
-              width: 8.5in;
-              height: 11in;
-              position: relative;
-              overflow: hidden;
-              background: white;
-              box-sizing: border-box;
-            }
-            #certificate-preview * {
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-              color-adjust: exact !important;
-            }
-          </style>
-        </head>
-        <body>
-          ${certificateElement.outerHTML}
-        </body>
-      </html>
-    `);
+    iframeDoc.write(`<!DOCTYPE html><html><head><title>Print Certificate</title>
+      <style>
+        @page { size: 8.5in 11in; margin: 0; }
+        body { margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        #certificate-preview { width: 8.5in; height: 11in; position: relative; overflow: hidden; background: white; box-sizing: border-box; }
+        #certificate-preview * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      </style></head><body>${certificateElement.outerHTML}</body></html>`);
     iframeDoc.close();
-
-    // 4. Trigger the print dialog once the iframe content is loaded
     setTimeout(() => {
       const iframeWindow = iframe.contentWindow || iframe;
-      iframeWindow.focus(); // Required for some browsers
+      iframeWindow.focus();
       iframeWindow.print();
-
-      // 5. Clean up by removing the iframe after the print dialog
-      window.onafterprint = () => {
-        document.body.removeChild(iframe);
-      };
-      // Fallback cleanup in case onafterprint doesn't fire
+      window.onafterprint = () => { document.body.removeChild(iframe); };
       setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
-        }
+        if (document.body.contains(iframe)) document.body.removeChild(iframe);
       }, 1000);
-    }, 250); // A short delay to render
+    }, 250);
   }
 
-  // Function to handle QR code click
   const handleQrCodeClick = () => {
     if (display.certificate_of_residency_id) {
       const verificationUrl = `${window.location.origin}/verify-certificate?id=${display.certificate_of_residency_id}`;
       window.open(verificationUrl, '_blank');
     } else {
-      // Show a dialog with the certificate details (for unsaved draft)
       setQrDialogOpen(true);
     }
   };
 
-  const handleZoomIn = () => {
-    setZoomLevel((prev) => Math.min(prev + 0.1, 2)); // Max zoom: 2x (200%)
-  };
-
-  const handleZoomOut = () => {
-    setZoomLevel((prev) => Math.max(prev - 0.1, 0.3)); // Min zoom: 0.3x (30%)
-  };
-
-  const handleResetZoom = () => {
-    setZoomLevel(0.75); // Reset to default
-  };
+  const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 0.1, 2));
+  const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 0.1, 0.3));
+  const handleResetZoom = () => setZoomLevel(0.75);
 
   useEffect(() => {
     const handleKeyPress = (e) => {
-      // Check if Ctrl/Cmd is pressed
       if (e.ctrlKey || e.metaKey) {
-        if (e.key === '=' || e.key === '+') {
-          e.preventDefault();
-          handleZoomIn();
-        } else if (e.key === '-') {
-          e.preventDefault();
-          handleZoomOut();
-        } else if (e.key === '0') {
-          e.preventDefault();
-          handleResetZoom();
-        }
+        if (e.key === '=' || e.key === '+') { e.preventDefault(); handleZoomIn(); }
+        else if (e.key === '-') { e.preventDefault(); handleZoomOut(); }
+        else if (e.key === '0') { e.preventDefault(); handleResetZoom(); }
       }
     };
-
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [zoomLevel]);
 
-  // ── Helper: parse date_issued into day / month / year ──────────────────────
-  function getIssuedParts(dateStr) {
-    if (!dateStr) return { day: '___', month: '________', year: '____' };
-    const d = new Date(dateStr + 'T00:00:00');
-    const monthNames = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-    return {
-      day: d.getDate(),
-      month: monthNames[d.getMonth()],
-      year: d.getFullYear(),
-    };
-  }
-
   return (
     <ThemeProvider theme={theme}>
-      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', bgcolor: 'background.default' }}>
-        {/* TOP HEADER */}
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100vh',
+          overflow: 'hidden',
+          bgcolor: 'background.default',
+        }}
+      >
+        {/* ── TOP HEADER ── */}
         <Paper elevation={2} sx={{ zIndex: 10, borderRadius: 0 }}>
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'space-between',
-            p: 2,
-            bgcolor: 'primary.main',
-            color: 'white'
-          }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              p: 2,
+              bgcolor: 'primary.main',
+              color: 'white',
+            }}
+          >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Avatar src={Logo145} sx={{ width: 48, height: 48 }} />
               <Box>
@@ -1084,25 +988,19 @@ function confirmSaveWithValidCert() {
                 </Typography>
               </Box>
             </Box>
-            
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Badge badgeContent={records.length} color="secondary">
-                <Chip 
+                <Chip
                   icon={<FolderIcon />}
-                  label="Total Records" 
-                  sx={{ 
-                    bgcolor: "rgba(255,255,255,0.2)", 
-                    color: "white",
-                    fontWeight: 600
-                  }} 
+                  label="Total Records"
+                  sx={{ bgcolor: 'rgba(255,255,255,0.2)', color: 'white', fontWeight: 600 }}
                 />
               </Badge>
-              
-              <Button 
-                variant="contained" 
-                color="secondary" 
-                startIcon={<AddIcon />} 
-                onClick={() => { resetForm(); setIsFormOpen(true); setActiveTab("form"); }}
+              <Button
+                variant="contained"
+                color="secondary"
+                startIcon={<AddIcon />}
+                onClick={() => { resetForm(); setIsFormOpen(true); setActiveTab('form'); }}
                 sx={{ borderRadius: 20, px: 3 }}
               >
                 New Certificate
@@ -1111,26 +1009,21 @@ function confirmSaveWithValidCert() {
           </Box>
 
           {/* NAVIGATION TABS */}
-          <Box sx={{ bgcolor: "background.paper", borderBottom: 1, borderColor: "divider" }}>
-            <Box sx={{ maxWidth: 1200, mx: "auto" }}>
-              <Tabs 
-                value={activeTab} 
-                onChange={(e, nv) => setActiveTab(nv)} 
+          <Box sx={{ bgcolor: 'background.paper', borderBottom: 1, borderColor: 'divider' }}>
+            <Box sx={{ maxWidth: 1200, mx: 'auto' }}>
+              <Tabs
+                value={activeTab}
+                onChange={(e, nv) => setActiveTab(nv)}
                 variant="fullWidth"
-                sx={{ 
-                  "& .MuiTabs-indicator": { height: 3, borderRadius: "3px 3px 0 0" },
-                  minHeight: 48
+                sx={{
+                  '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' },
+                  minHeight: 48,
                 }}
               >
-                <Tab 
-                  icon={<ArticleIcon />} 
-                  label="Form" 
-                  value="form"
-                  iconPosition="start"
-                />
-                <Tab 
-                  icon={<FolderIcon />} 
-                  label={`Records (${records.length})`} 
+                <Tab icon={<ArticleIcon />} label="Form" value="form" iconPosition="start" />
+                <Tab
+                  icon={<FolderIcon />}
+                  label={`Records (${records.length})`}
                   value="records"
                   iconPosition="start"
                 />
@@ -1139,43 +1032,52 @@ function confirmSaveWithValidCert() {
           </Box>
         </Paper>
 
-        {/* MAIN CONTENT AREA */}
+        {/* ── MAIN CONTENT ── */}
         <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          {/* LEFT: Certificate preview */}
-          <Box sx={{ 
-            flex: 1, 
-            overflow: 'auto', 
-            display: 'flex', 
-            flexDirection: 'column', 
-            bgcolor: 'background.default',
-            p: 2,
-            [theme.breakpoints.down('lg')]: { display: activeTab === "form" ? 'none' : 'flex' }
-          }}>
+          {/* ── LEFT: Certificate Preview ── */}
+          <Box
+            sx={{
+              flex: 1,
+              overflow: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              bgcolor: 'background.default',
+              p: 2,
+              [theme.breakpoints.down('lg')]: {
+                display: activeTab === 'form' ? 'none' : 'flex',
+              },
+            }}
+          >
             {/* ZOOM CONTROLS */}
             <Paper elevation={1} sx={{ p: 2, mb: 2, borderRadius: 2 }}>
-              <Box sx={{ 
-                display: "flex", 
-                justifyContent: "space-between", 
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: 1
-              }}>
-                <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 1,
+                }}
+              >
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                   <Tooltip title="Zoom Out">
                     <IconButton onClick={handleZoomOut} color="primary" size="small">
                       <ZoomOutIcon />
                     </IconButton>
                   </Tooltip>
-                  <Typography variant="body2" sx={{ 
-                    minWidth: 60, 
-                    textAlign: "center", 
-                    fontWeight: 600,
-                    px: 1,
-                    py: 0.5,
-                    bgcolor: "background.paper",
-                    borderRadius: 1,
-                    color: "#000000"
-                  }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      minWidth: 60,
+                      textAlign: 'center',
+                      fontWeight: 600,
+                      px: 1,
+                      py: 0.5,
+                      bgcolor: 'background.paper',
+                      borderRadius: 1,
+                      color: '#000000',
+                    }}
+                  >
                     {Math.round(zoomLevel * 100)}%
                   </Typography>
                   <Tooltip title="Zoom In">
@@ -1189,24 +1091,23 @@ function confirmSaveWithValidCert() {
                     </IconButton>
                   </Tooltip>
                 </Box>
-
-                <Box sx={{ display: "flex", gap: 1 }}>
+                <Box sx={{ display: 'flex', gap: 1 }}>
                   <Tooltip title="Download PDF">
-                    <Button 
-                      variant="contained" 
-                      color="secondary" 
-                      onClick={generatePDF} 
-                      disabled={!display.certificate_of_residency_id || isGeneratingPDF} 
+                    <Button
+                      variant="contained"
+                      color="secondary"
+                      onClick={generatePDF}
+                      disabled={!display.certificate_of_residency_id || isGeneratingPDF}
                       startIcon={<FileTextIcon />}
                       size="small"
                     >
-                      {isGeneratingPDF ? "Generating..." : "Download"}
+                      {isGeneratingPDF ? 'Generating...' : 'Download'}
                     </Button>
                   </Tooltip>
                   <Tooltip title="Print">
-                    <Button 
-                      variant="outlined" 
-                      onClick={handlePrint} 
+                    <Button
+                      variant="outlined"
+                      onClick={handlePrint}
                       disabled={!display.certificate_of_residency_id}
                       startIcon={<PrintIcon />}
                       size="small"
@@ -1219,14 +1120,16 @@ function confirmSaveWithValidCert() {
             </Paper>
 
             {/* CERTIFICATE PREVIEW */}
-            <Box sx={{ 
-              display: "flex", 
-              justifyContent: "center", 
-              alignItems: "flex-start", 
-              flex: 1, 
-              overflow: "auto",
-              p: 1
-            }}>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'flex-start',
+                flex: 1,
+                overflow: 'auto',
+                p: 1,
+              }}
+            >
               <Box sx={{ transform: `scale(${zoomLevel})`, transformOrigin: 'top center' }}>
                 <div
                   id="certificate-preview"
@@ -1276,64 +1179,26 @@ function confirmSaveWithValidCert() {
                       <img
                         src={CaloocanLogo}
                         alt="Caloocan Logo"
-                        style={{
-                          width: '120px',
-                          height: '120px',
-                          objectFit: 'contain',
-                        }}
+                        style={{ width: '120px', height: '120px', objectFit: 'contain' }}
                       />
-                      <div
-                        style={{
-                          textAlign: 'center',
-                          flex: 1,
-                          padding: '0 20px',
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontFamily: 'Old English Text MT',
-                            fontSize: '16pt',
-                          }}
-                        >
+                      <div style={{ textAlign: 'center', flex: 1, padding: '0 20px' }}>
+                        <div style={{ fontFamily: 'Old English Text MT', fontSize: '16pt' }}>
                           Republic of the Philippines
                         </div>
-                        <div
-                          style={{
-                            fontFamily: '"Times New Roman"',
-                            fontSize: '16pt',
-                            marginTop: '2px',
-                          }}
-                        >
+                        <div style={{ fontFamily: '"Times New Roman"', fontSize: '16pt', marginTop: '2px' }}>
                           City of Caloocan
                         </div>
-                        <div
-                          style={{
-                            fontFamily: '"Times New Roman"',
-                            fontSize: '16pt',
-                            marginTop: '2px',
-                          }}
-                        >
+                        <div style={{ fontFamily: '"Times New Roman"', fontSize: '16pt', marginTop: '2px' }}>
                           Barangay 145, Zone 13, District 1
                         </div>
-                        <div
-                          style={{
-                            fontFamily: '"Times New Roman"',
-                            fontSize: '12pt',
-                            marginTop: '2px',
-                          }}
-                        >
-                          Reparo St. Cor. Gen. Tirona St. Bagong Barrio,
-                          Caloocan City
+                        <div style={{ fontFamily: '"Times New Roman"', fontSize: '12pt', marginTop: '2px' }}>
+                          Reparo St. Cor. Gen. Tirona St. Bagong Barrio, Caloocan City
                         </div>
                       </div>
                       <img
                         src={Logo145}
                         alt="Barangay 145 Logo"
-                        style={{
-                          width: '120px',
-                          height: '120px',
-                          objectFit: 'contain',
-                        }}
+                        style={{ width: '120px', height: '120px', objectFit: 'contain' }}
                       />
                     </div>
 
@@ -1379,28 +1244,37 @@ function confirmSaveWithValidCert() {
                         TO WHOM IT MAY CONCERN:
                       </p>
 
-                      {/* Paragraph 1 */}
                       <p style={{ margin: '0 0 10px 0', textIndent: '50px' }}>
-                        This is to certify that <strong>{display.full_name || '____________________________'}</strong>, of legal age, <strong>{display.civil_status || 'single'}</strong>, Filipino citizen, is a resident of <strong>{display.address || '(present address)'}</strong>, Barangay 145 District 1 Caloocan City.
+                        This is to certify that{' '}
+                        <strong>{display.full_name || '____________________________'}</strong>, of
+                        legal age, <strong>{display.civil_status || 'single'}</strong>, Filipino
+                        citizen, is a resident of{' '}
+                        <strong>{display.address || '(present address)'}</strong>, Barangay 145
+                        District 1 Caloocan City.
                       </p>
 
-                      {/* Paragraph 2 */}
                       <p style={{ margin: '0 0 10px 0', textIndent: '50px' }}>
-                        This certification is issued upon the request of the above-mentioned individual for <strong>{display.request_reason || '(state the purpose of the Certificate)'}</strong>.
+                        This certification is issued upon the request of the above-mentioned
+                        individual for{' '}
+                        <strong>
+                          {display.request_reason || '(state the purpose of the Certificate)'}
+                        </strong>
+                        .
                       </p>
 
-                      {/* Issued line */}
                       {(() => {
                         const { day, month, year } = getIssuedParts(display.date_issued);
                         return (
                           <p style={{ margin: '0 0 10px 0', textIndent: '50px' }}>
-                            Issued this <strong>{day}</strong> of <strong>{month}</strong>, <strong>{year}</strong>, at Barangay <strong>145</strong>, Caloocan City.
+                            Issued this <strong>{day}</strong> of <strong>{month}</strong>,{' '}
+                            <strong>{year}</strong>, at Barangay <strong>145</strong>, Caloocan
+                            City.
                           </p>
                         );
                       })()}
                     </div>
 
-                    {/* Photo & Thumbmark */}
+                    {/* ── Photo & Thumbmark ── */}
                     <div
                       style={{
                         display: 'flex',
@@ -1415,21 +1289,30 @@ function confirmSaveWithValidCert() {
                             width: '150px',
                             height: '150px',
                             border: '1.5px solid #000',
+                            overflow: 'hidden',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: '#fff',
                           }}
-                        />
-                        <div style={{ fontSize: '10pt', marginTop: '6px' }}>
+                        >
+                          {display.applicant_photo ? (
+                            <img
+                              src={display.applicant_photo}
+                              alt="Applicant Photo"
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                          ) : null}
+                        </div>
+                        <div style={{ fontSize: '10pt', marginTop: '6px', fontWeight: 'bold' }}>
                           Applicant Photo
                         </div>
                       </div>
                       <div style={{ textAlign: 'center' }}>
                         <div
-                          style={{
-                            width: '150px',
-                            height: '150px',
-                            border: '1.5px solid #000',
-                          }}
+                          style={{ width: '150px', height: '150px', border: '1.5px solid #000' }}
                         />
-                        <div style={{ fontSize: '10pt', marginTop: '6px' }}>
+                        <div style={{ fontSize: '10pt', marginTop: '6px', fontWeight: 'bold' }}>
                           Applicant Thumbmark
                         </div>
                       </div>
@@ -1444,13 +1327,7 @@ function confirmSaveWithValidCert() {
                         marginTop: '10px',
                       }}
                     >
-                      <div
-                        style={{
-                          textAlign: 'center',
-                          width: '300px',
-                          marginTop: '50px',
-                        }}
-                      >
+                      <div style={{ textAlign: 'center', width: '300px', marginTop: '10px' }}>
                         {display.use_signature && display.signature_path ? (
                           <div
                             style={{
@@ -1464,14 +1341,8 @@ function confirmSaveWithValidCert() {
                             <img
                               src={getSignatureImageUrl(display.signature_path)}
                               alt="Signature"
-                              style={{
-                                maxWidth: '200px',
-                                maxHeight: '65px',
-                                objectFit: 'contain',
-                              }}
-                              onError={(e) => {
-                                e.target.style.display = 'none';
-                              }}
+                              style={{ maxWidth: '200px', maxHeight: '65px', objectFit: 'contain' }}
+                              onError={(e) => { e.target.style.display = 'none'; }}
                             />
                           </div>
                         ) : null}
@@ -1514,15 +1385,11 @@ function confirmSaveWithValidCert() {
                     </div>
 
                     {/* Barangay Seal & Control No. */}
-                    <div
-                      style={{ padding: '30px 70px 0 70px', fontSize: '11pt' }}
-                    >
+                    <div style={{ padding: '30px 70px 0 70px', fontSize: '11pt' }}>
                       <div>Barangay Seal</div>
                       <div style={{ marginTop: '4px' }}>
                         Control No.{' '}
-                        <span
-                          style={{ minWidth: '120px', display: 'inline-block' }}
-                        >
+                        <span style={{ minWidth: '120px', display: 'inline-block' }}>
                           {display.control_no || '145-0001'}
                         </span>
                       </div>
@@ -1536,14 +1403,12 @@ function confirmSaveWithValidCert() {
                         }}
                       >
                         <li>
-                          This certification is not valid without the Official
-                          Barangay Dry Seal and the Barangay Chairman's
-                          Signature/Stamp.
+                          This certification is not valid without the Official Barangay Dry Seal
+                          and the Barangay Chairman's Signature/Stamp.
                         </li>
                         <li>
-                          Officials and applicants who submit false
-                          certifications or documents shall be held liable for
-                          administrative/criminal liabilities.
+                          Officials and applicants who submit false certifications or documents
+                          shall be held liable for administrative/criminal liabilities.
                         </li>
                       </ul>
                       <div
@@ -1555,14 +1420,11 @@ function confirmSaveWithValidCert() {
                       >
                         <div>
                           Prepared by:{' '}
-                          <strong>
-                            {display.prepared_by_name || 'Roselyn Anore'}
-                          </strong>
+                          <strong>{display.prepared_by_name || 'Roselyn Anore'}</strong>
                         </div>
                         <div style={{ marginLeft: '80px' }}>
                           <strong>
-                            {display.prepared_by_position ||
-                              'Barangay Secretary'}
+                            {display.prepared_by_position || 'Barangay Secretary'}
                           </strong>
                         </div>
                       </div>
@@ -1576,9 +1438,7 @@ function confirmSaveWithValidCert() {
                         }}
                       >
                         This certification is{' '}
-                        <strong>
-                          valid for six (6) months from the date of issuance.
-                        </strong>
+                        <strong>valid for six (6) months from the date of issuance.</strong>
                       </div>
                       <div
                         style={{
@@ -1586,10 +1446,7 @@ function confirmSaveWithValidCert() {
                           textAlign: 'right',
                           paddingRight: '10px',
                           height: '110px',
-                          visibility:
-                            qrCodeUrl && display.use_signature
-                              ? 'visible'
-                              : 'hidden',
+                          visibility: qrCodeUrl && display.use_signature ? 'visible' : 'hidden',
                         }}
                       >
                         <img
@@ -1622,59 +1479,43 @@ function confirmSaveWithValidCert() {
                       </div>
                     </div>
                   </div>
-                  {/* end zIndex wrapper */}
                 </div>
               </Box>
             </Box>
 
-            <style>
-              {`
-        @media print {
-          body * {
-            visibility: hidden;
-          }
-          #certificate-preview, #certificate-preview * {
-            visibility: visible;
-          }
-          #certificate-preview {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 8.5in;
-            height: 13in;
-            transform: none !important;
-          }
-          @page {
-            size: portrait;
-            margin: 0;
-          }
-          #certificate-preview * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            color-adjust: exact !important;
-          }
-        }
-      `}
-            </style>
+            <style>{`
+              @media print {
+                body * { visibility: hidden; }
+                #certificate-preview, #certificate-preview * { visibility: visible; }
+                #certificate-preview { position: absolute; left: 0; top: 0; width: 8.5in; height: 13in; transform: none !important; }
+                @page { size: portrait; margin: 0; }
+                #certificate-preview * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+              }
+            `}</style>
           </Box>
 
-          {/* RIGHT: FORM/RECORDS PANEL */}
-          <Box sx={{ 
-            width: { xs: '100%', md: '50%', lg: '40%' }, 
-            bgcolor: "background.paper", 
-            borderLeft: { xs: 0, md: 1 }, 
-            borderColor: "divider",
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden'
-          }}>
-            {/* FORM */}
-            {activeTab === "form" && (
-              <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <Paper elevation={0} sx={{ p: 3, borderBottom: 1, borderColor: "divider" }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 1, display: "flex", alignItems: "center", gap: 1 }}>
+          {/* ── RIGHT: FORM / RECORDS PANEL ── */}
+          <Box
+            sx={{
+              width: { xs: '100%', md: '50%', lg: '40%' },
+              bgcolor: 'background.paper',
+              borderLeft: { xs: 0, md: 1 },
+              borderColor: 'divider',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
+            {/* ── FORM ── */}
+            {activeTab === 'form' && (
+              <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <Paper elevation={0} sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}>
+                  <Typography
+                    variant="h6"
+                    sx={{ fontWeight: 600, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}
+                  >
                     <ArticleIcon color="primary" />
-                    {editingId ? "Edit Certificate" : "New Certificate of Residency"}
+                    {editingId ? 'Edit Certificate' : 'New Certificate of Residency'}
                   </Typography>
                   {selectedRecord && !editingId && (
                     <Typography variant="body2" color="text.secondary">
@@ -1683,15 +1524,15 @@ function confirmSaveWithValidCert() {
                   )}
                 </Paper>
 
-                <Box sx={{ flex: 1, overflow: "auto", p: 3 }}>
+                <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
                   <Stack spacing={3}>
+                    {/* Full Name */}
                     <Autocomplete
                       options={residents}
-                      getOptionLabel={(option) => option.full_name || ""}
+                      getOptionLabel={(option) => option.full_name || ''}
                       value={residents.find((r) => r.full_name === formData.full_name) || null}
                       onChange={(e, nv) => {
                         if (nv) {
-                          // Ensure date is properly formatted without timezone issues
                           const dobFormatted = nv.dob ? nv.dob.slice(0, 10) : '';
                           setFormData({
                             ...formData,
@@ -1709,85 +1550,90 @@ function confirmSaveWithValidCert() {
                         }
                       }}
                       renderInput={(params) => (
-                        <TextField 
-                          {...params} 
-                          label="Full Name" 
-                          variant="outlined" 
-                          fullWidth 
+                        <TextField
+                          {...params}
+                          label="Full Name"
+                          variant="outlined"
+                          fullWidth
                           size="small"
                           required
                         />
                       )}
                     />
 
-                    <TextField 
-                      label="Address" 
-                      variant="outlined" 
-                      fullWidth 
+                    {/* Address */}
+                    <TextField
+                      label="Address"
+                      variant="outlined"
+                      fullWidth
                       size="small"
-                      multiline 
+                      multiline
                       rows={2}
-                      value={formData.address} 
-                      onChange={(e) => setFormData({ ...formData, address: e.target.value })} 
+                      value={formData.address}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                       required
                     />
 
+                    {/* Birthday & Age */}
                     <Grid container spacing={2}>
                       <Grid item xs={12} sm={6}>
-                        <TextField 
-                          label="Birthday" 
-                          type="date" 
-                          variant="outlined" 
-                          fullWidth 
+                        <TextField
+                          label="Birthday"
+                          type="date"
+                          variant="outlined"
+                          fullWidth
                           size="small"
-                          InputLabelProps={{ shrink: true }} 
-                          value={formData.dob} 
-                          onChange={(e) => handleBirthdayChange(e.target.value)} 
+                          InputLabelProps={{ shrink: true }}
+                          value={formData.dob}
+                          onChange={(e) => handleBirthdayChange(e.target.value)}
                           required
                         />
                       </Grid>
                       <Grid item xs={12} sm={6}>
-                        <TextField 
-                          label="Age" 
-                          variant="outlined" 
-                          fullWidth 
+                        <TextField
+                          label="Age"
+                          variant="outlined"
+                          fullWidth
                           size="small"
-                          value={formData.age} 
+                          value={formData.age}
                           InputProps={{ readOnly: true }}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              bgcolor: 'grey.100',
-                            },
-                          }}
+                          sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'grey.100' } }}
                         />
                       </Grid>
                     </Grid>
 
-                    <TextField 
-                      label="Provincial Address" 
-                      variant="outlined" 
-                      fullWidth 
+                    {/* Provincial Address */}
+                    <TextField
+                      label="Provincial Address"
+                      variant="outlined"
+                      fullWidth
                       size="small"
-                      value={formData.provincial_address} 
-                      onChange={(e) => setFormData({ ...formData, provincial_address: e.target.value })} 
+                      value={formData.provincial_address}
+                      onChange={(e) =>
+                        setFormData({ ...formData, provincial_address: e.target.value })
+                      }
                     />
 
-                    <TextField 
-                      label="Contact Number" 
-                      variant="outlined" 
-                      fullWidth 
+                    {/* Contact Number */}
+                    <TextField
+                      label="Contact Number"
+                      variant="outlined"
+                      fullWidth
                       size="small"
                       placeholder="09XXXXXXXXX"
-                      value={formData.contact_no} 
-                      onChange={(e) => setFormData({ ...formData, contact_no: e.target.value })} 
+                      value={formData.contact_no}
+                      onChange={(e) => setFormData({ ...formData, contact_no: e.target.value })}
                     />
 
+                    {/* Civil Status */}
                     <FormControl fullWidth size="small">
                       <InputLabel>Civil Status</InputLabel>
                       <Select
                         value={formData.civil_status}
                         label="Civil Status"
-                        onChange={(e) => setFormData({ ...formData, civil_status: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({ ...formData, civil_status: e.target.value })
+                        }
                       >
                         {civilStatusOptions.map((status) => (
                           <MenuItem key={status} value={status}>
@@ -1797,74 +1643,164 @@ function confirmSaveWithValidCert() {
                       </Select>
                     </FormControl>
 
-                    <TextField 
-                      label="Remarks" 
-                      variant="outlined" 
-                      fullWidth 
+                    {/* Remarks */}
+                    <TextField
+                      label="Remarks"
+                      variant="outlined"
+                      fullWidth
                       size="small"
-                      multiline 
+                      multiline
                       rows={2}
-                      value={formData.remarks} 
-                      onChange={(e) => setFormData({ ...formData, remarks: e.target.value })} 
+                      value={formData.remarks}
+                      onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
                       required
                     />
 
-                    <TextField 
-                      label="Request Reason" 
-                      variant="outlined" 
-                      fullWidth 
+                    {/* Request Reason */}
+                    <TextField
+                      label="Request Reason"
+                      variant="outlined"
+                      fullWidth
                       size="small"
-                      multiline 
+                      multiline
                       rows={2}
                       placeholder="School enrollment, Employment, etc."
-                      value={formData.request_reason} 
-                      onChange={(e) => setFormData({ ...formData, request_reason: e.target.value })} 
+                      value={formData.request_reason}
+                      onChange={(e) =>
+                        setFormData({ ...formData, request_reason: e.target.value })
+                      }
                       required
                     />
 
-                    <TextField 
-                      label="Date Issued" 
-                      type="date" 
-                      variant="outlined" 
-                      fullWidth 
+                    {/* Date Issued */}
+                    <TextField
+                      label="Date Issued"
+                      type="date"
+                      variant="outlined"
+                      fullWidth
                       size="small"
-                      InputLabelProps={{ shrink: true }} 
-                      value={formData.date_issued} 
-                      onChange={(e) => setFormData({ ...formData, date_issued: e.target.value })} 
+                      InputLabelProps={{ shrink: true }}
+                      value={formData.date_issued}
+                      onChange={(e) => setFormData({ ...formData, date_issued: e.target.value })}
                       required
                     />
 
-                    <TextField 
-                      label="Control Number" 
-                      variant="outlined" 
-                      fullWidth 
-                      size="small"
-                      value={formData.control_no} 
-                      onChange={(e) => setFormData({ ...formData, control_no: e.target.value })} 
-                    />
+                    {/* ── Applicant Photo ── */}
+                    <Box
+                      sx={{
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 2,
+                        p: 2,
+                        bgcolor: 'background.paper',
+                      }}
+                    >
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 0.5 }}>
+                        Applicant Photo
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                        Capture from camera, upload a file, or paste an image from your clipboard.
+                      </Typography>
 
-                    <TextField 
-                      label="Prepared By (Name)" 
-                      variant="outlined" 
-                      fullWidth 
-                      size="small"
-                      placeholder="e.g., Roselyn Anore"
-                      value={formData.prepared_by_name} 
-                      onChange={(e) => setFormData({ ...formData, prepared_by_name: e.target.value })} 
-                    />
+                      {/* Buttons row */}
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
+                        <Button
+                          variant="outlined"
+                          startIcon={<PhotoCameraIcon />}
+                          onClick={openCameraCapture}
+                          size="small"
+                        >
+                          Open Camera
+                        </Button>
+                        <Button
+                          variant="contained"
+                          color="secondary"
+                          size="small"
+                          onClick={() => applicantPhotoInputRef.current?.click()}
+                        >
+                          Upload Photo
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          color={isPasteZoneActive ? 'success' : 'primary'}
+                          startIcon={<ContentPasteIcon />}
+                          size="small"
+                          onClick={() => setIsPasteZoneActive((prev) => !prev)}
+                        >
+                          {isPasteZoneActive ? 'Waiting for paste…' : 'Paste Photo'}
+                        </Button>
+                      </Box>
 
-                    <TextField 
-                      label="Prepared By (Position)" 
-                      variant="outlined" 
-                      fullWidth 
-                      size="small"
-                      placeholder="e.g., Barangay Secretary"
-                      value={formData.prepared_by_position} 
-                      onChange={(e) => setFormData({ ...formData, prepared_by_position: e.target.value })} 
-                    />
+                      {/* Paste zone — shown when active */}
+                      {isPasteZoneActive && (
+                        <Box
+                          onPaste={handlePasteImage}
+                          tabIndex={0}
+                          sx={{
+                            border: '2px dashed',
+                            borderColor: 'success.main',
+                            borderRadius: 2,
+                            p: 3,
+                            mb: 1.5,
+                            textAlign: 'center',
+                            bgcolor: 'rgba(65,100,74,0.06)',
+                            cursor: 'pointer',
+                            outline: 'none',
+                            '&:focus': { boxShadow: '0 0 0 3px rgba(65,100,74,0.25)' },
+                          }}
+                          // auto-focus so keyboard paste works immediately
+                          ref={(el) => el && el.focus()}
+                        >
+                          <ContentPasteIcon sx={{ fontSize: 36, color: 'success.main', mb: 1 }} />
+                          <Typography variant="body2" color="success.main" fontWeight={600}>
+                            Press <strong>Ctrl+V</strong> (or <strong>⌘V</strong>) to paste
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Copy any image first, then paste it here
+                          </Typography>
+                        </Box>
+                      )}
+
+                      <input
+                        ref={applicantPhotoInputRef}
+                        type="file"
+                        accept="image/*"
+                        hidden
+                        onChange={handleApplicantPhotoUpload}
+                      />
+
+                      {formData.applicant_photo ? (
+                        <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <Box
+                            component="img"
+                            src={formData.applicant_photo}
+                            alt="Applicant preview"
+                            sx={{
+                              width: 144,
+                              height: 144,
+                              objectFit: 'cover',
+                              borderRadius: 2,
+                              border: '1px solid',
+                              borderColor: 'divider',
+                            }}
+                          />
+                          <Button
+                            variant="text"
+                            color="error"
+                            onClick={() => {
+                              setFormData({ ...formData, applicant_photo: '' });
+                              setIsPasteZoneActive(false);
+                            }}
+                          >
+                            Remove Photo
+                          </Button>
+                        </Box>
+                      ) : null}
+                    </Box>
 
                     <Divider sx={{ my: 2 }} />
 
+                    {/* E-Signature */}
                     <FormControlLabel
                       control={
                         <Checkbox
@@ -1879,9 +1815,7 @@ function confirmSaveWithValidCert() {
                                   ? selectedSignature.signature_id
                                   : null,
                             });
-                            if (!checked) {
-                              setSelectedSignature(null);
-                            }
+                            if (!checked) setSelectedSignature(null);
                           }}
                           color="primary"
                         />
@@ -1892,17 +1826,13 @@ function confirmSaveWithValidCert() {
                     {formData.use_signature && (
                       <Autocomplete
                         options={signatures}
-                        getOptionLabel={(opt) =>
-                          `${opt.official_name} - ${opt.designation}`
-                        }
+                        getOptionLabel={(opt) => `${opt.official_name} - ${opt.designation}`}
                         value={selectedSignature}
                         onChange={(e, newValue) => {
                           setSelectedSignature(newValue);
                           setFormData({
                             ...formData,
-                            signature_id: newValue
-                              ? newValue.signature_id
-                              : null,
+                            signature_id: newValue ? newValue.signature_id : null,
                           });
                         }}
                         renderInput={(params) => (
@@ -1918,22 +1848,66 @@ function confirmSaveWithValidCert() {
                       />
                     )}
 
-                    <Box sx={{ display: "flex", gap: 2, pt: 2 }}>
-                      <Button 
-                        onClick={handleSubmit} 
-                        variant="contained" 
-                        startIcon={<SaveIcon />} 
-                        fullWidth 
+                    <Divider sx={{ my: 2 }} />
+
+                    {/* Control Number */}
+                    <TextField
+                      label="Control Number"
+                      variant="outlined"
+                      fullWidth
+                      size="small"
+                      value={formData.control_no}
+                      onChange={(e) => setFormData({ ...formData, control_no: e.target.value })}
+                      helperText="Format: YYYY145-R000000 (auto-generated)"
+                    />
+
+                    {/* Prepared By */}
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          label="Prepared By (Name)"
+                          variant="outlined"
+                          fullWidth
+                          size="small"
+                          value={formData.prepared_by_name}
+                          onChange={(e) =>
+                            setFormData({ ...formData, prepared_by_name: e.target.value })
+                          }
+                          placeholder="e.g., Roselyn Anore"
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          label="Prepared By (Position)"
+                          variant="outlined"
+                          fullWidth
+                          size="small"
+                          value={formData.prepared_by_position}
+                          onChange={(e) =>
+                            setFormData({ ...formData, prepared_by_position: e.target.value })
+                          }
+                          placeholder="e.g., Barangay Secretary"
+                        />
+                      </Grid>
+                    </Grid>
+
+                    {/* Action Buttons */}
+                    <Box sx={{ display: 'flex', gap: 2, pt: 2 }}>
+                      <Button
+                        onClick={handleSubmit}
+                        variant="contained"
+                        startIcon={<SaveIcon />}
+                        fullWidth
                         color="primary"
                         size="large"
                       >
-                        {editingId ? "Update" : "Save"}
+                        {editingId ? 'Update' : 'Save'}
                       </Button>
                       {(editingId || isFormOpen) && (
-                        <Button 
-                          onClick={resetForm} 
-                          variant="outlined" 
-                          startIcon={<CloseIcon />} 
+                        <Button
+                          onClick={resetForm}
+                          variant="outlined"
+                          startIcon={<CloseIcon />}
                           color="primary"
                           size="large"
                         >
@@ -1946,65 +1920,85 @@ function confirmSaveWithValidCert() {
               </Box>
             )}
 
-            {/* RECORDS */}
-            {activeTab === "records" && (
-              <Box sx={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                <Paper elevation={0} sx={{ p: 3, borderBottom: 1, borderColor: "divider" }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-                    <FolderIcon color="primary" />
-                    Certificate Records
+            {/* ── RECORDS ── */}
+            {activeTab === 'records' && (
+              <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <Paper elevation={0} sx={{ p: 3, borderBottom: 1, borderColor: 'divider' }}>
+                  <Typography
+                    variant="h6"
+                    sx={{ fontWeight: 600, mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}
+                  >
+                    <FolderIcon color="primary" /> Certificate Records
                   </Typography>
-                  <TextField 
-                    fullWidth 
-                    size="small" 
-                    placeholder="Search by name, address, or contact no." 
-                    value={searchTerm} 
-                    onChange={(e) => setSearchTerm(e.target.value)} 
-                    InputProps={{ 
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Search by name, address, or contact no."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
                           <SearchIcon />
                         </InputAdornment>
-                      ) 
-                    }} 
+                      ),
+                    }}
                   />
                 </Paper>
 
-                <Box sx={{ flex: 1, overflow: "auto", p: 2 }}>
+                <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
                   {filteredRecords.length === 0 ? (
-                    <Paper sx={{ p: 4, textAlign: "center", color: "text.secondary" }}>
+                    <Paper sx={{ p: 4, textAlign: 'center', color: 'text.secondary' }}>
                       <FolderIcon sx={{ fontSize: 48, mb: 2, opacity: 0.3 }} />
                       <Typography variant="h6" gutterBottom>
-                        {searchTerm ? "No records found" : "No records yet"}
+                        {searchTerm ? 'No records found' : 'No records yet'}
                       </Typography>
                       <Typography variant="body2">
-                        {searchTerm ? "Try a different search term" : "Create your first certificate to get started"}
+                        {searchTerm
+                          ? 'Try a different search term'
+                          : 'Create your first certificate to get started'}
                       </Typography>
                     </Paper>
                   ) : (
                     <Stack spacing={2}>
                       {filteredRecords.map((record) => (
-                        <Card key={record.certificate_of_residency_id} sx={{ 
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                          borderLeft: 4,
-                          borderColor: "primary.main",
-                        }}>
+                        <Card
+                          key={record.certificate_of_residency_id}
+                          sx={{
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            borderLeft: 4,
+                            borderColor: 'primary.main',
+                          }}
+                        >
                           <CardContent sx={{ p: 2 }}>
-                            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'flex-start',
+                              }}
+                            >
                               <Box sx={{ flex: 1 }}>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5, color: "#000000" }}>
+                                <Typography
+                                  variant="subtitle1"
+                                  sx={{ fontWeight: 600, mb: 0.5, color: '#000000' }}
+                                >
                                   {record.full_name}
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                  sx={{ mb: 1 }}
+                                >
                                   {record.address}
                                 </Typography>
-                                <Box sx={{ display: "flex", alignItems: "center", mb: 1, gap: 1 }}>
-                                  <Chip 
-                                    label={record.civil_status} 
-                                    size="small" 
-                                    color="primary" 
-                                    variant="outlined" 
+                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1 }}>
+                                  <Chip
+                                    label={record.civil_status}
+                                    size="small"
+                                    color="primary"
+                                    variant="outlined"
                                   />
                                   {record.contact_no && (
                                     <Typography variant="caption" color="text.secondary">
@@ -2025,29 +2019,29 @@ function confirmSaveWithValidCert() {
                                   />
                                 )}
                               </Box>
-                              <Box sx={{ display: "flex", gap: 0.5 }}>
+                              <Box sx={{ display: 'flex', gap: 0.5 }}>
                                 <Tooltip title="View">
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleView(record)} 
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleView(record)}
                                     color="primary"
                                   >
                                     <EyeIcon />
                                   </IconButton>
                                 </Tooltip>
                                 <Tooltip title="Edit">
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleEdit(record)} 
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleEdit(record)}
                                     color="success"
                                   >
                                     <EditIcon />
                                   </IconButton>
                                 </Tooltip>
                                 <Tooltip title="Delete">
-                                  <IconButton 
-                                    size="small" 
-                                    onClick={() => handleDelete(record.certificate_of_residency_id)} 
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleDelete(record.certificate_of_residency_id)}
                                     color="error"
                                   >
                                     <DeleteIcon />
@@ -2063,151 +2057,254 @@ function confirmSaveWithValidCert() {
                 </Box>
               </Box>
             )}
-
           </Box>
         </Box>
 
-        {/* FLOATING ACTION BUTTON FOR MOBILE */}
-        {isMobile && activeTab !== "form" && (
+        {/* MOBILE FAB */}
+        {isMobile && activeTab !== 'form' && (
           <Fab
             color="primary"
             aria-label="add"
-            sx={{
-              position: 'absolute',
-              bottom: 16,
-              right: 16,
-            }}
-            onClick={() => { resetForm(); setIsFormOpen(true); setActiveTab("form"); }}
+            sx={{ position: 'absolute', bottom: 16, right: 16 }}
+            onClick={() => { resetForm(); setIsFormOpen(true); setActiveTab('form'); }}
           >
             <AddIcon />
           </Fab>
         )}
       </Box>
 
-      {/* QR Code Details Dialog */}
+      {/* ── CAMERA CAPTURE DIALOG ── */}
       <Dialog
-        open={qrDialogOpen}
-        onClose={() => setQrDialogOpen(false)}
-        maxWidth="md"
+        open={isCameraOpen}
+        onClose={closeCameraCapture}
         fullWidth
+        maxWidth="sm"
+        PaperProps={{ sx: { borderRadius: 3, overflow: 'hidden' } }}
       >
+        <DialogTitle
+          sx={{
+            bgcolor: 'primary.main',
+            color: 'white',
+            py: 2,
+            px: 3,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PhotoCameraIcon />
+            <Typography variant="h6" fontWeight={700}>
+              {capturedPreview ? 'Use this photo?' : 'Capture Applicant Photo'}
+            </Typography>
+          </Box>
+          <IconButton size="small" onClick={closeCameraCapture} sx={{ color: 'white' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+
+        {/* Live feed or captured preview */}
+        <DialogContent sx={{ p: 0, bgcolor: '#000', position: 'relative', lineHeight: 0 }}>
+          <Box sx={{ display: capturedPreview ? 'none' : 'block' }}>
+            {cameraError ? (
+              <Box
+                sx={{
+                  p: 4,
+                  textAlign: 'center',
+                  bgcolor: '#1a1a1a',
+                  minHeight: 280,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 1,
+                }}
+              >
+                <PhotoCameraIcon sx={{ fontSize: 48, color: '#555' }} />
+                <Typography color="error" variant="body2" sx={{ maxWidth: 320 }}>
+                  {cameraError}
+                </Typography>
+              </Box>
+            ) : (
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{
+                  width: '100%',
+                  display: 'block',
+                  maxHeight: '420px',
+                  objectFit: 'cover',
+                }}
+              />
+            )}
+          </Box>
+
+          {capturedPreview && (
+            <Box
+              component="img"
+              src={capturedPreview}
+              alt="Captured photo preview"
+              sx={{
+                width: '100%',
+                display: 'block',
+                maxHeight: '420px',
+                objectFit: 'cover',
+              }}
+            />
+          )}
+        </DialogContent>
+
+        {/* Camera selector (only when live and multiple cameras) */}
+        {!capturedPreview && cameraDevices.length > 1 && (
+          <Box sx={{ px: 2, pt: 2, pb: 1, bgcolor: 'background.paper' }}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Camera</InputLabel>
+              <Select
+                value={selectedCameraId}
+                label="Camera"
+                onChange={(e) => {
+                  const nextId = e.target.value;
+                  setSelectedCameraId(nextId);
+                  startCamera(nextId);
+                }}
+              >
+                {cameraDevices.map((device, index) => (
+                  <MenuItem key={device.deviceId} value={device.deviceId}>
+                    {device.label || `Camera ${index + 1}`}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+        )}
+
+        <DialogActions sx={{ p: 2, gap: 1, bgcolor: 'background.paper' }}>
+          {capturedPreview ? (
+            <>
+              <Button
+                onClick={retakePhoto}
+                variant="outlined"
+                color="primary"
+                startIcon={<ResetIcon />}
+                sx={{ flex: 1 }}
+              >
+                Retake
+              </Button>
+              <Button
+                onClick={confirmApplicantPhoto}
+                variant="contained"
+                color="primary"
+                startIcon={<CheckCircleIcon />}
+                sx={{ flex: 1 }}
+              >
+                Use Photo
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={closeCameraCapture} variant="outlined" color="primary">
+                Cancel
+              </Button>
+              {cameraError && (
+                <Button
+                  onClick={() => startCamera(selectedCameraId)}
+                  variant="outlined"
+                  color="primary"
+                >
+                  Retry Camera
+                </Button>
+              )}
+              <Button
+                onClick={captureApplicantPhoto}
+                variant="contained"
+                color="primary"
+                startIcon={<PhotoCameraIcon />}
+                disabled={!!cameraError}
+                sx={{ flex: 1 }}
+              >
+                Capture
+              </Button>
+            </>
+          )}
+        </DialogActions>
+      </Dialog>
+
+      {/* ── QR Code Details Dialog ── */}
+      <Dialog open={qrDialogOpen} onClose={() => setQrDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white' }}>
           Certificate Details
         </DialogTitle>
         <DialogContent dividers>
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Certificate ID:
-              </Typography>
-              <Typography
-                variant="body1"
-                sx={{ fontWeight: 600, color: 'text.primary' }}
-              >
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Certificate ID:</Typography>
+              <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
                 {display.certificate_of_residency_id || 'Draft (Not yet saved)'}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Transaction Number:
-              </Typography>
-              <Typography
-                variant="body1"
-                sx={{ fontWeight: 600, color: 'text.primary' }}
-              >
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Transaction Number:</Typography>
+              <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
                 {display.transaction_number || 'N/A'}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Full Name:
-              </Typography>
-              <Typography
-                variant="body1"
-                sx={{ fontWeight: 600, color: 'text.primary' }}
-              >
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Full Name:</Typography>
+              <Typography variant="body1" sx={{ fontWeight: 600, color: 'text.primary' }}>
                 {display.full_name}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Address:
-              </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {display.address}
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Address:</Typography>
+              <Typography variant="body1" sx={{ color: 'text.secondary' }}>{display.address}</Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Date of Birth:
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Date of Birth:</Typography>
               <Typography variant="body1" sx={{ color: 'text.secondary' }}>
                 {display.dob ? formatDateDisplay(display.dob) : 'N/A'}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Age:
-              </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {display.age}
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Age:</Typography>
+              <Typography variant="body1" sx={{ color: 'text.secondary' }}>{display.age}</Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Civil Status:
-              </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {display.civil_status}
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Civil Status:</Typography>
+              <Typography variant="body1" sx={{ color: 'text.secondary' }}>{display.civil_status}</Typography>
             </Grid>
             <Grid item xs={12}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Remarks:
-              </Typography>
-              <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {display.remarks}
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Remarks:</Typography>
+              <Typography variant="body1" sx={{ color: 'text.secondary' }}>{display.remarks}</Typography>
             </Grid>
             <Grid item xs={12}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Request Reason:
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Request Reason:</Typography>
               <Typography variant="body1" sx={{ color: 'text.secondary' }}>
                 {display.request_reason}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Date Issued:
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Date Issued:</Typography>
               <Typography variant="body1" sx={{ color: 'text.secondary' }}>
                 {formatDateDisplay(display.date_issued)}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                Date Created:
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>Date Created:</Typography>
               <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                {display.date_created
-                  ? formatDateTimeDisplay(display.date_created)
-                  : 'N/A'}
+                {display.date_created ? formatDateTimeDisplay(display.date_created) : 'N/A'}
               </Typography>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                E-Signature:
-              </Typography>
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>E-Signature:</Typography>
               <Typography variant="body1" sx={{ color: 'text.secondary' }}>
                 {display.use_signature ? 'Yes' : 'No'}
               </Typography>
             </Grid>
             {display.use_signature && (
               <Grid item xs={12} md={6}>
-                <Typography variant="body2" sx={{ color: 'grey.600' }}>
-                  Signed By:
-                </Typography>
+                <Typography variant="body2" sx={{ color: 'grey.600' }}>Signed By:</Typography>
                 <Typography variant="body1" sx={{ color: 'text.secondary' }}>
                   {display.official_name} - {display.designation}
                 </Typography>
@@ -2216,9 +2313,7 @@ function confirmSaveWithValidCert() {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setQrDialogOpen(false)} color="primary">
-            Close
-          </Button>
+          <Button onClick={() => setQrDialogOpen(false)} color="primary">Close</Button>
           {display.certificate_of_residency_id && (
             <Button
               onClick={() => {
@@ -2235,46 +2330,44 @@ function confirmSaveWithValidCert() {
         </DialogActions>
       </Dialog>
 
-
-      // Add the dialog at the end of the component, before the closing tags
-<Dialog
-  open={showValidCertDialog}
-  onClose={() => setShowValidCertDialog(false)}
-  PaperProps={{ sx: { borderRadius: 2 } }}
->
-  <DialogTitle sx={{ bgcolor: '#41644A', color: 'white', py: 2 }}>
-    <Typography variant="h6" sx={{ fontWeight: 700 }}>
-      Resident Has Valid Certificate
-    </Typography>
-  </DialogTitle>
-  <DialogContent sx={{ p: 3 }}>
-    <Typography>
-      This resident already has a valid Certificate of Residency issued on{' '}
-      {validCertInfo && formatDateDisplay(validCertInfo.date_issued)}.
-      Certificates are valid for 6 months.
-    </Typography>
-    <Typography sx={{ mt: 2 }}>
-      Are you sure you want to create a new certificate for this resident?
-    </Typography>
-  </DialogContent>
-  <DialogActions sx={{ p: 2, borderTop: '1px solid #F1F0E9' }}>
-    <Button
-      onClick={() => setShowValidCertDialog(false)}
-      variant="outlined"
-      sx={{ borderColor: '#41644A', color: '#41644A' }}
-    >
-      Cancel
-    </Button>
-    <Button
-      onClick={confirmSaveWithValidCert}
-      variant="contained"
-      sx={{ bgcolor: '#E9762B', '&:hover': { bgcolor: '#d8651f' } }}
-    >
-      Create Anyway
-    </Button>
-  </DialogActions>
-</Dialog>
-
+      {/* ── Valid Certificate Warning Dialog ── */}
+      <Dialog
+        open={showValidCertDialog}
+        onClose={() => setShowValidCertDialog(false)}
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ bgcolor: '#41644A', color: 'white', py: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            Resident Has Valid Certificate
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ p: 3 }}>
+          <Typography>
+            This resident already has a valid Certificate of Residency issued on{' '}
+            {validCertInfo && formatDateDisplay(validCertInfo.date_issued)}. Certificates are valid
+            for 6 months.
+          </Typography>
+          <Typography sx={{ mt: 2 }}>
+            Are you sure you want to create a new certificate for this resident?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, borderTop: '1px solid #F1F0E9' }}>
+          <Button
+            onClick={() => setShowValidCertDialog(false)}
+            variant="outlined"
+            sx={{ borderColor: '#41644A', color: '#41644A' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={confirmSaveWithValidCert}
+            variant="contained"
+            sx={{ bgcolor: '#E9762B', '&:hover': { bgcolor: '#d8651f' } }}
+          >
+            Create Anyway
+          </Button>
+        </DialogActions>
+      </Dialog>
     </ThemeProvider>
   );
 }
